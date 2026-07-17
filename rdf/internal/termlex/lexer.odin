@@ -113,7 +113,10 @@ is_absolute_iri :: proc(value: string) -> bool {
 	return false
 }
 
-read_iri :: proc(s: ^Scanner, decoded: ^strings.Builder) -> (rdf.Term, Error) {
+// read_iriref decodes one bracketed IRIREF without imposing a syntax-specific
+// absolute-IRI policy. Turtle uses the returned relative-or-absolute value;
+// N-Triples and N-Quads continue through read_iri below.
+read_iriref :: proc(s: ^Scanner, decoded: ^strings.Builder) -> (string, Error) {
 	if s.pos >= len(s.input) || s.input[s.pos] != '<' do return {}, error_at(s, .Expected_IRI)
 	advance_ascii(s)
 	start := s.pos
@@ -143,8 +146,18 @@ read_iri :: proc(s: ^Scanner, decoded: ^strings.Builder) -> (rdf.Term, Error) {
 		strings.write_string(decoded, s.input[chunk:s.pos])
 		value = strings.to_string(decoded^)
 	}
-	if !is_absolute_iri(value) do return {}, error_at(s, .Invalid_IRI)
 	advance_ascii(s)
+	return value, {}
+}
+
+// read_iri reads an absolute IRI and preserves the released syntax packages'
+// error code and closing-bracket location for relative references.
+read_iri :: proc(s: ^Scanner, decoded: ^strings.Builder) -> (rdf.Term, Error) {
+	value, err := read_iriref(s, decoded)
+	if err.code != .None do return {}, err
+	if !is_absolute_iri(value) {
+		return {}, Error{code = .Invalid_IRI, line = s.line, column = s.column - 1}
+	}
 	return rdf.iri(value), {}
 }
 

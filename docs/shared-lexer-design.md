@@ -63,7 +63,7 @@ The migration is accepted only when all of these remain true:
 No public shared-lexer API, Turtle feature, or writer redesign belongs in these
 steps.
 
-## Before-refactor baseline
+## Before-refactor synthetic baseline
 
 Measured on 2026-07-17 with Odin `dev-2026-07:819fdc7a8`, Darwin x86_64,
 `-o:speed`, 250,000 records, three timed rounds, and three independent processes.
@@ -74,6 +74,13 @@ The table reports the median of each process's best round.
 | N-Triples | 2.82 M | 196.42 MiB/s | 17.40 MiB |
 | N-Quads | 0.49 M | 47.14 MiB/s | 23.84 MiB |
 
-These numbers compare implementations on one machine; they are not cross-machine
-performance claims. Reproduce the protocol with `./scripts/run-benchmarks.sh` and
-retain the full output when reporting a change.
+The workload repeats one language-literal statement, with a named IRI graph in
+N-Quads. It intentionally isolates the parser hot path and synthetic-statement
+overhead; it is not representative of mixed IRIs, blank nodes, escaped literals,
+or reader I/O. Add a separate mixed-term workload before making broader parser
+performance claims.
+
+These numbers compare implementations on one machine and are not cross-machine
+performance claims. Reproduce the protocol with `./scripts/run-benchmarks.sh`,
+which records the source revision, and retain the full output when reporting a
+change.

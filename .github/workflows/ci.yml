@@ -52,6 +52,9 @@ jobs:
       - run: odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
       - run: odin check tests/property -no-entry-point -vet -warnings-as-errors
+      - run: odin check benchmarks/ntriples -vet -warnings-as-errors
+      - run: odin check benchmarks/nquads -vet -warnings-as-errors
+      - run: BENCH_RUNS=1 BENCH_RECORDS=1000 BENCH_ROUNDS=1 ./scripts/run-benchmarks.sh
       - run: odin test rdf -sanitize:address
       - run: odin test rdf/ntriples -sanitize:address
       - run: odin test rdf/nquads -sanitize:address

@@ -12,6 +12,11 @@ esac
 
 odin version
 uname -sm
+revision=$(git -C "$root" rev-parse --verify HEAD 2>/dev/null || printf '%s' unknown)
+if [ "$revision" != unknown ] && [ -n "$(git -C "$root" status --porcelain 2>/dev/null)" ]; then
+  revision=$revision-dirty
+fi
+printf 'revision: %s\n' "$revision"
 printf 'configuration: runs=%s records=%s rounds=%s optimization=speed\n' "$runs" "$records" "$rounds"
 
 run=1

@@ -35,7 +35,7 @@ main :: proc() {
 		seconds := time.duration_seconds(time.since(started))
 		if err.code != .None || count != QUADS {
 			fmt.eprintf("benchmark failed: %v, parsed %d quads\n", err.code, count)
-			return
+			os.exit(1)
 		}
 		best_seconds = min(best_seconds, seconds)
 		fmt.printf("round %d: %.2f M quads/s, %.2f MiB/s\n", round, f64(count) / seconds / 1e6, f64(len(input)) / seconds / 1024 / 1024)

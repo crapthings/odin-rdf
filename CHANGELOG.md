@@ -2,6 +2,11 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Define the RDF 1.1 Turtle parser API, streaming architecture, transient
+  parse-state model, resource limits, and 313-case W3C conformance gate.
+
 ## 0.3.1 - 2026-07-17
 
 - Preserve the first invalid Unicode-escape digit when a physical line ending also truncates the escape, keeping memory and reader diagnostics identical.

@@ -2,7 +2,6 @@
 package ntriples
 
 import "core:strings"
-import "core:sync"
 import "core:unicode/utf8"
 import rdf ".."
 
@@ -75,13 +74,6 @@ Sink :: proc(triple: rdf.Triple, user_data: rawptr) -> bool
 	line:   int,
 	column: int,
 	scope:  rdf.Blank_Node_Scope,
-}
-
-@(private) blank_node_scope_counter: u64
-
-@(private) new_blank_node_scope :: proc() -> rdf.Blank_Node_Scope {
-	previous := sync.atomic_add_explicit(&blank_node_scope_counter, u64(1), .Relaxed)
-	return rdf.Blank_Node_Scope(previous + 1)
 }
 
 @(private) error_at :: proc(s: ^Scanner, code: Error_Code) -> Parse_Error {
@@ -369,9 +361,10 @@ Sink :: proc(triple: rdf.Triple, user_data: rawptr) -> bool
 	return {}, error_at(s, .Expected_Term)
 }
 
-// parse parses a complete UTF-8 N-Triples document. Temporary memory is allocated
-// only for terms that contain escape sequences.
-@(private) parse_with_scope :: proc(input: string, sink: Sink, scope: rdf.Blank_Node_Scope, user_data: rawptr = nil) -> Parse_Error {
+// parse_scoped parses a complete document using a caller-provided blank-node
+// scope. It supports syntax adapters that must preserve identity across records.
+// Temporary memory is allocated only for terms that contain escape sequences.
+parse_scoped :: proc(input: string, sink: Sink, scope: rdf.Blank_Node_Scope, user_data: rawptr = nil) -> Parse_Error {
 	if sink == nil do return Parse_Error{code = .Missing_Sink, line = 1, column = 1}
 	s := Scanner{input = input, line = 1, column = 1, scope = scope}
 	builders: [4]strings.Builder
@@ -415,5 +408,5 @@ Sink :: proc(triple: rdf.Triple, user_data: rawptr) -> bool
 // parse parses a complete UTF-8 N-Triples document. Blank-node labels share
 // one non-zero scope for this call and are distinct from labels in other calls.
 parse :: proc(input: string, sink: Sink, user_data: rawptr = nil) -> Parse_Error {
-	return parse_with_scope(input, sink, new_blank_node_scope(), user_data)
+	return parse_scoped(input, sink, rdf.new_blank_node_scope(), user_data)
 }

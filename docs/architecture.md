@@ -2,7 +2,7 @@
 
 ## Package boundaries
 
-The `rdf` package contains only syntax-independent data types. Syntax packages such as `rdf/ntriples` produce `Triple` values without depending on a filesystem, database, or in-memory graph implementation. Dataset and quad types will be introduced with N-Quads rather than committed to prematurely.
+The `rdf` package contains only syntax-independent data types. Syntax packages such as `rdf/ntriples` and `rdf/nquads` produce `Triple` and `Quad` values without depending on a filesystem, database, or in-memory graph implementation. A quad represents the default graph explicitly with `has_graph = false`; the default graph is never encoded as a sentinel RDF term.
 
 Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and a small utility can collect them into a dynamic array when retaining the graph is appropriate.
 
@@ -10,7 +10,7 @@ Consumers receive triples through a sink callback. A converter can write each tr
 
 The parser avoids copying whenever possible. Values may reference the original input, the reusable line buffer owned by `parse_reader`, or temporary builders used for escape decoding. Consequently, every parsing API guarantees term strings only for the duration of the current sink callback. Consumers must copy strings or encode them into application-owned IDs before returning if they need longer lifetimes.
 
-Blank-node labels are scoped to one parsed document. The parser stores that identity in `Term.scope`; one `parse` or `parse_reader` call shares a non-zero scope, and independent calls receive different scopes. Manually constructed blank nodes default to scope zero, so applications can either provide an explicit scope or dictionary-encode them when merging sources.
+Blank-node labels are scoped to one parsed document. Parsers store that identity in `Term.scope`; one `parse` or `parse_reader` call shares a non-zero scope across triple positions and N-Quads graph names, while independent calls and syntax packages draw from one process-wide scope generator. Manually constructed blank nodes default to scope zero, so applications can provide an explicit scope or dictionary-encode them when merging sources.
 
 The streaming reader requests 64 KiB chunks by default and enforces a 16 MiB maximum physical line length to bound memory growth on untrusted input. Both values are configurable, and callers may also cap the number of emitted triples.
 

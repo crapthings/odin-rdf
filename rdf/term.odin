@@ -1,6 +1,8 @@
 // Package rdf defines the syntax-independent RDF data model.
 package rdf
 
+import "core:sync"
+
 // Term_Kind identifies the three RDF 1.1 term categories represented by Term.
 Term_Kind :: enum {
 	IRI,
@@ -12,6 +14,15 @@ Term_Kind :: enum {
 // meaningful. Zero is reserved for caller-managed terms constructed without
 // an explicit source scope.
 Blank_Node_Scope :: distinct u64
+
+@(private) blank_node_scope_counter: u64
+
+// new_blank_node_scope returns a process-unique, non-zero scope suitable for
+// labels originating from one RDF document or caller-managed source.
+new_blank_node_scope :: proc() -> Blank_Node_Scope {
+	previous := sync.atomic_add_explicit(&blank_node_scope_counter, u64(1), .Relaxed)
+	return Blank_Node_Scope(previous + 1)
+}
 
 XSD_STRING      :: "http://www.w3.org/2001/XMLSchema#string"
 RDF_LANG_STRING :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"
@@ -32,6 +43,32 @@ Triple :: struct {
 	subject:   Term,
 	predicate: Term,
 	object:    Term,
+}
+
+// Quad is one RDF dataset statement. When has_graph is false the statement is
+// in the default graph and graph is ignored; otherwise graph is an IRI or blank node.
+Quad :: struct {
+	subject:   Term,
+	predicate: Term,
+	object:    Term,
+	graph:     Term,
+	has_graph: bool,
+}
+
+// default_graph_quad constructs a dataset statement in the default graph.
+default_graph_quad :: proc(triple: Triple) -> Quad {
+	return Quad{subject = triple.subject, predicate = triple.predicate, object = triple.object}
+}
+
+// named_graph_quad constructs a dataset statement with an explicit graph name.
+// Use validate_quad_structure to reject a literal or malformed graph term.
+named_graph_quad :: proc(triple: Triple, graph: Term) -> Quad {
+	return Quad{subject = triple.subject, predicate = triple.predicate, object = triple.object, graph = graph, has_graph = true}
+}
+
+// triple returns the subject-predicate-object portion of a quad.
+triple :: proc(quad: Quad) -> Triple {
+	return Triple{quad.subject, quad.predicate, quad.object}
 }
 
 // iri constructs an IRI term without validating the IRI string.
@@ -80,6 +117,14 @@ Triple_Structure_Error :: enum {
 	Invalid_Object_Term,
 }
 
+// Quad_Structure_Error reports a triple or graph-name invariant violation.
+Quad_Structure_Error :: enum {
+	None,
+	Invalid_Triple,
+	Invalid_Graph,
+	Invalid_Graph_Term,
+}
+
 // term_structure_error_message returns a stable, allocation-free description.
 term_structure_error_message :: proc(code: Term_Structure_Error) -> string {
 	switch code {
@@ -102,6 +147,17 @@ triple_structure_error_message :: proc(code: Triple_Structure_Error) -> string {
 	case .Invalid_Subject_Term:   return "subject has invalid term structure"
 	case .Invalid_Predicate_Term: return "predicate has invalid term structure"
 	case .Invalid_Object_Term:    return "object has invalid term structure"
+	}
+	return "unknown error"
+}
+
+// quad_structure_error_message returns a stable, allocation-free description.
+quad_structure_error_message :: proc(code: Quad_Structure_Error) -> string {
+	switch code {
+	case .None:               return "no error"
+	case .Invalid_Triple:     return "quad contains an invalid RDF triple"
+	case .Invalid_Graph:      return "graph name must be an IRI or blank node"
+	case .Invalid_Graph_Term: return "graph name has invalid term structure"
 	}
 	return "unknown error"
 }
@@ -131,5 +187,15 @@ validate_triple_structure :: proc(triple: Triple) -> Triple_Structure_Error {
 	if validate_term_structure(triple.subject) != .None do return .Invalid_Subject_Term
 	if validate_term_structure(triple.predicate) != .None do return .Invalid_Predicate_Term
 	if validate_term_structure(triple.object) != .None do return .Invalid_Object_Term
+	return .None
+}
+
+// validate_quad_structure checks RDF triple rules and, for named graphs, the
+// graph-name kind and term structure. The default graph is not represented by a term.
+validate_quad_structure :: proc(quad: Quad) -> Quad_Structure_Error {
+	if validate_triple_structure(triple(quad)) != .None do return .Invalid_Triple
+	if !quad.has_graph do return .None
+	if quad.graph.kind != .IRI && quad.graph.kind != .Blank_Node do return .Invalid_Graph
+	if validate_term_structure(quad.graph) != .None do return .Invalid_Graph_Term
 	return .None
 }

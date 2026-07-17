@@ -32,3 +32,10 @@ while [ "$run" -le "$runs" ]; do
   odin run "$root/benchmarks/nquads" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
   run=$((run + 1))
 done
+
+run=1
+while [ "$run" -le "$runs" ]; do
+  printf '\nMixed-term process %s/%s\n' "$run" "$runs"
+  odin run "$root/benchmarks/mixed" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
+  run=$((run + 1))
+done

@@ -43,6 +43,19 @@ test_parse_reader_reports_global_line :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_parse_reader_preserves_physical_line_error_semantics :: proc(t: ^testing.T) {
+	input := "<urn:s> <urn:p> \"broken\r<urn:s> <urn:p> <urn:o> ."
+	memory := parse(input, ignore)
+	string_reader: strings.Reader
+	reader := strings.to_reader(&string_reader, input)
+	stream := parse_reader(reader, ignore, Reader_Options{chunk_size = 1})
+	testing.expect_value(t, memory.code, Error_Code.Expected_Term)
+	testing.expect_value(t, stream.error.code, memory.code)
+	testing.expect_value(t, stream.error.line, memory.line)
+	testing.expect_value(t, stream.error.column, memory.column)
+}
+
+@(test)
 test_parse_reader_enforces_line_limit :: proc(t: ^testing.T) {
 	input := "# 123456789"
 	string_reader: strings.Reader

@@ -130,6 +130,9 @@ parse_reader :: proc(
 				break
 			}
 			append(&line, ..part)
+			// Retain a physical terminator while parsing this record so malformed
+			// literals have the same error code as the in-memory document path.
+			append(&line, '\n')
 			if parse_err := parse_reader_line(line[:], line_number, &state); parse_err.code != .None {
 				result.error = parse_err
 				break

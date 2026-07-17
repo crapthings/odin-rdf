@@ -7,7 +7,7 @@
   <meta name="description" content="A small, streaming-first RDF 1.1 toolkit for Odin with conformant N-Triples and N-Quads parsers, bounded-memory readers, and atomic writers.">
   <meta name="keywords" content="Odin, RDF, RDF 1.1, N-Triples, N-Quads, semantic web, linked data, streaming parser, W3C">
   <meta name="author" content="odin-rdf contributors">
-  <meta name="theme-color" content="#020617">
+  <meta name="theme-color" content="#f7f8f2">
   <meta property="og:type" content="website">
   <meta property="og:title" content="odin-rdf — Streaming RDF for Odin">
   <meta property="og:description" content="Standards-driven N-Triples and N-Quads parsing and writing with explicit memory ownership.">
@@ -66,8 +66,8 @@
             <dd class="mt-1 text-xs leading-5 text-olive-700/65">Linux, macOS, Windows</dd>
           </div>
           <div>
-            <dt class="font-mono text-2xl font-semibold text-olive-950">O(1)</dt>
-            <dd class="mt-1 text-xs leading-5 text-olive-700/65">Bounded streaming memory</dd>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">Bounded</dt>
+            <dd class="mt-1 text-xs leading-5 text-olive-700/65">Configurable streaming limits</dd>
           </div>
         </dl>
       </div>
@@ -161,7 +161,7 @@ err := nt.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.2.0 covers RDF 1.1 terms, triples, quads, N-Triples, and N-Quads syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.3.0 covers RDF 1.1 terms, triples, quads, N-Triples, and N-Quads syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
           <a href="https://www.w3.org/TR/n-quads/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -221,7 +221,7 @@ err := nt.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.2.0</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.3.0</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Build the RDF layer you actually need.</h2>
           <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Start with a focused, verified syntax foundation. Keep storage, inference, and application vocabulary choices in your own architecture.</p>
         </div>

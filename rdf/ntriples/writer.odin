@@ -3,6 +3,7 @@ package ntriples
 import "core:strings"
 import "core:unicode/utf8"
 import rdf ".."
+import termlex "../internal/termlex"
 
 // Write_Error identifies why a term or triple cannot be serialized as N-Triples.
 Write_Error :: enum {
@@ -76,20 +77,20 @@ write_error_message :: proc(code: Write_Error) -> string {
 
 @(private) valid_language :: proc(value: string) -> bool {
 	if len(value) == 0 do return false
-	s := Scanner{input = value, line = 1, column = 1}
+	s := termlex.Scanner{input = value, line = 1, column = 1}
 	letters := 0
 	for s.pos < len(s.input) && ((s.input[s.pos] >= 'a' && s.input[s.pos] <= 'z') || (s.input[s.pos] >= 'A' && s.input[s.pos] <= 'Z')) {
-		advance_ascii(&s); letters += 1
+		termlex.advance_ascii(&s); letters += 1
 	}
 	if letters == 0 do return false
 	for s.pos < len(s.input) {
 		if s.input[s.pos] != '-' do return false
-		advance_ascii(&s)
+		termlex.advance_ascii(&s)
 		part := 0
 		for s.pos < len(s.input) {
 			c := s.input[s.pos]
 			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) do break
-			advance_ascii(&s); part += 1
+			termlex.advance_ascii(&s); part += 1
 		}
 		if part == 0 do return false
 	}
@@ -100,14 +101,14 @@ write_error_message :: proc(code: Write_Error) -> string {
 	if len(value) == 0 do return false
 	r, width := utf8.decode_rune_in_string(value)
 	if r == utf8.RUNE_ERROR && width == 1 do return false
-	if !(is_pn_chars_u(r) || (r >= '0' && r <= '9')) do return false
+	if !(termlex.is_pn_chars_u(r) || (r >= '0' && r <= '9')) do return false
 	last_dot := false
 	for pos := width; pos < len(value); {
 		r, width = utf8.decode_rune_in_string(value[pos:])
 		if r == utf8.RUNE_ERROR && width == 1 do return false
 		if r == '.' {
 			last_dot = true
-		} else if is_pn_chars(r) {
+		} else if termlex.is_pn_chars(r) {
 			last_dot = false
 		} else {
 			return false
@@ -141,7 +142,7 @@ write_error_message :: proc(code: Write_Error) -> string {
 	if structure_error := term_structure_write_error(rdf.validate_term_structure(term)); structure_error != .None do return structure_error
 	switch term.kind {
 	case .IRI:
-		if !is_absolute_iri(term.value) do return .Invalid_IRI
+		if !termlex.is_absolute_iri(term.value) do return .Invalid_IRI
 		if !utf8.valid_string(term.value) do return .Invalid_UTF8
 	case .Blank_Node:
 		if !valid_blank_node(term.value) do return .Invalid_Blank_Node
@@ -150,7 +151,7 @@ write_error_message :: proc(code: Write_Error) -> string {
 		if len(term.language) > 0 {
 			if !valid_language(term.language) do return .Invalid_Language_Tag
 		} else {
-			if !is_absolute_iri(term.datatype) do return .Invalid_IRI
+			if !termlex.is_absolute_iri(term.datatype) do return .Invalid_IRI
 			if !utf8.valid_string(term.datatype) do return .Invalid_UTF8
 		}
 	case: return .Invalid_Term_Kind

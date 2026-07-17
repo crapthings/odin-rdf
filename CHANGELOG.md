@@ -2,13 +2,17 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.4.0 - 2026-07-17
 
 - Define the RDF 1.1 Turtle parser API, streaming architecture, transient
   parse-state model, resource limits, and 313-case W3C conformance gate.
 - Add pinned Turtle manifest inventory, test-only RDF graph isomorphism, and a
   relative-capable internal IRIREF decoder while preserving absolute-IRI policy
   for N-Triples and N-Quads.
+- Add an RDF 1.1 Turtle parser with directives, relative IRI resolution,
+  prefixed names, literal shorthands, property lists, collections, bounded
+  reader parsing, statement-atomic emission, and all 313 pinned W3C cases
+  passing through memory and 1-byte, 7-byte, and default reader chunks.
 
 ## 0.3.1 - 2026-07-17
 

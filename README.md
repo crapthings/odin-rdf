@@ -5,24 +5,25 @@
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
 ![W3C syntax tests](https://img.shields.io/badge/W3C_syntax_tests-72%2F72-16a34a)
 ![W3C N-Quads tests](https://img.shields.io/badge/W3C_N--Quads-87%2F87-65a30d)
+![W3C Turtle tests](https://img.shields.io/badge/W3C_Turtle-313%2F313-4d7c0f)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
 A small, streaming-first RDF toolkit for Odin, built around standards compliance and explicit memory ownership.
 
-> The API may still evolve. The RDF 1.1 N-Triples and N-Quads parsers pass the pinned W3C syntax test suites used by this repository.
+> The API may still evolve. The RDF 1.1 N-Triples, N-Quads, and Turtle parsers pass the pinned W3C suites used by this repository.
 
 ## Status and scope
 
-Version `0.3.1` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages share a tested internal term lexer and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.4.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser, and an RDF dataset model. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
-Turtle, RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. See the roadmap below for planned syntax support.
+RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. Turtle writing is intentionally separate because prefix and formatting policy require their own API.
 
 The project is tested with Odin `dev-2026-07` and CI tracks the current Odin toolchain on Linux, macOS, and Windows.
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples and 87 N-Quads syntax cases through memory and streaming entry points, including parser/writer round trips.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, and 313 Turtle cases through memory and streaming entry points. Turtle evaluation uses RDF graph isomorphism.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.
 - **Explicit lifetimes.** Public APIs document exactly how long input-backed and decoded strings remain valid.
@@ -32,7 +33,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ```mermaid
 flowchart LR
-    Memory[UTF-8 string] --> Parser[N-Triples / N-Quads parser]
+    Memory[UTF-8 string] --> Parser[N-Triples / N-Quads / Turtle parser]
     Reader[io.Reader] -->|bounded chunks| Parser
     Parser -->|sink callback| Converter[Format converter]
     Parser -->|sink callback| Database[Database importer]
@@ -55,8 +56,10 @@ flowchart LR
 rdf/                 Syntax-independent RDF terms, triples, and quads
 rdf/ntriples/        N-Triples parser, writer, and unit tests
 rdf/nquads/          N-Quads parser, writer, and unit tests
+rdf/turtle/          Turtle parser, IRI resolution, and bounded reader
 examples/minimal/    Tiny educational example with no library dependency
 examples/basic/      Streaming parser API example
+examples/turtle/     Turtle directives and compact graph example
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
@@ -70,6 +73,8 @@ benchmarks/          Reproducible parser benchmarks
 - `ntriples.parse_reader(reader, sink, options)` parses incrementally with bounded memory. Defaults are a 64 KiB read buffer and a 16 MiB maximum line length.
 - `ntriples.write_triple(builder, triple)` validates a triple and atomically appends canonical-layout N-Triples.
 - `nquads.parse`, `nquads.parse_reader`, and `nquads.write_quad` provide the corresponding RDF dataset pipeline.
+- `turtle.parse(input, sink, options)` covers RDF 1.1 Turtle directives, relative IRIs, compact predicate/object lists, literal shorthands, property lists, and collections.
+- `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
 - `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
 - `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
 - Every public error enum has a matching stable, allocation-free message function across `rdf`, `ntriples`, and `nquads`.
@@ -121,6 +126,20 @@ err := nquads.parse(`<urn:s> <urn:p> <urn:o> <urn:g> .`, print_quad)
 
 See [`examples/nquads`](examples/nquads/main.odin) for the complete runnable example.
 
+Turtle accepts an optional initial base IRI and emits a statement only after it
+has been completely validated:
+
+```odin
+import turtle "path/to/odin-rdf/rdf/turtle"
+
+input := `@prefix ex: <https://example.com/> .
+ex:alice a ex:Person ; ex:name "Alice"@en .`
+
+err := turtle.parse(input, print_triple)
+```
+
+See [`examples/turtle`](examples/turtle/main.odin) for a complete example.
+
 ## Verification
 
 ```sh
@@ -128,21 +147,23 @@ odin check rdf -no-entry-point
 odin test rdf
 odin test rdf/ntriples
 odin test rdf/nquads
+odin test rdf/turtle
 odin test tests/property
 odin run tests/fuzz -o:speed -sanitize:address
 odin run examples/minimal
 odin run examples/basic
+odin run examples/turtle
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
+./scripts/run-w3c-turtle-tests.sh
 ./scripts/run-benchmarks.sh
 ```
 
 ## Roadmap
 
-1. Implement Turtle over the shared lexical foundation according to the
-   [parser design](docs/turtle-design.md).
-2. Add a buffered, batch-oriented writer API after profiling real converter workloads.
-3. Evaluate storage and SPARQL APIs after the syntax layer is broader.
+1. Design a Turtle writer with explicit prefix selection and formatting policy.
+2. Add a buffered, batch-oriented writer API after profiling converter workloads.
+3. Evaluate RDF/XML or JSON-LD before committing to graph storage and SPARQL APIs.
 
 ## License
 

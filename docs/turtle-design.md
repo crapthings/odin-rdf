@@ -1,8 +1,7 @@
 # Turtle parser design
 
-This document defines the implementation contract for an RDF 1.1 Turtle
-parser. It is a design boundary, not a claim that Turtle is available in the
-current release.
+This document defines the implementation contract for the RDF 1.1 Turtle
+parser introduced in version 0.4.0.
 
 The normative baseline is the W3C [RDF 1.1 Turtle Recommendation][turtle]. The
 acceptance suite is the official [`w3c/rdf-tests` Turtle manifest][tests],
@@ -11,7 +10,7 @@ pinned to the same upstream commit as the existing syntax suites:
 
 ## Scope
 
-The first implementation must cover the complete RDF 1.1 Turtle grammar and
+The implementation covers the complete RDF 1.1 Turtle grammar and
 mapping to RDF triples:
 
 - `@base`/`BASE` and `@prefix`/`PREFIX` directives, including their distinct
@@ -39,14 +38,16 @@ Parse_Options :: struct {
 	base_iri:            string,
 	max_token_bytes:     int,
 	max_prefixes:        int,
+	max_prefix_bytes:    int,
 	max_nesting_depth:   int,
 	max_pending_triples: int,
 	max_triples:         int,
 }
 
 Reader_Options :: struct {
-	parse:      Parse_Options,
-	chunk_size: int,
+	parse:               Parse_Options,
+	chunk_size:          int,
+	max_statement_bytes: int,
 }
 
 parse :: proc(input: string, sink: Sink, options: Parse_Options = {},
@@ -54,11 +55,11 @@ parse :: proc(input: string, sink: Sink, options: Parse_Options = {},
 
 parse_reader :: proc(reader: io.Reader, sink: Sink,
                      options: Reader_Options = {},
-                     user_data: rawptr = nil) -> Parse_Error
+                     user_data: rawptr = nil) -> Reader_Result
 ```
 
-Exact default limits will be selected and documented with implementation. Zero
-selects a safe default; negative values are invalid. `base_iri`, when present,
+Zero selects a documented safe default; negative values are invalid.
+`base_iri`, when present,
 must be absolute. A relative IRI is an error when neither options nor a prior
 base directive establishes a usable base.
 
@@ -77,8 +78,8 @@ core API.
 Turtle is document grammar, not a line format. Memory and reader entry points
 feed one stateful lexer and recursive-descent parser. The reader preserves state
 across arbitrary chunks, including UTF-8 sequences, escapes, prefixed names,
-and multiline strings. It must not split input into lines or copy the whole
-document.
+and multiline strings. A framing lexer bounds one top-level statement with
+`max_statement_bytes`; the complete document is never materialized.
 
 The implementation has three transient layers:
 
@@ -146,14 +147,14 @@ details and must not collide with source blank-node labels in the same scope.
 ## Resource and ownership guarantees
 
 Reader memory must remain bounded independently of input size. Limits cover
-token bytes, prefix count, nesting depth, pending triples, emitted triples, and
-chunk size. Prefix values and the current base have document lifetime and are
-bounded by prefix count and per-token size. Reassignment replaces a prefix
-instead of consuming another slot.
+token bytes, prefix count and total bytes, nesting depth, pending triples,
+emitted triples, and chunk size. Prefix values and the current base have
+document lifetime. Reassignment replaces a prefix and returns the old namespace
+bytes to the table budget.
 
 There is no line-length limit: valid long strings cross lines and a statement
-may be formatted arbitrarily. Token and pending-statement limits provide the
-relevant bounds.
+may be formatted arbitrarily. Token, statement-byte, and pending-triple limits
+provide the relevant bounds.
 
 Memory parsing may reference unescaped input slices. Reader input and decoded,
 resolved, prefixed, or generated values use parser-owned storage. The pending
@@ -202,7 +203,7 @@ force a public graph-store API prematurely.
 
 ## Delivery sequence
 
-Implementation lands as reviewable, always-green changes:
+Implementation landed as reviewable, always-green changes:
 
 1. Add manifest discovery and test-only graph isomorphism; split IRIREF decoding
    from absolute-IRI policy without observable regressions.
@@ -216,8 +217,8 @@ Implementation lands as reviewable, always-green changes:
    differential property/fuzz coverage.
 6. Advertise Turtle in README and landing page only after the gate passes.
 
-Each stage preserves released syntax behavior. The first Turtle release is a
-minor version because it adds a package; shared internal refactors stay hidden.
+Each stage preserved released syntax behavior. Version 0.4.0 is a minor release
+because it adds a package; shared internal refactors stay hidden.
 
 [turtle]: https://www.w3.org/TR/turtle/
 [tests]: https://github.com/w3c/rdf-tests/tree/d3e844aaa3e2f2b5250f2d1c988ce58870d6bc86/rdf/rdf11/rdf-turtle

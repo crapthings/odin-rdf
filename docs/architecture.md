@@ -31,3 +31,7 @@ The core package validates RDF term and triple structure separately from lexical
 ## Performance policy
 
 Correctness against the W3C test suite comes first. Performance work should use representative large inputs and report throughput, allocation counts, and peak memory. Optimize copying and allocation behavior first, then I/O batching and data layout; consider SIMD only after profiling identifies a clear benefit.
+
+The [shared term lexer design](shared-lexer-design.md) freezes the compatibility
+contract and before-refactor throughput baseline for the next parser-internal
+migration.

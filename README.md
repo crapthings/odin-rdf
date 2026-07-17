@@ -132,8 +132,7 @@ odin run examples/minimal
 odin run examples/basic
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
-odin run benchmarks/ntriples -o:speed
-odin run benchmarks/nquads -o:speed
+./scripts/run-benchmarks.sh
 ```
 
 ## Roadmap

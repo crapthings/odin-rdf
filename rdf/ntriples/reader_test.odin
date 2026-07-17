@@ -134,7 +134,7 @@ test_parser_handles_deterministic_random_bytes :: proc(t: ^testing.T) {
 	state := u64(0x4d595df4d0f33173)
 	buffer: [128]byte
 	for length in 0..=len(buffer) {
-		for iteration in 0..<32 {
+		for _ in 0..<32 {
 			for i in 0..<length {
 				state = state * 6364136223846793005 + 1442695040888963407
 				buffer[i] = byte(state >> 56)

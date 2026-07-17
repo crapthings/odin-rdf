@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 - 2026-07-17
+
+- Add the RDF dataset `Quad` model with explicit default-graph representation.
+- Add an RDF 1.1 N-Quads parser, bounded `io.Reader` path, and atomic writer.
+- Pass all 87 pinned W3C RDF 1.1 N-Quads syntax tests through memory and streaming paths with writer round trips.
+- Share blank-node scopes and proven N-Triples term parsing across syntax packages.
+
 ## 0.1.0 - 2026-07-17
 
 Initial public release.

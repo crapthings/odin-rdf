@@ -1,49 +1,44 @@
-package ntriples
+package nquads
 
 import "core:io"
 import rdf ".."
 
-// DEFAULT_CHUNK_SIZE is used when Reader_Options.chunk_size is zero.
-DEFAULT_CHUNK_SIZE :: 64 * 1024
-// DEFAULT_MAX_LINE_BYTES is used when Reader_Options.max_line_bytes is zero.
+DEFAULT_CHUNK_SIZE     :: 64 * 1024
 DEFAULT_MAX_LINE_BYTES :: 16 * 1024 * 1024
 @(private) MAX_EMPTY_READS :: 100
 
 // Reader_Options controls buffering and resource limits for parse_reader.
 Reader_Options :: struct {
-	// Number of bytes requested from the reader per call. Zero uses 64 KiB.
 	chunk_size:     int,
-	// Maximum physical line length in bytes. Zero uses 16 MiB.
 	max_line_bytes: int,
-	// Maximum number of triples to emit. Zero disables the limit.
-	max_triples:    u64,
+	max_quads:      u64,
 }
 
 // Reader_Result contains the parse outcome, preserved I/O error, and progress.
 Reader_Result :: struct {
-	error:       Parse_Error,
+	error:        Parse_Error,
 	reader_error: io.Error,
-	triples:     u64,
-	bytes_read:  u64,
+	quads:        u64,
+	bytes_read:   u64,
 }
 
 @(private) Reader_State :: struct {
-	sink:        Sink,
-	user_data:   rawptr,
-	max_triples: u64,
-	triples:     u64,
-	limit_hit:   bool,
-	scope:       rdf.Blank_Node_Scope,
+	sink:      Sink,
+	user_data: rawptr,
+	max_quads: u64,
+	quads:     u64,
+	limit_hit: bool,
+	scope:     rdf.Blank_Node_Scope,
 }
 
-@(private) reader_sink :: proc(triple: rdf.Triple, data: rawptr) -> bool {
+@(private) reader_sink :: proc(quad: rdf.Quad, data: rawptr) -> bool {
 	state := cast(^Reader_State)data
-	if state.max_triples > 0 && state.triples >= state.max_triples {
+	if state.max_quads > 0 && state.quads >= state.max_quads {
 		state.limit_hit = true
 		return false
 	}
-	state.triples += 1
-	return state.sink(triple, state.user_data)
+	state.quads += 1
+	return state.sink(quad, state.user_data)
 }
 
 @(private) line_limit_exceeded :: proc(current, incoming, limit: int) -> bool {
@@ -51,23 +46,15 @@ Reader_Result :: struct {
 }
 
 @(private) parse_reader_line :: proc(line: []byte, line_number: int, state: ^Reader_State) -> Parse_Error {
-	err := parse_scoped(string(line), reader_sink, state.scope, state)
-	if state.limit_hit do return Parse_Error{code = .Triple_Limit, line = line_number, column = err.column}
-	if err.code != .None {
-		err.line += line_number - 1
-	}
+	err := parse_line(string(line), reader_sink, state.scope, state)
+	if state.limit_hit do return Parse_Error{code = .Quad_Limit, line = line_number, column = max(err.column, 1)}
+	if err.code != .None do err.line = line_number
 	return err
 }
 
 // parse_reader incrementally parses an io.Reader with memory bounded by
-// max_line_bytes plus chunk_size. Sink strings remain valid only for the current
-// callback. Ownership of the reader remains with the caller.
-parse_reader :: proc(
-	reader: io.Reader,
-	sink: Sink,
-	options: Reader_Options = {},
-	user_data: rawptr = nil,
-) -> Reader_Result {
+// max_line_bytes plus chunk_size. Sink strings remain callback-scoped.
+parse_reader :: proc(reader: io.Reader, sink: Sink, options: Reader_Options = {}, user_data: rawptr = nil) -> Reader_Result {
 	result: Reader_Result
 	if sink == nil {
 		result.error = Parse_Error{code = .Missing_Sink, line = 1, column = 1}
@@ -90,7 +77,7 @@ parse_reader :: proc(
 	defer delete(chunk)
 	line := make([dynamic]byte, 0, min(chunk_size, max_line_bytes))
 	defer delete(line)
-	state := Reader_State{sink = sink, user_data = user_data, max_triples = options.max_triples, scope = rdf.new_blank_node_scope()}
+	state := Reader_State{sink = sink, user_data = user_data, max_quads = options.max_quads, scope = rdf.new_blank_node_scope()}
 	line_number := 1
 	skip_lf := false
 	no_progress := 0
@@ -118,10 +105,7 @@ parse_reader :: proc(
 			c := chunk[i]
 			if skip_lf {
 				skip_lf = false
-				if c == '\n' {
-					start = i + 1
-					continue
-				}
+				if c == '\n' { start = i + 1; continue }
 			}
 			if c != '\r' && c != '\n' do continue
 			part := chunk[start:i]
@@ -130,10 +114,7 @@ parse_reader :: proc(
 				break
 			}
 			append(&line, ..part)
-			if parse_err := parse_reader_line(line[:], line_number, &state); parse_err.code != .None {
-				result.error = parse_err
-				break
-			}
+			if err := parse_reader_line(line[:], line_number, &state); err.code != .None { result.error = err; break }
 			clear(&line)
 			line_number += 1
 			start = i + 1
@@ -156,10 +137,7 @@ parse_reader :: proc(
 			break
 		}
 	}
-
-	if result.error.code == .None && len(line) > 0 {
-		result.error = parse_reader_line(line[:], line_number, &state)
-	}
-	result.triples = state.triples
+	if result.error.code == .None && len(line) > 0 do result.error = parse_reader_line(line[:], line_number, &state)
+	result.quads = state.quads
 	return result
 }

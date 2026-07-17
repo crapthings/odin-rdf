@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -22,8 +23,10 @@ jobs:
       - run: odin check rdf -no-entry-point
       - run: odin test rdf
       - run: odin test rdf/ntriples
+      - run: odin test rdf/nquads
       - run: odin run examples/minimal
       - run: odin run examples/basic
+      - run: odin run examples/nquads
 
   w3c:
     runs-on: ubuntu-latest
@@ -34,6 +37,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/run-w3c-tests.sh
+      - run: ./scripts/run-w3c-nquads-tests.sh
 
   quality:
     runs-on: ubuntu-latest
@@ -44,5 +48,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - run: odin check rdf -no-entry-point -vet -warnings-as-errors
+      - run: odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
+      - run: odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
       - run: odin test rdf -sanitize:address
       - run: odin test rdf/ntriples -sanitize:address
+      - run: odin test rdf/nquads -sanitize:address

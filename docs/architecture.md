@@ -34,6 +34,6 @@ Correctness against the W3C test suite comes first. Performance work should use 
 
 The [shared term lexer design](shared-lexer-design.md) freezes the compatibility
 contract and before-refactor throughput baseline for the next parser-internal
-migration. Its first stage is implemented in `rdf/internal/termlex`: N-Triples
-uses the internal lexical primitives while retaining ownership of its document
-grammar and public errors. N-Quads migration remains a separate second stage.
+migration. Both N-Triples and N-Quads now use `rdf/internal/termlex` while
+retaining ownership of their document grammars and public errors. N-Quads scans
+each statement once instead of constructing and reparsing synthetic N-Triples.

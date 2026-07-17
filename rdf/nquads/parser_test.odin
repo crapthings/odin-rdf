@@ -78,6 +78,14 @@ test_preserves_term_error_codes_and_locations :: proc(t: ^testing.T) {
 
 	err = parse(`<urn:s> <urn:p> "x"@en- <urn:g> .`, ignore)
 	testing.expect_value(t, err.code, Error_Code.Invalid_Language_Tag)
+
+	err = parse(`<urn:s> <urn:p> "unterminated`, ignore)
+	testing.expect_value(t, err.code, Error_Code.Unexpected_End)
+	testing.expect_value(t, err.column, 17)
+
+	err = parse(`<urn:s> <urn:p> "x"^^bad .`, ignore)
+	testing.expect_value(t, err.code, Error_Code.Unexpected_End)
+	testing.expect_value(t, err.column, 17)
 }
 
 @(test)
@@ -85,6 +93,17 @@ test_minimal_whitespace_and_comments :: proc(t: ^testing.T) {
 	input := "# header\n<urn:s><urn:p><urn:o><urn:g>.# tail\n_:s<urn:p>\"x\".\n"
 	err := parse(input, ignore)
 	testing.expect_value(t, err.code, Error_Code.None)
+}
+
+@(test)
+test_incomplete_statement_compatibility :: proc(t: ^testing.T) {
+	inputs := []string{".", `<urn:s> .`, `<urn:s> <urn:p> .`}
+	for input in inputs {
+		err := parse(input, ignore)
+		testing.expect_value(t, err.code, Error_Code.Expected_Quad)
+		testing.expect_value(t, err.column, 1)
+	}
+	testing.expect_value(t, parse(`<urn:s>`, ignore).code, Error_Code.Expected_Dot)
 }
 
 @(test)

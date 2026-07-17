@@ -30,11 +30,11 @@ The `rdf/nquads` package mirrors the stable N-Triples shape:
   graph-name labels;
 - stable error codes, exact locations, and allocation-free error messages.
 
-N-Triples and N-Quads retain independent document grammars. The current
-implementation reuses the proven term parser through the scoped N-Triples
-adapter, which keeps blank-node identity stable across per-record parsing. A
-future direct lexer extraction is a performance optimization, not a change to
-the public N-Quads API.
+N-Triples and N-Quads retain independent document grammars. N-Quads parses its
+three triple positions and optional graph name directly through the internal
+shared term lexer. A caller-provided document scope keeps blank-node identity
+stable across statement positions and reader chunks without constructing or
+reparsing synthetic N-Triples statements.
 
 ## Conformance gate
 

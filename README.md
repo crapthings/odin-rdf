@@ -139,7 +139,8 @@ odin run examples/basic
 
 ## Roadmap
 
-1. Design and implement Turtle over the shared lexical foundation.
+1. Implement Turtle over the shared lexical foundation according to the
+   [parser design](docs/turtle-design.md).
 2. Add a buffered, batch-oriented writer API after profiling real converter workloads.
 3. Evaluate storage and SPARQL APIs after the syntax layer is broader.
 

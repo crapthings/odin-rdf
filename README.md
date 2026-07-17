@@ -14,7 +14,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.2.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.3.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages share a tested internal term lexer and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
 Turtle, RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. See the roadmap below for planned syntax support.
 
@@ -59,6 +59,7 @@ examples/minimal/    Tiny educational example with no library dependency
 examples/basic/      Streaming parser API example
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
+tests/fuzz/          Reproducible differential parser fuzzing harness
 benchmarks/          Reproducible parser benchmarks
 ```
 
@@ -128,6 +129,7 @@ odin test rdf
 odin test rdf/ntriples
 odin test rdf/nquads
 odin test tests/property
+odin run tests/fuzz -o:speed -sanitize:address
 odin run examples/minimal
 odin run examples/basic
 ./scripts/run-w3c-tests.sh
@@ -137,9 +139,9 @@ odin run examples/basic
 
 ## Roadmap
 
-1. Add continuous fuzzing and publish benchmark results from reproducible environments.
-2. Add a buffered, batch-oriented N-Triples writer API.
-3. Implement Turtle, then evaluate storage and SPARQL APIs.
+1. Design and implement Turtle over the shared lexical foundation.
+2. Add a buffered, batch-oriented writer API after profiling real converter workloads.
+3. Evaluate storage and SPARQL APIs after the syntax layer is broader.
 
 ## License
 

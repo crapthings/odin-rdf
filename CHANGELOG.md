@@ -2,12 +2,15 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 - 2026-07-17
 
 - Add deterministic property tests that compare N-Triples and N-Quads memory parsing, bounded-reader chunking, and canonical writer round trips across generated RDF data and random byte input.
 - Document the shared term-lexer migration contract and add a configurable, reproducible benchmark runner with a frozen before-refactor baseline.
 - Extract syntax-neutral RDF term lexing into `rdf/internal/termlex` and migrate N-Triples without changing its public API, diagnostics, or callback lifetimes.
 - Parse N-Quads directly through the shared term lexer, removing synthetic N-Triples reparsing while preserving conformance and improving parser throughput.
+- Add mixed-term N-Triples and N-Quads benchmarks alongside the focused synthetic workloads.
+- Add reproducible differential parser fuzzing with pull-request smoke coverage and a daily AddressSanitizer campaign.
+- Align N-Triples memory and bounded-reader errors for physical line endings inside literals and Unicode escapes.
 
 ## 0.2.0 - 2026-07-17
 

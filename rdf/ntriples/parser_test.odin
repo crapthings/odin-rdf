@@ -106,6 +106,13 @@ test_reject_invalid_inputs :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_unicode_escape_cannot_cross_physical_line :: proc(t: ^testing.T) {
+	err := parse("<urn:\\u26\r03> <urn:p> <urn:o> .", ignore)
+	testing.expect_value(t, err.code, Error_Code.Unexpected_End)
+	testing.expect_value(t, err.column, 6)
+}
+
+@(test)
 test_reject_invalid_utf8 :: proc(t: ^testing.T) {
 	bytes := []byte{'<','u','r','n',':','s','>',' ','<','u','r','n',':','p','>',' ','"',0xff,'"',' ','.'}
 	err := parse(string(bytes), ignore)

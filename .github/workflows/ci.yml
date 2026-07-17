@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: odin check rdf -no-entry-point
+      - run: odin test rdf
+      - run: odin test rdf/ntriples
+      - run: odin run examples/minimal
+      - run: odin run examples/basic
+
+  w3c:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: ./scripts/run-w3c-tests.sh
+
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: odin check rdf -no-entry-point -vet -warnings-as-errors
+      - run: odin test rdf -sanitize:address
+      - run: odin test rdf/ntriples -sanitize:address

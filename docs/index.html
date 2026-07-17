@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth bg-olive-50">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>odin-rdf — Streaming RDF for Odin</title>
+  <meta name="description" content="A small, streaming-first RDF 1.1 toolkit for Odin with a conformant N-Triples parser, bounded-memory reader, and atomic writer.">
+  <meta name="keywords" content="Odin, RDF, RDF 1.1, N-Triples, semantic web, linked data, streaming parser, W3C">
+  <meta name="author" content="odin-rdf contributors">
+  <meta name="theme-color" content="#020617">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="odin-rdf — Streaming RDF for Odin">
+  <meta property="og:description" content="Standards-driven N-Triples parsing and writing with explicit memory ownership.">
+  <meta property="og:image" content="assets/odin-rdf-banner.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-olive-50 font-sans text-olive-950 antialiased selection:bg-olive-800 selection:text-olive-50">
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div class="absolute left-1/2 top-0 h-[32rem] w-[70rem] -translate-x-1/2 rounded-full bg-olive-300/35 blur-3xl"></div>
+    <div class="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-lime-200/30 blur-3xl"></div>
+  </div>
+
+  <header class="sticky top-0 z-50 border-b border-olive-950/10 bg-olive-50/85 backdrop-blur-xl">
+    <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8" aria-label="Primary navigation">
+      <a href="#top" class="flex items-center gap-3 text-sm font-semibold tracking-tight text-olive-950">
+        <span class="grid h-8 w-8 place-items-center rounded-lg border border-olive-800/20 bg-olive-800 font-mono text-xs text-olive-50">RDF</span>
+        <span>odin-rdf</span>
+      </a>
+      <div class="hidden items-center gap-7 text-sm text-olive-700 sm:flex">
+        <a href="#features" class="transition hover:text-olive-950">Features</a>
+        <a href="#standards" class="transition hover:text-olive-950">Standards</a>
+        <a href="#quickstart" class="transition hover:text-olive-950">Quick start</a>
+        <a href="architecture.md" class="transition hover:text-olive-950">Architecture</a>
+      </div>
+      <a href="https://github.com/crapthings/odin-rdf" class="rounded-lg border border-olive-900/15 bg-white/70 px-4 py-2 text-sm font-medium text-olive-950 shadow-sm transition hover:border-olive-700/35 hover:bg-white" aria-label="View odin-rdf source on GitHub">View source</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="mx-auto grid max-w-7xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:pb-32 lg:pt-28">
+      <div class="flex flex-col justify-center">
+        <div class="mb-7 flex flex-wrap gap-2">
+          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 72/72</span>
+          <span class="rounded-full border border-lime-700/20 bg-lime-100 px-3 py-1 font-mono text-xs text-lime-800">RDF 1.1</span>
+          <span class="rounded-full border border-stone-400/25 bg-white/70 px-3 py-1 font-mono text-xs text-stone-700">MIT</span>
+        </div>
+        <h1 class="max-w-4xl text-5xl font-semibold leading-[1.03] tracking-[-0.045em] text-olive-950 sm:text-6xl lg:text-7xl">
+          RDF pipelines,<br>
+          <span class="text-olive-700">built the Odin way.</span>
+        </h1>
+        <p class="mt-7 max-w-2xl text-lg leading-8 text-olive-800/75 sm:text-xl">
+          A small, streaming-first RDF toolkit with a standards-driven N-Triples parser, bounded-memory reader, and atomic writer. Explicit lifetimes. Predictable limits. No graph store attached.
+        </p>
+        <div class="mt-10 flex flex-col gap-3 sm:flex-row">
+          <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700">Start parsing</a>
+          <a href="https://github.com/crapthings/odin-rdf/blob/main/README.md" class="inline-flex items-center justify-center rounded-xl border border-olive-900/15 bg-white/70 px-5 py-3 text-sm font-semibold text-olive-950 transition hover:border-olive-700/30 hover:bg-white">Read the docs</a>
+        </div>
+        <dl class="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-olive-950/10 pt-7">
+          <div>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">72/72</dt>
+            <dd class="mt-1 text-xs leading-5 text-olive-700/65">Pinned W3C syntax cases</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">3 OS</dt>
+            <dd class="mt-1 text-xs leading-5 text-olive-700/65">Linux, macOS, Windows</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">O(1)</dt>
+            <dd class="mt-1 text-xs leading-5 text-olive-700/65">Bounded streaming memory</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="relative flex items-center">
+        <div class="absolute -inset-8 rounded-[2.5rem] bg-gradient-to-br from-olive-400/25 via-transparent to-lime-300/20 blur-2xl"></div>
+        <div class="relative w-full overflow-hidden rounded-2xl border border-olive-900/20 bg-olive-950 shadow-2xl shadow-olive-950/20">
+          <div class="flex items-center justify-between border-b border-olive-50/10 px-5 py-3">
+            <div class="flex gap-2" aria-hidden="true">
+              <span class="h-2.5 w-2.5 rounded-full bg-stone-400"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-amber-300"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-lime-300"></span>
+            </div>
+            <span class="font-mono text-[11px] text-olive-300/60">main.odin</span>
+          </div>
+          <pre class="overflow-x-auto p-6 text-[13px] leading-7 text-olive-100 sm:p-8 sm:text-sm"><code><span class="text-lime-300">import</span> rdf <span class="text-amber-200">"odin-rdf/rdf"</span>
+<span class="text-lime-300">import</span> nt <span class="text-amber-200">"odin-rdf/rdf/ntriples"</span>
+
+consume <span class="text-olive-400/70">::</span> <span class="text-lime-300">proc</span>(triple: rdf.Triple,
+                _: rawptr) -&gt; bool {
+  process(triple)
+  <span class="text-lime-300">return</span> <span class="text-amber-200">true</span>
+}
+
+err := nt.parse(input, consume)
+<span class="text-lime-300">if</span> err.code != .None {
+  report(err.line, err.column,
+         nt.parse_error_message(err.code))
+}</code></pre>
+          <div class="border-t border-olive-50/10 bg-black/15 px-6 py-4 font-mono text-xs text-lime-300">
+            ✓ streaming · ✓ zero-copy paths · ✓ exact locations
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-y border-olive-950/10 bg-white/45">
+      <div class="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        <p class="text-center font-mono text-xs uppercase tracking-[0.24em] text-olive-700/65">A focused foundation for RDF tooling in Odin</p>
+        <div class="mt-7 grid grid-cols-2 gap-4 text-center text-sm font-medium text-olive-800/70 sm:grid-cols-4">
+          <span>N-Triples</span>
+          <span>RDF 1.1 terms</span>
+          <span>io.Reader</span>
+          <span>Sink pipelines</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+      <div class="max-w-2xl">
+        <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Engineered for real input</p>
+        <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-5xl">Small surface. Serious guarantees.</h2>
+        <p class="mt-5 text-lg leading-8 text-olive-800/70">The library stays out of your storage model and concentrates on trustworthy syntax boundaries.</p>
+      </div>
+      <div class="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">01 / stream</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Bounded by design</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Parse from an <code class="text-olive-900">io.Reader</code> with explicit chunk, physical-line, and triple limits.</p>
+        </article>
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">02 / own</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Explicit lifetimes</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Callback string validity is documented precisely, including input-backed and decoded terms.</p>
+        </article>
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">03 / verify</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Conformance first</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Every pinned W3C positive and negative syntax case runs through memory and streaming paths.</p>
+        </article>
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">04 / locate</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Actionable diagnostics</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Stable error codes, allocation-free messages, and exact one-based line and column locations.</p>
+        </article>
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">05 / identify</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Correct blank nodes</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Parsed blank nodes carry document-local scope across both complete and incremental parsing.</p>
+        </article>
+        <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
+          <span class="font-mono text-sm text-olive-700">06 / compose</span>
+          <h3 class="mt-5 text-xl font-semibold text-olive-950">Pipeline native</h3>
+          <p class="mt-3 leading-7 text-olive-800/70">Send triples directly to converters, dictionaries, databases, or application-owned collectors.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="standards" class="border-y border-olive-950/10 bg-olive-100/65">
+      <div class="mx-auto grid max-w-7xl gap-12 px-6 py-24 lg:grid-cols-2 lg:px-8 lg:py-28">
+        <div>
+          <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.1.0 focuses on RDF 1.1 terms, triples, and N-Triples syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <a href="https://www.w3.org/TR/n-triples/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C specification →</a>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="rounded-2xl border border-olive-700/20 bg-white/70 p-6 shadow-sm">
+            <p class="font-mono text-xs uppercase tracking-wider text-olive-700">Included</p>
+            <ul class="mt-5 space-y-3 text-sm text-olive-900/80">
+              <li>RDF IRI, blank-node, literal terms</li>
+              <li>Triple position invariants</li>
+              <li>N-Triples parser and writer</li>
+              <li>UTF-8 and escape handling</li>
+              <li>W3C syntax conformance suite</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
+            <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
+            <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
+              <li>Turtle and N-Quads</li>
+              <li>RDFS and OWL reasoning</li>
+              <li>SKOS and Dublin Core</li>
+              <li>Graph or dataset storage</li>
+              <li>SPARQL execution</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickstart" class="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+      <div class="grid gap-14 lg:grid-cols-[.8fr_1.2fr]">
+        <div>
+          <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Quick start</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">From bytes to triples in one callback.</h2>
+          <p class="mt-5 leading-7 text-olive-800/70">Clone or vendor the repository into your Odin source tree, import the two packages, then choose the in-memory or bounded-reader entry point.</p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="https://github.com/crapthings/odin-rdf" class="rounded-lg bg-olive-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-olive-700">Get the source</a>
+            <a href="https://github.com/crapthings/odin-rdf/tree/main/examples" class="rounded-lg border border-olive-900/15 bg-white/60 px-4 py-2.5 text-sm font-semibold text-olive-950 transition hover:bg-white">Browse examples</a>
+          </div>
+        </div>
+        <div class="overflow-hidden rounded-2xl border border-olive-900/20 bg-olive-950 shadow-xl shadow-olive-950/10">
+          <div class="border-b border-olive-50/10 px-5 py-3 font-mono text-xs text-olive-300/60">terminal</div>
+          <pre class="overflow-x-auto p-6 font-mono text-sm leading-7 text-olive-100"><code><span class="text-olive-300/70"># verify the core model and syntax package</span>
+<span class="text-amber-200">odin test</span> rdf
+<span class="text-amber-200">odin test</span> rdf/ntriples
+
+<span class="text-olive-300/70"># run the official pinned conformance suite</span>
+<span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
+
+<span class="text-lime-300">W3C RDF 1.1 N-Triples syntax:</span>
+<span class="text-lime-300">72 cases, 0 failures</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
+      <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.1.0</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Build the RDF layer you actually need.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Start with a focused, verified syntax foundation. Keep storage, inference, and application vocabulary choices in your own architecture.</p>
+        </div>
+        <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-olive-950/10 bg-white/30">
+    <div class="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-9 text-sm text-olive-700/70 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+      <p>odin-rdf · RDF 1.1 tooling for Odin · MIT licensed</p>
+      <div class="flex gap-5">
+        <a href="https://github.com/crapthings/odin-rdf" class="transition hover:text-olive-950">GitHub</a>
+        <a href="architecture.md" class="transition hover:text-olive-950">Architecture</a>
+        <a href="https://www.w3.org/TR/rdf11-concepts/" class="transition hover:text-olive-950">RDF Concepts</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

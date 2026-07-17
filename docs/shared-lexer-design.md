@@ -65,16 +65,18 @@ steps.
 
 ## Implementation status
 
-Stage 1 is complete. The syntax-internal lexer lives in
-`rdf/internal/termlex`; N-Triples now maps its syntax-neutral errors explicitly
-to the existing public error codes. Its document grammar, reader behavior,
-public API, callback lifetimes, and blank-node scoping remain owned by
-`rdf/ntriples` and are unchanged.
+Both migration stages are complete. The syntax-internal lexer lives in
+`rdf/internal/termlex`; N-Triples and N-Quads map its syntax-neutral errors
+explicitly to their existing public error codes. Their document grammars,
+reader behavior, public APIs, callback lifetimes, and blank-node scoping remain
+owned by their syntax packages and are unchanged.
 
 The post-extraction benchmark used the frozen protocol below and measured a
 2.84 M triples/s median of process-best rounds (197.69 MiB/s). This is within
 measurement noise of the 2.82 M triples/s baseline. Stage 2, direct N-Quads
-parsing over the shared lexer, remains pending.
+parsing over the shared lexer, measured 1.42 M quads/s (135.66 MiB/s) with the
+same protocol. The immediately preceding synthetic implementation measured
+0.53 M quads/s on the same checkout and machine.
 
 ## Before-refactor synthetic baseline
 

@@ -2,7 +2,7 @@
 
 This harness generates reproducible random byte strings and mutations of valid
 and invalid RDF seed statements. Every input is parsed through the in-memory
-and bounded-reader N-Triples and N-Quads entry points. Error codes, error
+and bounded-reader N-Triples, N-Quads, and Turtle entry points. Error codes, error
 locations, and emitted record counts must agree, and AddressSanitizer must stay
 clean.
 

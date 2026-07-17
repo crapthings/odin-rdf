@@ -6,6 +6,7 @@ This directory integrates the official `w3c/rdf-tests` RDF 1.1 N-Triples and N-Q
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/check-w3c-turtle-manifest.sh
+./scripts/run-w3c-turtle-tests.sh
 ```
 
 The N-Triples gate covers 72 manifest cases. The N-Quads gate covers 87
@@ -21,6 +22,9 @@ ignoring blank-node labels and triple order.
 `scripts/list-w3c-turtle-tests.sh` emits a tab-separated inventory of case type,
 action path, and expected-result path so the future runner does not infer test
 semantics from filenames.
+The Turtle runner checks all 313 cases through memory parsing and bounded-reader
+chunk sizes of 1 byte, 7 bytes, and the default size. Evaluation cases compare
+the emitted triples with expected N-Triples by RDF graph isomorphism.
 
 All suites are pinned to commit `d3e844aaa3e2f2b5250f2d1c988ce58870d6bc86`.
 The N-Triples manifest contains 43 positive and 29 negative syntax cases. Every

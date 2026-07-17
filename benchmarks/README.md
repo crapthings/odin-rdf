@@ -1,9 +1,10 @@
 # Parser benchmarks
 
-`run-benchmarks.sh` runs three parser workloads in fresh processes:
+`run-benchmarks.sh` runs four parser workloads in fresh processes:
 
 - a repeated language-literal N-Triples statement;
 - the corresponding named-graph N-Quads statement; and
+- compact Turtle with prefixes, a blank-node property list, and a collection;
 - mixed N-Triples and N-Quads documents containing IRIs, blank nodes, simple,
   language, typed, Unicode, and escaped literals, plus default and named graphs.
 

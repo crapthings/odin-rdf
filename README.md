@@ -58,6 +58,7 @@ rdf/nquads/          N-Quads parser, writer, and unit tests
 examples/minimal/    Tiny educational example with no library dependency
 examples/basic/      Streaming parser API example
 tests/w3c/           Pinned W3C conformance test runner
+tests/property/      Deterministic parser/reader/writer property tests
 benchmarks/          Reproducible parser benchmarks
 ```
 
@@ -126,6 +127,7 @@ odin check rdf -no-entry-point
 odin test rdf
 odin test rdf/ntriples
 odin test rdf/nquads
+odin test tests/property
 odin run examples/minimal
 odin run examples/basic
 ./scripts/run-w3c-tests.sh

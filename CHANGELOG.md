@@ -2,6 +2,10 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add deterministic property tests that compare N-Triples and N-Quads memory parsing, bounded-reader chunking, and canonical writer round trips across generated RDF data and random byte input.
+
 ## 0.2.0 - 2026-07-17
 
 - Add the RDF dataset `Quad` model with explicit default-graph representation.

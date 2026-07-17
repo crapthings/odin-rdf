@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Correct the Turtle W3C documentation after the 313-case gate landed.
+- Run the Turtle example in the cross-platform CI matrix.
+- Add a public API reference, benchmark comparison baseline, and release
+  checklist.
+
 ## 0.4.0 - 2026-07-17
 
 - Define the RDF 1.1 Turtle parser API, streaming architecture, transient

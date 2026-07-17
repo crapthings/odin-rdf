@@ -18,3 +18,8 @@ BENCH_RUNS=1 BENCH_RECORDS=1000 BENCH_ROUNDS=1 ./scripts/run-benchmarks.sh
 Results describe one revision, compiler, machine, and workload. Retain the
 revision and configuration header when comparing changes; do not present them
 as cross-machine performance claims.
+
+The repository keeps a manually reviewed [reference baseline](baseline.md).
+Compare the median of the per-process `best` results on the same machine,
+compiler, and configuration. A repeatable regression greater than 10% warrants
+investigation; it is deliberately not a noisy CI failure threshold.

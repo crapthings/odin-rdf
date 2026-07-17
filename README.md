@@ -68,6 +68,9 @@ benchmarks/          Reproducible parser benchmarks
 
 ## API overview
 
+The complete public surface, defaults, ownership rules, error conventions, and
+reader behavior are collected in the [API reference](docs/api-reference.md).
+
 - `ntriples.parse(input, sink)` parses a complete UTF-8 document already held in memory.
 - `ntriples.parse_scoped(input, sink, scope)` is an advanced syntax-integration adapter. Callers must provide a non-zero scope when parsed blank nodes need document identity.
 - `ntriples.parse_reader(reader, sink, options)` parses incrementally with bounded memory. Defaults are a 64 KiB read buffer and a 16 MiB maximum line length.
@@ -140,6 +143,12 @@ err := turtle.parse(input, print_triple)
 
 See [`examples/turtle`](examples/turtle/main.odin) for a complete example.
 
+Error helpers follow one stable naming convention: parsers expose
+`parse_error_message`, writers expose `write_error_message`, and the core model
+uses a descriptive `<operation>_error_message` name. These functions are
+allocation-free; callers should branch on the enum code rather than message
+text.
+
 ## Verification
 
 ```sh
@@ -158,6 +167,10 @@ odin run examples/turtle
 ./scripts/run-w3c-turtle-tests.sh
 ./scripts/run-benchmarks.sh
 ```
+
+Maintainers should also follow the [release checklist](docs/releasing.md).
+Performance comparisons use the documented [v0.4.0 baseline](benchmarks/baseline.md)
+as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 

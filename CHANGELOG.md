@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 - 2026-07-17
 
 - Add the RDF dataset `Quad` model with explicit default-graph representation.
 - Add an RDF 1.1 N-Quads parser, bounded `io.Reader` path, and atomic writer.

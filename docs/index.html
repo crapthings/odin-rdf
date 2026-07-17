@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>odin-rdf — Streaming RDF for Odin</title>
-  <meta name="description" content="A small, streaming-first RDF 1.1 toolkit for Odin with a conformant N-Triples parser, bounded-memory reader, and atomic writer.">
-  <meta name="keywords" content="Odin, RDF, RDF 1.1, N-Triples, semantic web, linked data, streaming parser, W3C">
+  <meta name="description" content="A small, streaming-first RDF 1.1 toolkit for Odin with conformant N-Triples and N-Quads parsers, bounded-memory readers, and atomic writers.">
+  <meta name="keywords" content="Odin, RDF, RDF 1.1, N-Triples, N-Quads, semantic web, linked data, streaming parser, W3C">
   <meta name="author" content="odin-rdf contributors">
   <meta name="theme-color" content="#020617">
   <meta property="og:type" content="website">
   <meta property="og:title" content="odin-rdf — Streaming RDF for Odin">
-  <meta property="og:description" content="Standards-driven N-Triples parsing and writing with explicit memory ownership.">
+  <meta property="og:description" content="Standards-driven N-Triples and N-Quads parsing and writing with explicit memory ownership.">
   <meta property="og:image" content="assets/odin-rdf-banner.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -41,7 +41,7 @@
     <section class="mx-auto grid max-w-7xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:pb-32 lg:pt-28">
       <div class="flex flex-col justify-center">
         <div class="mb-7 flex flex-wrap gap-2">
-          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 72/72</span>
+          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 159/159</span>
           <span class="rounded-full border border-lime-700/20 bg-lime-100 px-3 py-1 font-mono text-xs text-lime-800">RDF 1.1</span>
           <span class="rounded-full border border-stone-400/25 bg-white/70 px-3 py-1 font-mono text-xs text-stone-700">MIT</span>
         </div>
@@ -50,7 +50,7 @@
           <span class="text-olive-700">built the Odin way.</span>
         </h1>
         <p class="mt-7 max-w-2xl text-lg leading-8 text-olive-800/75 sm:text-xl">
-          A small, streaming-first RDF toolkit with a standards-driven N-Triples parser, bounded-memory reader, and atomic writer. Explicit lifetimes. Predictable limits. No graph store attached.
+          A small, streaming-first RDF toolkit with standards-driven N-Triples and N-Quads parsers, bounded-memory readers, and atomic writers. Explicit lifetimes. Predictable limits. No graph store attached.
         </p>
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
           <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700">Start parsing</a>
@@ -58,7 +58,7 @@
         </div>
         <dl class="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-olive-950/10 pt-7">
           <div>
-            <dt class="font-mono text-2xl font-semibold text-olive-950">72/72</dt>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">159/159</dt>
             <dd class="mt-1 text-xs leading-5 text-olive-700/65">Pinned W3C syntax cases</dd>
           </div>
           <div>
@@ -109,7 +109,7 @@ err := nt.parse(input, consume)
         <p class="text-center font-mono text-xs uppercase tracking-[0.24em] text-olive-700/65">A focused foundation for RDF tooling in Odin</p>
         <div class="mt-7 grid grid-cols-2 gap-4 text-center text-sm font-medium text-olive-800/70 sm:grid-cols-4">
           <span>N-Triples</span>
-          <span>RDF 1.1 terms</span>
+          <span>N-Quads</span>
           <span>io.Reader</span>
           <span>Sink pipelines</span>
         </div>
@@ -151,7 +151,7 @@ err := nt.parse(input, consume)
         <article class="rounded-2xl border border-olive-950/10 bg-white/65 p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-olive-700/25 hover:bg-white">
           <span class="font-mono text-sm text-olive-700">06 / compose</span>
           <h3 class="mt-5 text-xl font-semibold text-olive-950">Pipeline native</h3>
-          <p class="mt-3 leading-7 text-olive-800/70">Send triples directly to converters, dictionaries, databases, or application-owned collectors.</p>
+          <p class="mt-3 leading-7 text-olive-800/70">Send triples or quads directly to converters, dictionaries, databases, or application-owned collectors.</p>
         </article>
       </div>
     </section>
@@ -161,8 +161,8 @@ err := nt.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.1.0 focuses on RDF 1.1 terms, triples, and N-Triples syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
-          <a href="https://www.w3.org/TR/n-triples/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C specification →</a>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.2.0 covers RDF 1.1 terms, triples, quads, N-Triples, and N-Quads syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <a href="https://www.w3.org/TR/n-quads/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="rounded-2xl border border-olive-700/20 bg-white/70 p-6 shadow-sm">
@@ -171,6 +171,7 @@ err := nt.parse(input, consume)
               <li>RDF IRI, blank-node, literal terms</li>
               <li>Triple position invariants</li>
               <li>N-Triples parser and writer</li>
+              <li>Quad model and N-Quads syntax</li>
               <li>UTF-8 and escape handling</li>
               <li>W3C syntax conformance suite</li>
             </ul>
@@ -178,7 +179,7 @@ err := nt.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>Turtle and N-Quads</li>
+              <li>Turtle and RDF/XML</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
               <li>Graph or dataset storage</li>
@@ -205,12 +206,14 @@ err := nt.parse(input, consume)
           <pre class="overflow-x-auto p-6 font-mono text-sm leading-7 text-olive-100"><code><span class="text-olive-300/70"># verify the core model and syntax package</span>
 <span class="text-amber-200">odin test</span> rdf
 <span class="text-amber-200">odin test</span> rdf/ntriples
+<span class="text-amber-200">odin test</span> rdf/nquads
 
 <span class="text-olive-300/70"># run the official pinned conformance suite</span>
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
+<span class="text-amber-200">./scripts/run-w3c-nquads-tests.sh</span>
 
-<span class="text-lime-300">W3C RDF 1.1 N-Triples syntax:</span>
-<span class="text-lime-300">72 cases, 0 failures</span></code></pre>
+<span class="text-lime-300">W3C RDF 1.1 syntax:</span>
+<span class="text-lime-300">159 cases, 0 failures</span></code></pre>
         </div>
       </div>
     </section>
@@ -218,7 +221,7 @@ err := nt.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.1.0</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.2.0</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Build the RDF layer you actually need.</h2>
           <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Start with a focused, verified syntax foundation. Keep storage, inference, and application vocabulary choices in your own architecture.</p>
         </div>

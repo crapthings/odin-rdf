@@ -14,7 +14,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.1.0` provides a production-oriented RDF 1.1 N-Triples parser and writer. The unreleased `0.2.0` work adds an N-Quads parser, writer, and RDF dataset model. Both syntax packages support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.2.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
 Turtle, RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. See the roadmap below for planned syntax support.
 
@@ -138,8 +138,7 @@ odin run benchmarks/nquads -o:speed
 
 1. Add continuous fuzzing and publish benchmark results from reproducible environments.
 2. Add a buffered, batch-oriented N-Triples writer API.
-3. Release the completed N-Quads and dataset APIs as `v0.2.0`.
-4. Implement Turtle, then evaluate storage and SPARQL APIs.
+3. Implement Turtle, then evaluate storage and SPARQL APIs.
 
 ## License
 

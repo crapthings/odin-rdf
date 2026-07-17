@@ -24,6 +24,7 @@ jobs:
       - run: odin test rdf
       - run: odin test rdf/ntriples
       - run: odin test rdf/nquads
+      - run: odin test tests/property
       - run: odin run examples/minimal
       - run: odin run examples/basic
       - run: odin run examples/nquads
@@ -50,6 +51,8 @@ jobs:
       - run: odin check rdf -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
+      - run: odin check tests/property -no-entry-point -vet -warnings-as-errors
       - run: odin test rdf -sanitize:address
       - run: odin test rdf/ntriples -sanitize:address
       - run: odin test rdf/nquads -sanitize:address
+      - run: odin test tests/property -sanitize:address

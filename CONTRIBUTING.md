@@ -10,3 +10,6 @@ Changes to a parser should include:
 4. For performance claims, the input data, compiler options, and results from at least three runs.
 
 Public APIs must document ownership of strings and allocator-backed memory. Parsers should remain independent of any particular database; database integrations belong in consumers or separate adapter packages.
+
+Use `./scripts/run-benchmarks.sh` for parser performance comparisons and retain
+the complete environment, configuration, and per-process output with the claim.

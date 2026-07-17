@@ -1,13 +1,14 @@
 package main
 
 import "core:fmt"
+import "core:os"
 import "core:strings"
 import "core:time"
 import rdf "../../rdf"
 import ntriples "../../rdf/ntriples"
 
-TRIPLES :: 250_000
-ROUNDS  :: 3
+TRIPLES :: #config(BENCH_RECORDS, 250_000)
+ROUNDS  :: #config(BENCH_ROUNDS, 3)
 
 count_sink :: proc(_: rdf.Triple, data: rawptr) -> bool {
 	(cast(^u64)data)^ += 1
@@ -15,6 +16,10 @@ count_sink :: proc(_: rdf.Triple, data: rawptr) -> bool {
 }
 
 main :: proc() {
+	if TRIPLES <= 0 || ROUNDS <= 0 {
+		fmt.eprintln("BENCH_RECORDS and BENCH_ROUNDS must be positive")
+		os.exit(2)
+	}
 	document := strings.builder_make_len_cap(0, TRIPLES * 64)
 	defer strings.builder_destroy(&document)
 	line := `<http://example.org/subject> <http://example.org/predicate> "value"@en .
@@ -35,5 +40,11 @@ main :: proc() {
 		best_seconds = min(best_seconds, seconds)
 		fmt.printf("round %d: %.2f M triples/s, %.2f MiB/s\n", round, f64(count) / seconds / 1e6, f64(len(input)) / seconds / 1024 / 1024)
 	}
-	fmt.printf("best: %.2f M triples/s (%.2f MiB input, %d triples)\n", f64(TRIPLES) / best_seconds / 1e6, f64(len(input)) / 1024 / 1024, TRIPLES)
+	fmt.printf(
+		"best: %.2f M triples/s, %.2f MiB/s (%.2f MiB input, %d triples)\n",
+		f64(TRIPLES) / best_seconds / 1e6,
+		f64(len(input)) / best_seconds / 1024 / 1024,
+		f64(len(input)) / 1024 / 1024,
+		TRIPLES,
+	)
 }

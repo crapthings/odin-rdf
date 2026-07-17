@@ -5,6 +5,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 - Add deterministic property tests that compare N-Triples and N-Quads memory parsing, bounded-reader chunking, and canonical writer round trips across generated RDF data and random byte input.
+- Document the shared term-lexer migration contract and add a configurable, reproducible benchmark runner with a frozen before-refactor baseline.
 
 ## 0.2.0 - 2026-07-17
 

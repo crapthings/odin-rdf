@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+runs=${BENCH_RUNS:-3}
+records=${BENCH_RECORDS:-250000}
+rounds=${BENCH_ROUNDS:-3}
+
+case $runs:$records:$rounds in
+  *[!0-9:]*|0:*|*:0:*|*:0) printf '%s\n' 'BENCH_RUNS, BENCH_RECORDS, and BENCH_ROUNDS must be positive integers' >&2; exit 2 ;;
+esac
+
+odin version
+uname -sm
+printf 'configuration: runs=%s records=%s rounds=%s optimization=speed\n' "$runs" "$records" "$rounds"
+
+run=1
+while [ "$run" -le "$runs" ]; do
+  printf '\nN-Triples process %s/%s\n' "$run" "$runs"
+  odin run "$root/benchmarks/ntriples" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
+  run=$((run + 1))
+done
+
+run=1
+while [ "$run" -le "$runs" ]; do
+  printf '\nN-Quads process %s/%s\n' "$run" "$runs"
+  odin run "$root/benchmarks/nquads" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
+  run=$((run + 1))
+done

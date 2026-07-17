@@ -2,6 +2,10 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.3.1 - 2026-07-17
+
+- Preserve the first invalid Unicode-escape digit when a physical line ending also truncates the escape, keeping memory and reader diagnostics identical.
+
 ## 0.3.0 - 2026-07-17
 
 - Add deterministic property tests that compare N-Triples and N-Quads memory parsing, bounded-reader chunking, and canonical writer round trips across generated RDF data and random byte input.

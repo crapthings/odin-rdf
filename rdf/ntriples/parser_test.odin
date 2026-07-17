@@ -1,6 +1,7 @@
 package ntriples
 
 import "core:testing"
+import "core:strings"
 import rdf ".."
 
 @(private) collect :: proc(triple: rdf.Triple, data: rawptr) -> bool {
@@ -110,6 +111,16 @@ test_unicode_escape_cannot_cross_physical_line :: proc(t: ^testing.T) {
 	err := parse("<urn:\\u26\r03> <urn:p> <urn:o> .", ignore)
 	testing.expect_value(t, err.code, Error_Code.Unexpected_End)
 	testing.expect_value(t, err.column, 6)
+
+	input := "<urn:\\u[6\n3> <urn:p> <urn:o> ."
+	memory := parse(input, ignore)
+	string_reader: strings.Reader
+	reader := strings.to_reader(&string_reader, input)
+	stream := parse_reader(reader, ignore, Reader_Options{chunk_size = 1})
+	testing.expect_value(t, memory.code, Error_Code.Invalid_Unicode_Escape)
+	testing.expect_value(t, stream.error.code, memory.code)
+	testing.expect_value(t, stream.error.line, memory.line)
+	testing.expect_value(t, stream.error.column, memory.column)
 }
 
 @(test)

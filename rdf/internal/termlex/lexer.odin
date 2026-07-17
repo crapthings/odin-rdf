@@ -81,10 +81,11 @@ read_uchar :: proc(s: ^Scanner) -> (rune, Error) {
 	} else {
 		return 0, error_at(s, .Invalid_Escape)
 	}
-	if s.pos + 2 + digits > len(s.input) do return 0, error_at(s, .Unexpected_End)
 	value: u32
 	for i in 0..<digits {
-		digit := s.input[s.pos + 2 + i]
+		index := s.pos + 2 + i
+		if index >= len(s.input) do return 0, error_at(s, .Unexpected_End)
+		digit := s.input[index]
 		if digit == '\r' || digit == '\n' do return 0, error_at(s, .Unexpected_End)
 		nibble, ok := hex_value(digit)
 		if !ok do return 0, error_at(s, .Invalid_Unicode_Escape)

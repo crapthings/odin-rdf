@@ -14,7 +14,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.3.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages share a tested internal term lexer and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.3.1` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, plus an RDF dataset model. Both syntax packages share a tested internal term lexer and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
 Turtle, RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. See the roadmap below for planned syntax support.
 

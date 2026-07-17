@@ -48,3 +48,18 @@ test_parse_reader_rejects_invalid_options :: proc(t: ^testing.T) {
 	result = parse_reader(reader, ignore, Reader_Options{max_line_bytes = -1})
 	testing.expect_value(t, result.error.code, Error_Code.Invalid_Line_Limit)
 }
+
+@(test)
+test_parse_reader_nil_sink_and_sink_stop :: proc(t: ^testing.T) {
+	reader_state: strings.Reader
+	reader := strings.to_reader(&reader_state, "")
+	result := parse_reader(reader, nil)
+	testing.expect_value(t, result.error.code, Error_Code.Missing_Sink)
+
+	stop := proc(_: rdf.Quad, _: rawptr) -> bool { return false }
+	reader = strings.to_reader(&reader_state, `<urn:s> <urn:p> <urn:o> .`)
+	result = parse_reader(reader, stop, Reader_Options{chunk_size = 1})
+	testing.expect_value(t, result.error.code, Error_Code.Stopped)
+	testing.expect_value(t, result.error.line, 1)
+	testing.expect_value(t, result.quads, u64(1))
+}

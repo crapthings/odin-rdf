@@ -21,7 +21,7 @@ sentinel term for the default graph.
 
 ## Parser boundary
 
-The `rdf/nquads` package will mirror the stable N-Triples shape:
+The `rdf/nquads` package mirrors the stable N-Triples shape:
 
 - `parse(input, sink)` for complete UTF-8 documents;
 - `parse_reader(reader, sink, options)` for bounded-memory streaming;
@@ -30,7 +30,7 @@ The `rdf/nquads` package will mirror the stable N-Triples shape:
   graph-name labels;
 - stable error codes, exact locations, and allocation-free error messages.
 
-N-Triples and N-Quads retain independent document grammars. The initial
+N-Triples and N-Quads retain independent document grammars. The current
 implementation reuses the proven term parser through the scoped N-Triples
 adapter, which keeps blank-node identity stable across per-record parsing. A
 future direct lexer extraction is a performance optimization, not a change to

@@ -362,7 +362,8 @@ Sink :: proc(triple: rdf.Triple, user_data: rawptr) -> bool
 }
 
 // parse_scoped parses a complete document using a caller-provided blank-node
-// scope. It supports syntax adapters that must preserve identity across records.
+// scope. It is an advanced adapter for syntax implementations that must preserve
+// identity across records. Pass a non-zero scope for document-scoped blank nodes.
 // Temporary memory is allocated only for terms that contain escape sequences.
 parse_scoped :: proc(input: string, sink: Sink, scope: rdf.Blank_Node_Scope, user_data: rawptr = nil) -> Parse_Error {
 	if sink == nil do return Parse_Error{code = .Missing_Sink, line = 1, column = 1}

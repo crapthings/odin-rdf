@@ -67,6 +67,8 @@ test_quad_structure_and_default_graph :: proc(t: ^testing.T) {
 	testing.expect(t, !default_quad.has_graph)
 	testing.expect_value(t, validate_quad_structure(default_quad), Quad_Structure_Error.None)
 	testing.expect_value(t, triple(default_quad), statement)
+	default_quad.graph = literal("ignored")
+	testing.expect_value(t, validate_quad_structure(default_quad), Quad_Structure_Error.None)
 
 	named_quad := named_graph_quad(statement, iri("urn:g"))
 	testing.expect(t, named_quad.has_graph)

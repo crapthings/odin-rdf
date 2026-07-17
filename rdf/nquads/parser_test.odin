@@ -24,6 +24,20 @@ import rdf ".."
 
 @(private) ignore :: proc(_: rdf.Quad, _: rawptr) -> bool { return true }
 
+@(private) Scope_State :: struct {
+	first:  rdf.Blank_Node_Scope,
+	second: rdf.Blank_Node_Scope,
+	calls:  int,
+}
+
+@(private) collect_scope :: proc(quad: rdf.Quad, data: rawptr) -> bool {
+	state := cast(^Scope_State)data
+	if state.calls == 0 do state.first = quad.subject.scope
+	else do state.second = quad.subject.scope
+	state.calls += 1
+	return true
+}
+
 @(test)
 test_parse_default_and_named_graphs :: proc(t: ^testing.T) {
 	input := `<urn:s> <urn:p> <urn:o> .
@@ -60,7 +74,7 @@ test_preserves_term_error_codes_and_locations :: proc(t: ^testing.T) {
 	err = parse("\n<urn:s> <urn:p> <urn:o> <relative> .", ignore)
 	testing.expect_value(t, err.code, Error_Code.Invalid_IRI)
 	testing.expect_value(t, err.line, 2)
-	testing.expect(t, err.column >= 25)
+	testing.expect_value(t, err.column, 34)
 
 	err = parse(`<urn:s> <urn:p> "x"@en- <urn:g> .`, ignore)
 	testing.expect_value(t, err.code, Error_Code.Invalid_Language_Tag)
@@ -71,6 +85,35 @@ test_minimal_whitespace_and_comments :: proc(t: ^testing.T) {
 	input := "# header\n<urn:s><urn:p><urn:o><urn:g>.# tail\n_:s<urn:p>\"x\".\n"
 	err := parse(input, ignore)
 	testing.expect_value(t, err.code, Error_Code.None)
+}
+
+@(test)
+test_empty_comments_cr_and_nil_sink :: proc(t: ^testing.T) {
+	testing.expect_value(t, parse("", ignore).code, Error_Code.None)
+	testing.expect_value(t, parse("# comment\r", ignore).code, Error_Code.None)
+	err := parse(`<urn:s> <urn:p> <urn:o> .`, nil)
+	testing.expect_value(t, err.code, Error_Code.Missing_Sink)
+	testing.expect_value(t, err.line, 1)
+	testing.expect_value(t, err.column, 1)
+}
+
+@(test)
+test_sink_stop_and_document_local_blank_node_scope :: proc(t: ^testing.T) {
+	stop := proc(_: rdf.Quad, _: rawptr) -> bool { return false }
+	err := parse(`<urn:s> <urn:p> <urn:o> .`, stop)
+	testing.expect_value(t, err.code, Error_Code.Stopped)
+	testing.expect_value(t, err.line, 1)
+
+	within: Scope_State
+	err = parse("_:same <urn:p> <urn:o> _:same .\n_:same <urn:p> <urn:o> .", collect_scope, &within)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, within.first != rdf.Blank_Node_Scope(0))
+	testing.expect_value(t, within.first, within.second)
+
+	separate: Scope_State
+	err = parse(`_:same <urn:p> <urn:o> .`, collect_scope, &separate)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, separate.first != within.first)
 }
 
 @(test)

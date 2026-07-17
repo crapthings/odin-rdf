@@ -8,11 +8,16 @@
   <meta name="keywords" content="Odin, RDF, RDF 1.1, Turtle, N-Triples, N-Quads, semantic web, linked data, streaming parser, W3C">
   <meta name="author" content="odin-rdf contributors">
   <meta name="theme-color" content="#f7f8f2">
+  <link rel="canonical" href="https://crapthings.github.io/odin-rdf/">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://crapthings.github.io/odin-rdf/">
   <meta property="og:title" content="odin-rdf — Streaming RDF for Odin">
   <meta property="og:description" content="Standards-driven Turtle, N-Triples, and N-Quads parsing with explicit memory ownership.">
-  <meta property="og:image" content="assets/odin-rdf-banner.jpg">
+  <meta property="og:image" content="https://crapthings.github.io/odin-rdf/assets/odin-rdf-banner.jpg">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="odin-rdf — Streaming RDF for Odin">
+  <meta name="twitter:description" content="Standards-driven Turtle, N-Triples, and N-Quads parsing with explicit memory ownership.">
+  <meta name="twitter:image" content="https://crapthings.github.io/odin-rdf/assets/odin-rdf-banner.jpg">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body class="min-h-screen bg-olive-50 font-sans text-olive-950 antialiased selection:bg-olive-800 selection:text-olive-50">
@@ -23,17 +28,17 @@
 
   <header class="sticky top-0 z-50 border-b border-olive-950/10 bg-olive-50/85 backdrop-blur-xl">
     <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8" aria-label="Primary navigation">
-      <a href="#top" class="flex items-center gap-3 text-sm font-semibold tracking-tight text-olive-950">
+      <a href="#top" class="flex items-center gap-3 rounded-lg text-sm font-semibold tracking-tight text-olive-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">
         <span class="grid h-8 w-8 place-items-center rounded-lg border border-olive-800/20 bg-olive-800 font-mono text-xs text-olive-50">RDF</span>
         <span>odin-rdf</span>
       </a>
       <div class="hidden items-center gap-7 text-sm text-olive-700 sm:flex">
-        <a href="#features" class="transition hover:text-olive-950">Features</a>
-        <a href="#standards" class="transition hover:text-olive-950">Standards</a>
-        <a href="#quickstart" class="transition hover:text-olive-950">Quick start</a>
-        <a href="architecture.md" class="transition hover:text-olive-950">Architecture</a>
+        <a href="#features" class="rounded transition hover:text-olive-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Features</a>
+        <a href="#standards" class="rounded transition hover:text-olive-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Standards</a>
+        <a href="#quickstart" class="rounded transition hover:text-olive-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Quick start</a>
+        <a href="https://github.com/crapthings/odin-rdf/blob/main/docs/api-reference.md" class="rounded transition hover:text-olive-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">API</a>
       </div>
-      <a href="https://github.com/crapthings/odin-rdf" class="rounded-lg border border-olive-900/15 bg-white/70 px-4 py-2 text-sm font-medium text-olive-950 shadow-sm transition hover:border-olive-700/35 hover:bg-white" aria-label="View odin-rdf source on GitHub">View source</a>
+      <a href="https://github.com/crapthings/odin-rdf" class="rounded-lg border border-olive-900/15 bg-white/70 px-4 py-2 text-sm font-medium text-olive-950 shadow-sm transition hover:border-olive-700/35 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700" aria-label="View odin-rdf source on GitHub">View source</a>
     </nav>
   </header>
 
@@ -53,8 +58,8 @@
           A small, streaming-first RDF toolkit with conformant Turtle, N-Triples, and N-Quads parsers, bounded readers, and atomic writers. Explicit lifetimes. Predictable limits. No graph store attached.
         </p>
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
-          <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700">Start parsing</a>
-          <a href="https://github.com/crapthings/odin-rdf/blob/main/README.md" class="inline-flex items-center justify-center rounded-xl border border-olive-900/15 bg-white/70 px-5 py-3 text-sm font-semibold text-olive-950 transition hover:border-olive-700/30 hover:bg-white">Read the docs</a>
+          <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Start parsing</a>
+          <a href="https://github.com/crapthings/odin-rdf/blob/main/docs/api-reference.md" class="inline-flex items-center justify-center rounded-xl border border-olive-900/15 bg-white/70 px-5 py-3 text-sm font-semibold text-olive-950 transition hover:border-olive-700/30 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Read the API</a>
         </div>
         <dl class="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-olive-950/10 pt-7">
           <div>
@@ -237,9 +242,10 @@ err := ttl.parse(input, consume)
   <footer class="border-t border-olive-950/10 bg-white/30">
     <div class="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-9 text-sm text-olive-700/70 sm:flex-row sm:items-center sm:justify-between lg:px-8">
       <p>odin-rdf · RDF 1.1 tooling for Odin · MIT licensed</p>
-      <div class="flex gap-5">
+      <div class="flex flex-wrap gap-x-5 gap-y-2">
         <a href="https://github.com/crapthings/odin-rdf" class="transition hover:text-olive-950">GitHub</a>
-        <a href="architecture.md" class="transition hover:text-olive-950">Architecture</a>
+        <a href="https://github.com/crapthings/odin-rdf/blob/main/docs/api-reference.md" class="transition hover:text-olive-950">API</a>
+        <a href="https://github.com/crapthings/odin-rdf/blob/main/docs/architecture.md" class="transition hover:text-olive-950">Architecture</a>
         <a href="https://www.w3.org/TR/rdf11-concepts/" class="transition hover:text-olive-950">RDF Concepts</a>
       </div>
     </div>

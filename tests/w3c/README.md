@@ -14,17 +14,17 @@ manifest cases and runs positive inputs through parse-write-parse round trips.
 Both gates exercise in-memory parsing and bounded-reader chunk sizes of 1 byte,
 7 bytes, and the default buffer size.
 
-The Turtle foundation currently inventories the pinned manifest's 313 cases
-(145 evaluation, 74 positive syntax, and 94 negative syntax) without claiming
-parser support. `tests/w3c/support` provides test-only RDF graph isomorphism for
-comparing future Turtle evaluation output with expected N-Triples while
-ignoring blank-node labels and triple order.
+The Turtle gate covers all 313 manifest cases: 145 evaluation, 74 positive
+syntax, and 94 negative syntax tests. `tests/w3c/support` provides test-only RDF
+graph isomorphism for comparing Turtle evaluation output with expected
+N-Triples while ignoring blank-node labels and triple order.
 `scripts/list-w3c-turtle-tests.sh` emits a tab-separated inventory of case type,
-action path, and expected-result path so the future runner does not infer test
-semantics from filenames.
-The Turtle runner checks all 313 cases through memory parsing and bounded-reader
-chunk sizes of 1 byte, 7 bytes, and the default size. Evaluation cases compare
-the emitted triples with expected N-Triples by RDF graph isomorphism.
+action path, and expected-result path so the runner does not infer test
+semantics from filenames. The Turtle runner checks every case through memory
+parsing and bounded-reader chunk sizes of 1 byte, 7 bytes, and the default size.
+Evaluation cases compare the emitted triples with expected N-Triples by RDF
+graph isomorphism. Negative cases require the memory and reader paths to agree
+on error code and one-based source location.
 
 All suites are pinned to commit `d3e844aaa3e2f2b5250f2d1c988ce58870d6bc86`.
 The N-Triples manifest contains 43 positive and 29 negative syntax cases. Every

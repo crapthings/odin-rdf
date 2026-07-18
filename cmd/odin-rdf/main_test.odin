@@ -51,6 +51,56 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_parses_context_directed_jsonld_conversion :: proc(t: ^testing.T) {
+	options, err := parse_convert_args([]string{"convert", "input.nt", "--to", "jsonld", "--context", "context.jsonld", "--max-records", "10"})
+	defer delete(options.prefixes)
+	testing.expect_value(t, err.code, Command_Error_Code.None)
+	testing.expect_value(t, options.context_path, "context.jsonld")
+	testing.expect_value(t, options.output_format, convert.Format.JSON_LD)
+	testing.expect_value(t, options.reader_limits.max_records, 10)
+
+	wrong_options, wrong_err := parse_convert_args([]string{"convert", "input.nt", "--to", "nquads", "--context=context.jsonld"})
+	defer delete(wrong_options.prefixes)
+	testing.expect_value(t, wrong_err.code, Command_Error_Code.Context_Requires_JSONLD)
+
+	conflict_options, conflict_err := parse_convert_args([]string{"convert", "input.nt", "--to", "jsonld", "--context", "context.jsonld", "--output", "context.jsonld", "--max-records", "10"})
+	defer delete(conflict_options.prefixes)
+	testing.expect_value(t, conflict_err.code, Command_Error_Code.Same_Input_Output)
+}
+
+@(test)
+test_context_directed_jsonld_conversion_is_atomic :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-compact-input.nt"
+	context_path :: "odin-rdf-cli-compact-context.jsonld"
+	target_path :: "odin-rdf-cli-compact-output.jsonld"
+	temporary_path :: "odin-rdf-cli-compact-output.jsonld.odin-rdf.tmp"
+	defer os.remove(input_path)
+	defer os.remove(context_path)
+	defer os.remove(target_path)
+	defer os.remove(temporary_path)
+	testing.expect(t, write_test_file(input_path, `<https://example.test/alice> <https://example.test/name> "Alice" .
+`) == nil)
+	testing.expect(t, write_test_file(context_path, `{"@context":{"name":"https://example.test/name"}}`) == nil)
+	options, parse_err := parse_convert_args([]string{"convert", input_path, "--to", "jsonld", "--context", context_path, "--output", target_path, "--max-records", "10"})
+	defer delete(options.prefixes)
+	testing.expect_value(t, parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_convert(options), 0)
+	buffer: [256]byte
+	output, read_err := read_test_file(target_path, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect(t, strings.contains(output, `"name": "Alice"`))
+	testing.expect(t, !os.exists(temporary_path))
+
+	testing.expect(t, write_test_file(target_path, "previous\n") == nil)
+	testing.expect(t, write_test_file(context_path, `{`) == nil)
+	testing.expect_value(t, run_convert(options), 1)
+	output, read_err = read_test_file(target_path, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, output, "previous\n")
+	testing.expect(t, !os.exists(temporary_path))
+}
+
+@(test)
 test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 	args := []string{
 		"format", "input.ttl", "--output=output.ttl", "--prefix", "ex=https://example.com/", "--max-triples", "20", "--no-infer-prefixes",
@@ -117,6 +167,13 @@ test_infers_formats_from_canonical_file_extensions :: proc(t: ^testing.T) {
 	testing.expect_value(t, jsonld_err.code, Command_Error_Code.None)
 	testing.expect_value(t, jsonld_options.input_format, convert.Format.JSON_LD)
 	testing.expect_value(t, jsonld_options.output_format, convert.Format.N_Quads)
+
+	jsonld_output_options, jsonld_output_err := parse_convert_args([]string{"convert", "input.trig", "--output", "output.jsonld", "--max-records", "20"})
+	defer delete(jsonld_output_options.prefixes)
+	testing.expect_value(t, jsonld_output_err.code, Command_Error_Code.None)
+	testing.expect_value(t, jsonld_output_options.input_format, convert.Format.TriG)
+	testing.expect_value(t, jsonld_output_options.output_format, convert.Format.JSON_LD)
+	testing.expect_value(t, jsonld_output_options.reader_limits.max_records, 20)
 
 	rdfxml_options, rdfxml_err := parse_convert_args([]string{"convert", "input.rdf", "--output", "output.nt"})
 	defer delete(rdfxml_options.prefixes)
@@ -611,6 +668,7 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Missing_Diff_Input = "diff requires two input paths",
 		.Diff_Standard_Input = "diff does not accept standard input",
 		.Invalid_Hash_Algorithm = "--algorithm must be sha256 or sha384",
+		.Context_Requires_JSONLD = "--context requires JSON-LD output",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])
 }

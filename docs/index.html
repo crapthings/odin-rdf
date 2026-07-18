@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF and bidirectional RDF/XML default-graph processing, conformant TriG parsing and streaming-safe TriG serialization, and complete W3C RDFC-1.0 canonicalization with bounded hashes, isomorphism checks, and deterministic dataset diffs. It also includes RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic formatting, and loss-aware conversion. No hidden network client or graph store.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF, deterministic expanded JSON-LD output, and context-directed compaction, plus bidirectional RDF/XML default-graph processing, conformant TriG parsing and streaming-safe TriG serialization, and complete W3C RDFC-1.0 canonicalization with bounded hashes, isomorphism checks, and deterministic dataset diffs. It also includes RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic formatting, and loss-aware conversion. No hidden network client or graph store.</p>
           <a href="https://www.w3.org/TR/rdf-canon/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDFC-1.0 specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -179,7 +179,7 @@ err := ttl.parse(input, consume)
               <li>N-Triples parser and writer</li>
               <li>Quad model and N-Quads syntax</li>
               <li>Conformant Turtle parser, writer, and formatter</li>
-              <li>Bounded JSON-LD-to-RDF dataset conversion</li>
+              <li>Bounded JSON-LD-to-RDF, expanded output, and compaction</li>
               <li>Bounded RDF/XML input, batch writer, and stateful document writer</li>
               <li>Conformant TriG parser, streaming writer, and dataset formatter</li>
               <li>W3C RDFC-1.0 canonicalization with SHA-256 and SHA-384</li>
@@ -194,7 +194,7 @@ err := ttl.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>JSON-LD compaction, framing, and writer APIs</li>
+              <li>JSON-LD framing APIs</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
               <li>Graph or dataset storage</li>
@@ -233,6 +233,8 @@ err := ttl.parse(input, consume)
 <span class="text-olive-300/70"># stream records or atomically write a bounded RDF/XML graph</span>
 <span class="text-amber-200">odin-rdf convert</span> input.nt --output output.nq --max-records 100000
 <span class="text-amber-200">odin-rdf convert</span> input.nt --output output.rdf --max-records 100000
+<span class="text-amber-200">odin-rdf convert</span> input.trig --to jsonld --max-records 100000 --output output.jsonld
+<span class="text-amber-200">odin-rdf convert</span> input.nt --to jsonld --context context.jsonld --max-records 100000 --output compact.jsonld
 
 <span class="text-olive-300/70"># canonicalize, hash, compare, or diff a bounded dataset</span>
 <span class="text-amber-200">odin-rdf canon</span> input.trig --output canonical.nq --max-quads 100000

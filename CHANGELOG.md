@@ -2,6 +2,16 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add `trig.format_quads`, an atomic batch formatter for complete RDF datasets.
+  It groups default and named graphs, deterministically orders and deduplicates
+  quads, infers safe prefixes including graph names, and rejects ambiguous
+  blank-node labels across source scopes.
+- Extend `odin-rdf format` to infer Turtle or TriG file input, require an
+  explicit syntax for standard input, and use separate `--max-triples` and
+  `--max-quads` retention limits.
+
 ## 0.13.0 - 2026-07-18
 
 - Add a streaming-safe TriG writer with explicit Turtle-compatible prefix

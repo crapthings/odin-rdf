@@ -47,8 +47,14 @@ blocks, for example `<urn:g> { <urn:s> <urn:p> <urn:o> . }`.
 
 This is intentionally a record writer rather than a document formatter: it
 does not retain quads, group graph blocks, reorder input, infer prefixes, or
-deduplicate. A future batch formatter can provide grouped graph documents as a
-separate, explicitly retained API.
+deduplicate.
+
+`format_quads` is the separately explicit batch API. It accepts a complete
+caller-owned `[]rdf.Quad`, validates blank-node scope collisions across both
+triple and graph-name positions, sorts and deduplicates the dataset, and writes
+one grouped block per named graph. Its `Infer` prefix policy covers graph names
+and all triple terms. This makes the memory and ordering tradeoff visible at
+the call site rather than hiding a dataset accumulator in the streaming writer.
 
 ## Conformance gate
 

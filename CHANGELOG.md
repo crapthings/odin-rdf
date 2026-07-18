@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.11.0 - 2026-07-18
 
 - Add bounded RDF/XML-to-RDF conversion with namespace, base-IRI, language,
   node/property element, collection, reification, and default-graph support.

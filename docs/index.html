@@ -167,8 +167,8 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.9.1 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, explicit-prefix Turtle writing, deterministic Turtle formatting with a profiled CLI graph bound, and loss-aware syntax conversion with explicit source limits and file-format inference. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
-          <a href="https://www.w3.org/TR/turtle/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C Turtle specification →</a>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The next release adds a bounded JSON-LD-to-RDF core alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, deterministic Turtle formatting, and loss-aware conversion. JSON-LD is an explicit document processor with caller-controlled context loading—not a hidden network client or a graph store.</p>
+          <a href="https://www.w3.org/TR/json-ld11-api/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C JSON-LD processing specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="rounded-2xl border border-olive-700/20 bg-white/70 p-6 shadow-sm">
@@ -179,6 +179,7 @@ err := ttl.parse(input, consume)
               <li>N-Triples parser and writer</li>
               <li>Quad model and N-Quads syntax</li>
               <li>Conformant Turtle parser, writer, and formatter</li>
+              <li>Bounded JSON-LD-to-RDF dataset conversion</li>
               <li>Streaming syntax conversion CLI</li>
               <li>UTF-8 and escape handling</li>
               <li>W3C syntax conformance suite</li>
@@ -187,7 +188,8 @@ err := ttl.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>RDF/XML and JSON-LD</li>
+              <li>RDF/XML</li>
+              <li>JSON-LD compaction, framing, and writer APIs</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
               <li>Graph or dataset storage</li>

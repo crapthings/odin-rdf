@@ -6,6 +6,10 @@ The `rdf` package contains only syntax-independent data types. Syntax packages s
 
 Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and a small utility can collect them into a dynamic array when retaining the graph is appropriate.
 
+`rdf/jsonld` is the intentional exception to record streaming: JSON-LD context
+and graph processing retain one bounded document before emitting quads. Its
+loader is supplied by the caller; the core package has no HTTP dependency.
+
 ## Conversion boundary
 
 `rdf/convert` is the narrow adapter between syntax readers and writers. It

@@ -26,6 +26,8 @@ jobs:
       - run: odin test rdf/ntriples
       - run: odin test rdf/nquads
       - run: odin test rdf/turtle
+
+      - run: odin test rdf/jsonld
       - run: odin test rdf/convert
       - run: odin test cmd/odin-rdf
       - run: odin test tests/property
@@ -52,6 +54,8 @@ jobs:
       - run: ./scripts/check-w3c-turtle-manifest.sh
       - run: ./scripts/run-w3c-turtle-tests.sh
 
+      - run: ./scripts/run-w3c-jsonld-tests.sh
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -65,9 +69,13 @@ jobs:
       - run: odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/turtle -no-entry-point -vet -warnings-as-errors
+
+      - run: odin check rdf/jsonld -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/convert -no-entry-point -vet -warnings-as-errors
       - run: odin check cmd/odin-rdf -vet -warnings-as-errors
       - run: odin check tests/w3c/support -no-entry-point -vet -warnings-as-errors
+
+      - run: odin check tests/w3c/jsonld_runner -vet -warnings-as-errors
       - run: odin check tests/property -no-entry-point -vet -warnings-as-errors
       - run: odin check benchmarks/ntriples -vet -warnings-as-errors
       - run: odin check benchmarks/nquads -vet -warnings-as-errors
@@ -82,6 +90,8 @@ jobs:
       - run: odin test rdf/ntriples -sanitize:address
       - run: odin test rdf/nquads -sanitize:address
       - run: odin test rdf/turtle -sanitize:address
+
+      - run: odin test rdf/jsonld -sanitize:address
       - run: odin test rdf/convert -sanitize:address
       - run: odin test cmd/odin-rdf -sanitize:address
       - run: odin test tests/property -sanitize:address

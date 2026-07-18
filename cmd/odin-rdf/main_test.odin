@@ -31,7 +31,7 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 	args := []string{
 		"convert", "input.ttl", "--from", "ttl", "--to=ntriples", "--output", "output.nt",
 		"--prefix", "ex=https://example.com/", "--prefix", "=urn:example:",
-		"--max-records", "10", "--max-line-bytes=1024", "--max-statement-bytes", "2048",
+		"--max-records", "10", "--max-line-bytes=1024", "--max-statement-bytes", "2048", "--max-document-bytes", "4096",
 	}
 	options, err := parse_convert_args(args)
 	defer delete(options.prefixes)
@@ -46,6 +46,7 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 	testing.expect_value(t, options.reader_limits.max_records, 10)
 	testing.expect_value(t, options.reader_limits.max_line_bytes, 1024)
 	testing.expect_value(t, options.reader_limits.max_statement_bytes, 2048)
+	testing.expect_value(t, options.reader_limits.max_document_bytes, 4096)
 }
 
 @(test)
@@ -89,6 +90,12 @@ test_infers_formats_from_canonical_file_extensions :: proc(t: ^testing.T) {
 	testing.expect_value(t, override_err.code, Command_Error_Code.None)
 	testing.expect_value(t, override_options.input_format, convert.Format.Turtle)
 	testing.expect_value(t, override_options.output_format, convert.Format.N_Quads)
+
+	jsonld_options, jsonld_err := parse_convert_args([]string{"convert", "input.jsonld", "--output", "output.nq"})
+	defer delete(jsonld_options.prefixes)
+	testing.expect_value(t, jsonld_err.code, Command_Error_Code.None)
+	testing.expect_value(t, jsonld_options.input_format, convert.Format.JSON_LD)
+	testing.expect_value(t, jsonld_options.output_format, convert.Format.N_Quads)
 }
 
 @(test)
@@ -138,7 +145,7 @@ test_convert_command_infers_file_formats_end_to_end :: proc(t: ^testing.T) {
 
 @(test)
 test_rejects_invalid_arguments_without_guessing :: proc(t: ^testing.T) {
-	options, invalid_format := parse_convert_args([]string{"convert", "-", "--from", "jsonld", "--to", "turtle"})
+	options, invalid_format := parse_convert_args([]string{"convert", "-", "--from", "rdfxml", "--to", "turtle"})
 	defer delete(options.prefixes)
 	testing.expect_value(t, invalid_format.code, Command_Error_Code.Invalid_Format)
 
@@ -328,6 +335,7 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Invalid_Max_Records  = "--max-records must be a positive decimal integer",
 		.Invalid_Max_Line_Bytes = "--max-line-bytes must be a positive decimal integer",
 		.Invalid_Max_Statement_Bytes = "--max-statement-bytes must be a positive decimal integer",
+		.Invalid_Max_Document_Bytes = "--max-document-bytes must be a positive decimal integer",
 		.Invalid_Max_Triples  = "--max-triples must be a positive decimal integer",
 		.Cannot_Infer_Input_Format = "cannot infer input RDF syntax; use --from",
 		.Cannot_Infer_Output_Format = "cannot infer output RDF syntax; use --to",

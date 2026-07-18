@@ -26,6 +26,21 @@ ex:alice ex:name "Alice"@en .`
 }
 
 @(test)
+test_converts_jsonld_to_nquads_with_document_bound :: proc(t: ^testing.T) {
+	input := `{"@context":{"ex":"https://example.com/"},"@id":"ex:alice","ex:name":"Alice"}`
+	result, output := convert_text(input, Options{input = .JSON_LD, output = .N_Quads, reader_limits = {max_document_bytes = 1024}})
+	testing.expect_value(t, result.error.code, Error_Code.None)
+	testing.expect_value(t, result.statements, u64(1))
+	testing.expect_value(t, result.bytes_read, u64(len(input)))
+	testing.expect_value(t, output, "<https://example.com/alice> <https://example.com/name> \"Alice\" .\n")
+
+	limited, limited_output := convert_text(input, Options{input = .JSON_LD, output = .N_Quads, reader_limits = {max_document_bytes = 8}})
+	testing.expect_value(t, limited.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, limited.error.detail, "JSON-LD document exceeds configured byte limit")
+	testing.expect_value(t, limited_output, "")
+}
+
+@(test)
 test_converts_ntriples_to_turtle_with_explicit_prefixes :: proc(t: ^testing.T) {
 	input := "<https://example.com/alice> <https://example.com/vocab/name> \"Alice\"^^<https://example.com/vocab/Name> .\n"
 	prefixes := []turtle.Prefix{

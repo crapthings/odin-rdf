@@ -31,3 +31,10 @@ The N-Triples manifest contains 43 positive and 29 negative syntax cases. Every
 N-Triples case runs through the in-memory parser and the streaming reader with
 1-byte, 7-byte, and default-size chunks. Every positive case also completes a
 parse → write → parse round trip. Downloaded files are cached under `.cache/`.
+# JSON-LD core selection
+
+`../scripts/run-w3c-jsonld-tests.sh` pins the W3C JSON-LD API corpus and runs
+55 JSON-LD-to-RDF core cases. It intentionally does not claim the complete
+JSON-LD 1.1 API suite: scoped contexts, map containers, direction handling,
+generalized RDF, compaction, framing, and serialization have separate future
+conformance milestones.

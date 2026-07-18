@@ -1,0 +1,903 @@
+// Package jsonld transforms JSON-LD 1.1 documents into RDF datasets.
+//
+// JSON-LD processing necessarily retains a bounded JSON document and ctx
+// state. It is therefore deliberately separate from the line-streaming RDF
+// syntaxes in this repository.
+package jsonld
+
+import json "core:encoding/json"
+import "core:sort"
+import "core:strings"
+import "core:unicode/utf8"
+import rdf ".."
+import turtle "../turtle"
+
+RDF_TYPE  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+RDF_FIRST :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+RDF_REST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
+RDF_NIL   :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
+XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
+XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
+XSD_DOUBLE  :: "http://www.w3.org/2001/XMLSchema#double"
+
+// Error_Code identifies JSON syntax, JSON-LD processing, resource-limit, and
+// sink outcomes. JSON-LD errors are intentionally stable API diagnostics;
+// callers should not depend on the implementation details of core:encoding/json.
+Error_Code :: enum {
+	None,
+	Missing_Sink,
+	Invalid_UTF8,
+	Invalid_JSON,
+	Invalid_Option,
+	Invalid_Chunk_Size,
+	Reader_Error,
+	No_Progress,
+	Document_Too_Large,
+	Nesting_Limit,
+	Context_Limit,
+	Remote_Context_Limit,
+	Remote_Context_Disallowed,
+	Loading_Document_Failed,
+	Invalid_Context,
+	Invalid_Term_Definition,
+	Invalid_IRI,
+	Invalid_Value_Object,
+	Invalid_List_Object,
+	Invalid_Reverse_Property,
+	Invalid_Graph,
+	Unsupported_Feature,
+	Quad_Limit,
+	Stopped,
+	Out_Of_Memory,
+}
+
+// Parse_Error reports a processing outcome. JSON-LD ctx and expansion
+// failures do not always have a useful character offset after remote contexts
+// and aliases are resolved, so line and column are zero for those failures.
+Parse_Error :: struct {
+	code:   Error_Code,
+	line:   int,
+	column: int,
+}
+
+// parse_error_message returns a stable, allocation-free description.
+parse_error_message :: proc(code: Error_Code) -> string {
+	switch code {
+	case .None:                       return "no error"
+	case .Missing_Sink:               return "sink is required"
+	case .Invalid_UTF8:               return "invalid UTF-8"
+	case .Invalid_JSON:               return "invalid JSON"
+	case .Invalid_Option:             return "parser limits must not be negative"
+	case .Invalid_Chunk_Size:         return "chunk size must not be negative"
+	case .Reader_Error:               return "reader error"
+	case .No_Progress:                return "reader made no progress"
+	case .Document_Too_Large:         return "JSON-LD document exceeds configured byte limit"
+	case .Nesting_Limit:              return "JSON nesting depth limit reached"
+	case .Context_Limit:              return "context limit reached"
+	case .Remote_Context_Limit:       return "remote context limit reached"
+	case .Remote_Context_Disallowed:  return "remote context requires a document loader"
+	case .Loading_Document_Failed:    return "failed to load remote context"
+	case .Invalid_Context:            return "invalid JSON-LD context"
+	case .Invalid_Term_Definition:    return "invalid JSON-LD term definition"
+	case .Invalid_IRI:                return "invalid JSON-LD IRI"
+	case .Invalid_Value_Object:       return "invalid JSON-LD value object"
+	case .Invalid_List_Object:        return "invalid JSON-LD list object"
+	case .Invalid_Reverse_Property:   return "invalid JSON-LD reverse property"
+	case .Invalid_Graph:              return "invalid JSON-LD graph name"
+	case .Unsupported_Feature:        return "unsupported JSON-LD feature"
+	case .Quad_Limit:                 return "quad limit reached"
+	case .Stopped:                    return "stopped by sink"
+	case .Out_Of_Memory:              return "memory allocation failed"
+	}
+	return "unknown error"
+}
+
+// Document_Loader supplies a remote ctx document. The returned string is
+// consumed before the callback returns; callers retain its storage. The loader
+// is opt-in so this package never performs implicit network I/O.
+Document_Loader :: proc(url: string, user_data: rawptr) -> (document: string, ok: bool)
+
+// Options bounds retained state. Zero selects the documented default, except
+// max_quads where zero disables the output cap. base_iri must be absolute when
+// provided; it is used to resolve document-relative identifiers and contexts.
+Options :: struct {
+	base_iri:            string,
+	max_document_bytes:  int,
+	max_nesting_depth:   int,
+	max_contexts:        int,
+	max_remote_contexts: int,
+	max_quads:           int,
+	document_loader:     Document_Loader,
+	loader_data:         rawptr,
+}
+
+DEFAULT_MAX_DOCUMENT_BYTES  :: 16 * 1024 * 1024
+DEFAULT_MAX_NESTING_DEPTH   :: 256
+DEFAULT_MAX_CONTEXTS        :: 1024
+DEFAULT_MAX_REMOTE_CONTEXTS :: 16
+
+// Sink receives RDF dataset statements. Strings are valid only for the
+// callback, matching the ownership contract of the other syntax packages.
+Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
+
+@(private) Term_Definition :: struct {
+	id:             string,
+	type:           string,
+	language:       string,
+	has_language:   bool,
+	container_list: bool,
+	reverse:        bool,
+}
+
+@(private) Context :: struct {
+	terms:            map[string]Term_Definition,
+	base_iri:         string,
+	vocab:            string,
+	language:         string,
+	has_language:     bool,
+}
+
+@(private) State :: struct {
+	sink:              Sink,
+	user_data:         rawptr,
+	scope:             rdf.Blank_Node_Scope,
+	owned:             [dynamic]string,
+	contexts:          [dynamic]map[string]Term_Definition,
+	remote_urls:       map[string]bool,
+	named_bnodes:      map[string]rdf.Term,
+	generated:         u64,
+	emitted:           int,
+	context_count:     int,
+	remote_count:      int,
+	max_contexts:      int,
+	max_remote:        int,
+	max_quads:         int,
+	loader:            Document_Loader,
+	loader_data:       rawptr,
+}
+
+@(private) destroy_state :: proc(state: ^State) {
+	for value in state.owned do delete(value)
+	delete(state.owned)
+	for ctx in state.contexts do delete(ctx)
+	delete(state.contexts)
+	if state.remote_urls != nil do delete(state.remote_urls)
+	if state.named_bnodes != nil do delete(state.named_bnodes)
+}
+
+@(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {
+	cloned, alloc_error := strings.clone(value)
+	if alloc_error != nil do return "", Parse_Error{code = .Out_Of_Memory}
+	append(&state.owned, cloned)
+	return cloned, {}
+}
+
+@(private) make_context :: proc(state: ^State, parent: ^Context) -> (Context, Parse_Error) {
+	if state.context_count >= state.max_contexts do return {}, Parse_Error{code = .Context_Limit}
+	state.context_count += 1
+	result: Context
+	result.terms = make(map[string]Term_Definition)
+	if parent != nil {
+		result.base_iri = parent.base_iri
+		result.vocab = parent.vocab
+		result.language = parent.language
+		result.has_language = parent.has_language
+		for key, definition in parent.terms do result.terms[key] = definition
+	}
+	return result, {}
+}
+
+@(private) retain_context :: proc(state: ^State, ctx: Context) {
+	append(&state.contexts, ctx.terms)
+}
+
+@(private) object_value :: proc(object: json.Object, key: string) -> (json.Value, bool) {
+	value, ok := object[key]
+	return value, ok
+}
+
+@(private) string_value :: proc(value: json.Value) -> (string, bool) {
+	#partial switch actual in value {
+	case json.String: return string(actual), true
+	}
+	return "", false
+}
+
+@(private) object_from_value :: proc(value: json.Value) -> (json.Object, bool) {
+	#partial switch actual in value {
+	case json.Object: return actual, true
+	}
+	return nil, false
+}
+
+@(private) array_from_value :: proc(value: json.Value) -> (json.Array, bool) {
+	#partial switch actual in value {
+	case json.Array: return actual, true
+	}
+	return nil, false
+}
+
+@(private) is_keyword :: proc(value: string) -> bool {
+	switch value {
+	case "@base", "@container", "@context", "@direction", "@graph", "@id", "@import", "@included", "@index", "@json", "@language", "@list", "@nest", "@none", "@prefix", "@propagate", "@protected", "@reverse", "@set", "@type", "@value", "@version", "@vocab": return true
+	}
+	return false
+}
+
+@(private) keyword_for :: proc(ctx: ^Context, key: string) -> string {
+	if is_keyword(key) do return key
+	if definition, ok := ctx.terms[key]; ok && is_keyword(definition.id) do return definition.id
+	return ""
+}
+
+@(private) has_iri_scheme :: proc(value: string) -> bool {
+	if len(value) == 0 || !((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) do return false
+	for index in 1..<len(value) {
+		c := value[index]
+		if c == ':' do return true
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') do return false
+	}
+	return false
+}
+
+@(private) resolve_iri :: proc(state: ^State, base, reference: string) -> (string, Parse_Error) {
+	if len(reference) == 0 {
+		if len(base) == 0 do return "", Parse_Error{code = .Invalid_IRI}
+		return own(state, base)
+	}
+	// JSON-LD keeps an absolute IRI (including its dot segments) as supplied;
+	// only relative references are resolved against the active base.
+	if has_iri_scheme(reference) do return own(state, reference)
+	if len(base) == 0 do return own(state, reference)
+	resolved, ok := turtle.resolve_iri_reference(base, reference)
+	if !ok do return "", Parse_Error{code = .Invalid_IRI}
+	value, err := own(state, resolved)
+	delete(resolved)
+	return value, err
+}
+
+// expand_iri applies JSON-LD term, compact-IRI, vocabulary, and base rules.
+@(private) expand_iri :: proc(state: ^State, ctx: ^Context, value: string, vocab, document_relative: bool) -> (string, Parse_Error) {
+	if is_keyword(value) do return value, {}
+	if definition, ok := ctx.terms[value]; ok && len(definition.id) > 0 do return definition.id, {}
+	if colon := strings.index_byte(value, ':'); colon >= 0 {
+		prefix, suffix := value[:colon], value[colon + 1:]
+		if prefix != "_" && !strings.has_prefix(suffix, "//") {
+			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
+				builder := strings.builder_make()
+				defer strings.builder_destroy(&builder)
+				strings.write_string(&builder, definition.id)
+				strings.write_string(&builder, suffix)
+				return own(state, strings.to_string(builder))
+			}
+		}
+		return own(state, value)
+	}
+	if vocab && len(ctx.vocab) > 0 {
+		builder := strings.builder_make()
+		defer strings.builder_destroy(&builder)
+		strings.write_string(&builder, ctx.vocab)
+		strings.write_string(&builder, value)
+		return own(state, strings.to_string(builder))
+	}
+	if document_relative do return resolve_iri(state, ctx.base_iri, value)
+	return own(state, value)
+}
+
+@(private) apply_context :: proc(state: ^State, current: ^Context, value: json.Value) -> (Context, Parse_Error) {
+	if array, ok := array_from_value(value); ok {
+		result := current^
+		for index in 0..<len(array) {
+			item := array[index]
+			updated, err := apply_context(state, &result, item)
+			if err.code != .None do return {}, err
+			result = updated
+		}
+		return result, {}
+	}
+	if remote, ok := string_value(value); ok {
+		if state.loader == nil do return {}, Parse_Error{code = .Remote_Context_Disallowed}
+		url, err := expand_iri(state, current, remote, false, true)
+		if err.code != .None do return {}, err
+		if url in state.remote_urls do return {}, Parse_Error{code = .Invalid_Context}
+		if state.remote_count >= state.max_remote do return {}, Parse_Error{code = .Remote_Context_Limit}
+		state.remote_count += 1
+		state.remote_urls[url] = true
+		defer delete_key(&state.remote_urls, url)
+		document, loaded := state.loader(url, state.loader_data)
+		if !loaded do return {}, Parse_Error{code = .Loading_Document_Failed}
+		parsed, json_error := json.parse_string(strings.trim_space(document), .JSON, true)
+		if json_error != .None do return {}, Parse_Error{code = .Loading_Document_Failed}
+		defer json.destroy_value(parsed)
+		remote_object, object_ok := object_from_value(parsed)
+		if !object_ok do return {}, Parse_Error{code = .Invalid_Context}
+		remote_context, context_ok := object_value(remote_object, "@context")
+		if !context_ok do return {}, Parse_Error{code = .Invalid_Context}
+		return apply_context(state, current, remote_context)
+	}
+	object, ok := object_from_value(value)
+	if !ok do return {}, Parse_Error{code = .Invalid_Context}
+	for key in object {
+		if key == "@direction" || key == "@import" || key == "@propagate" || key == "@protected" || key == "@version" do return {}, Parse_Error{code = .Unsupported_Feature}
+	}
+	result, make_error := make_context(state, current)
+	if make_error.code != .None do return {}, make_error
+	if base_value, found := object_value(object, "@base"); found {
+		if base_value_string, valid := string_value(base_value); valid {
+			base, err := resolve_iri(state, current.base_iri, base_value_string)
+			if err.code != .None do return {}, err
+			result.base_iri = base
+		} else {
+			#partial switch null in base_value { case json.Null: result.base_iri = ""; case: return {}, Parse_Error{code = .Invalid_Context} }
+		}
+	}
+	if vocab_value, found := object_value(object, "@vocab"); found {
+		if vocab_value_string, valid := string_value(vocab_value); valid {
+			vocab, err := expand_iri(state, &result, vocab_value_string, true, true)
+			if err.code != .None do return {}, err
+			result.vocab = vocab
+		} else {
+			#partial switch null in vocab_value { case json.Null: result.vocab = ""; case: return {}, Parse_Error{code = .Invalid_Context} }
+		}
+	}
+	if language_value, found := object_value(object, "@language"); found {
+		if language, valid := string_value(language_value); valid {
+			result.language, make_error = own(state, strings.to_lower(language))
+			if make_error.code != .None do return {}, make_error
+			result.has_language = true
+		} else {
+			#partial switch null in language_value { case json.Null: result.language = ""; result.has_language = false; case: return {}, Parse_Error{code = .Invalid_Context} }
+		}
+	}
+	// Context object iteration is deliberately unordered. Establish absolute
+	// prefix mappings first so a later compact IRI such as ex:friend does not
+	// depend on map iteration order.
+	for term, definition_value in object {
+		if strings.has_prefix(term, "@") do continue
+		id, simple := string_value(definition_value)
+		if !simple || !(strings.has_prefix(id, "http://") || strings.has_prefix(id, "https://") || strings.has_prefix(id, "urn:")) do continue
+		identifier, err := own(state, id)
+		if err.code != .None do return {}, err
+		result.terms[term] = Term_Definition{id = identifier}
+	}
+	for term, definition_value in object {
+		if strings.has_prefix(term, "@") do continue
+		definition: Term_Definition
+		is_null := false
+		#partial switch _ in definition_value { case json.Null: is_null = true }
+		if is_null {
+			delete_key(&result.terms, term)
+			continue
+		}
+		if simple_id, simple := string_value(definition_value); simple {
+			id, err := expand_iri(state, &result, simple_id, true, true)
+			if err.code != .None do return {}, err
+			definition.id = id
+			result.terms[term] = definition
+			continue
+		}
+		definition_object, object_ok := object_from_value(definition_value)
+		if !object_ok do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		if reverse_value, found := object_value(definition_object, "@reverse"); found {
+			reverse, valid := string_value(reverse_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			definition.id, make_error = expand_iri(state, &result, reverse, true, true)
+			if make_error.code != .None do return {}, make_error
+			definition.reverse = true
+		} else if id_value, has_identifier := object_value(definition_object, "@id"); has_identifier {
+			#partial switch null in id_value {
+			case json.Null:
+				definition.id = ""
+			case:
+				id, valid := string_value(id_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+				definition.id, make_error = expand_iri(state, &result, id, true, true)
+				if make_error.code != .None do return {}, make_error
+			}
+		} else {
+			definition.id, make_error = expand_iri(state, &result, term, true, false)
+			if make_error.code != .None do return {}, make_error
+		}
+		if type_value, found := object_value(definition_object, "@type"); found {
+			type_name, valid := string_value(type_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if type_name == "@id" || type_name == "@vocab" || type_name == "@json" { definition.type = type_name } else {
+				definition.type, make_error = expand_iri(state, &result, type_name, true, true)
+				if make_error.code != .None do return {}, make_error
+			}
+		}
+		if language_value, found := object_value(definition_object, "@language"); found {
+			#partial switch null in language_value {
+			case json.Null:
+				definition.language = ""
+				definition.has_language = false
+			case:
+				language, valid := string_value(language_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+				definition.language, make_error = own(state, strings.to_lower(language))
+				if make_error.code != .None do return {}, make_error
+				definition.has_language = true
+			}
+		}
+		if container_value, found := object_value(definition_object, "@container"); found {
+			container, valid := string_value(container_value)
+			if !valid || (container != "@list" && container != "@set") do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			definition.container_list = container == "@list"
+		}
+		result.terms[term] = definition
+	}
+	retain_context(state, result)
+	return result, {}
+}
+
+@(private) blank_node :: proc(state: ^State) -> (rdf.Term, Parse_Error) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "b")
+	strings.write_u64(&builder, state.generated)
+	state.generated += 1
+	label, err := own(state, strings.to_string(builder))
+	if err.code != .None do return {}, err
+	return rdf.blank_node(label, state.scope), {}
+}
+
+@(private) identifier_term :: proc(state: ^State, ctx: ^Context, value: string) -> (rdf.Term, Parse_Error) {
+	id, err := expand_iri(state, ctx, value, false, true)
+	if err.code != .None do return {}, err
+	if strings.has_prefix(id, "_:") {
+		if len(id) <= 2 do return {}, Parse_Error{code = .Invalid_IRI}
+		if node, exists := state.named_bnodes[id]; exists do return node, {}
+		node, node_err := blank_node(state)
+		if node_err.code != .None do return {}, node_err
+		state.named_bnodes[id] = node
+		return node, {}
+	}
+	return rdf.iri(id), {}
+}
+
+// preassign_blank_nodes makes explicit JSON-LD blank-node identifiers stable
+// before anonymous nodes are generated. It also prevents a later _:label from
+// colliding with a generated bN label in the exposed RDF dataset.
+@(private) preassign_blank_nodes :: proc(state: ^State, value: json.Value) -> Parse_Error {
+	if array, is_array := array_from_value(value); is_array {
+		for index in 0..<len(array) {
+			if err := preassign_blank_nodes(state, array[index]); err.code != .None do return err
+		}
+		return {}
+	}
+	object, is_object := object_from_value(value)
+	if !is_object do return {}
+	if id_value, has_id := object_value(object, "@id"); has_id {
+		if id, is_string := string_value(id_value); is_string && strings.has_prefix(id, "_:") && !(id in state.named_bnodes) {
+			node, node_err := blank_node(state)
+			if node_err.code != .None do return node_err
+			state.named_bnodes[id] = node
+		}
+	}
+	keys := make([dynamic]string)
+	defer delete(keys)
+	for key in object do append(&keys, key)
+	sort.sort(sort.Interface{
+		collection = rawptr(&keys),
+		len = proc(it: sort.Interface) -> int {
+			keys := cast(^[dynamic]string)it.collection
+			return len(keys^)
+		},
+		less = proc(it: sort.Interface, i, j: int) -> bool {
+			keys := cast(^[dynamic]string)it.collection
+			return strings.compare(keys[i], keys[j]) < 0
+		},
+		swap = proc(it: sort.Interface, i, j: int) {
+			keys := cast(^[dynamic]string)it.collection
+			keys[i], keys[j] = keys[j], keys[i]
+		},
+	})
+	for key in keys {
+		child := object[key]
+		if key == "@context" do continue
+		if err := preassign_blank_nodes(state, child); err.code != .None do return err
+	}
+	return {}
+}
+
+@(private) emit :: proc(state: ^State, subject, predicate, object: rdf.Term, graph: rdf.Quad) -> Parse_Error {
+	if state.max_quads > 0 && state.emitted >= state.max_quads do return Parse_Error{code = .Quad_Limit}
+	quad := graph
+	quad.subject = subject
+	quad.predicate = predicate
+	quad.object = object
+	if !state.sink(quad, state.user_data) do return Parse_Error{code = .Stopped}
+	state.emitted += 1
+	return {}
+}
+
+@(private) numeric_literal :: proc(state: ^State, value: json.Value, datatype: string = "") -> (rdf.Term, Parse_Error) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	#partial switch actual in value {
+	case json.Integer:
+		strings.write_i64(&builder, i64(actual))
+		if datatype == XSD_DOUBLE do strings.write_string(&builder, ".0E0")
+		lexical, err := own(state, strings.to_string(builder))
+		if err.code != .None do return {}, err
+		output_datatype := len(datatype) == 0 ? XSD_INTEGER : datatype
+		return rdf.typed_literal(lexical, output_datatype), {}
+	case json.Float:
+		strings.write_float(&builder, f64(actual), 'E', -1, 64)
+		raw := strings.to_string(builder)
+		separator := strings.index_byte(raw, 'E')
+		if separator < 0 do return {}, Parse_Error{code = .Invalid_Value_Object}
+		canonical := strings.builder_make()
+		defer strings.builder_destroy(&canonical)
+		mantissa := raw[:separator]
+		strings.write_string(&canonical, mantissa)
+		if strings.index_byte(mantissa, '.') < 0 do strings.write_string(&canonical, ".0")
+		strings.write_byte(&canonical, 'E')
+		exponent := raw[separator + 1:]
+		if len(exponent) > 0 && exponent[0] == '+' do exponent = exponent[1:]
+		negative := len(exponent) > 0 && exponent[0] == '-'
+		if negative {
+			strings.write_byte(&canonical, '-')
+			exponent = exponent[1:]
+		}
+		for len(exponent) > 1 && exponent[0] == '0' do exponent = exponent[1:]
+		strings.write_string(&canonical, exponent)
+		lexical, err := own(state, strings.to_string(canonical))
+		if err.code != .None do return {}, err
+		output_datatype := len(datatype) == 0 ? XSD_DOUBLE : datatype
+		return rdf.typed_literal(lexical, output_datatype), {}
+	}
+	return {}, Parse_Error{code = .Invalid_Value_Object}
+}
+
+@(private) primitive_literal :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> (rdf.Term, Parse_Error) {
+	#partial switch actual in value {
+	case json.String:
+		text := string(actual)
+		if definition.type == "@id" {
+			return identifier_term(state, ctx, text)
+		}
+		if definition.type == "@vocab" {
+			id, err := expand_iri(state, ctx, text, true, true)
+			if err.code != .None do return {}, err
+			return rdf.iri(id), {}
+		}
+		if len(definition.type) > 0 && definition.type != "@json" {
+			return rdf.typed_literal(text, definition.type), {}
+		}
+		if definition.has_language do return rdf.language_literal(text, definition.language), {}
+		if ctx.has_language do return rdf.language_literal(text, ctx.language), {}
+		return rdf.literal(text), {}
+	case json.Boolean:
+		lexical := bool(actual) ? "true" : "false"
+		return rdf.typed_literal(lexical, XSD_BOOLEAN), {}
+	case json.Integer, json.Float:
+		type_iri := definition.type
+		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" do type_iri = ""
+		return numeric_literal(state, value, type_iri)
+	case json.Null:
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	return {}, Parse_Error{code = .Invalid_Value_Object}
+}
+
+@(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object) -> (rdf.Term, Parse_Error) {
+	value, found := object_value(object, "@value")
+	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
+	#partial switch actual in value {
+	case json.Null:
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	case json.Boolean, json.Integer, json.Float:
+		return primitive_literal(state, ctx, {}, value)
+	case json.String:
+		text := string(actual)
+		if language_value, has_language := object_value(object, "@language"); has_language {
+			language, valid := string_value(language_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+			return rdf.language_literal(text, language), {}
+		}
+		if type_value, has_type := object_value(object, "@type"); has_type {
+			type_name, valid := string_value(type_value)
+			if !valid || type_name == "@id" || type_name == "@vocab" do return {}, Parse_Error{code = .Invalid_Value_Object}
+			datatype, err := expand_iri(state, ctx, type_name, true, true)
+			if err.code != .None do return {}, err
+			return rdf.typed_literal(text, datatype), {}
+		}
+		return rdf.literal(text), {}
+	}
+	return {}, Parse_Error{code = .Invalid_Value_Object}
+}
+
+@(private) has_keyword :: proc(object: json.Object, ctx: ^Context, keyword: string) -> (json.Value, bool) {
+	for key, value in object {
+		if keyword_for(ctx, key) == keyword do return value, true
+	}
+	return {}, false
+}
+
+@(private) graph_has_node_name :: proc(object: json.Object, ctx: ^Context, top_level: bool) -> bool {
+	if !top_level do return true
+	for key in object {
+		keyword := keyword_for(ctx, key)
+		if keyword != "@context" && keyword != "@graph" do return true
+	}
+	return false
+}
+
+@(private) process_list :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	array, is_array := array_from_value(value)
+	item_count := is_array ? len(array) : 1
+	if item_count == 0 do return rdf.iri(RDF_NIL), {}
+	first, err := blank_node(state)
+	if err.code != .None do return {}, err
+	current := first
+	for index in 0..<item_count {
+		item := is_array ? array[index] : value
+		object, object_err := process_value(state, ctx, definition, item, graph)
+		if object_err.code != .None do return {}, object_err
+		if emit_err := emit(state, current, rdf.iri(RDF_FIRST), object, graph); emit_err.code != .None do return {}, emit_err
+		if index + 1 == item_count {
+			if emit_err := emit(state, current, rdf.iri(RDF_REST), rdf.iri(RDF_NIL), graph); emit_err.code != .None do return {}, emit_err
+		} else {
+			next, node_err := blank_node(state)
+			if node_err.code != .None do return {}, node_err
+			if emit_err := emit(state, current, rdf.iri(RDF_REST), next, graph); emit_err.code != .None do return {}, emit_err
+			current = next
+		}
+	}
+	return first, {}
+}
+
+@(private) process_node :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad, top_level := false) -> (rdf.Term, Parse_Error) {
+	active_context := ctx^
+	if context_value, found := object_value(object, "@context"); found {
+		updated, context_err := apply_context(state, ctx, context_value)
+		if context_err.code != .None do return {}, context_err
+		active_context = updated
+	}
+	if value, found := has_keyword(object, &active_context, "@value"); found {
+		_ = value
+		return value_object_term(state, &active_context, object)
+	}
+	if list, found := has_keyword(object, &active_context, "@list"); found {
+		return process_list(state, &active_context, {}, list, graph)
+	}
+	if _, found := has_keyword(object, &active_context, "@set"); found do return {}, Parse_Error{code = .Unsupported_Feature}
+
+	subject: rdf.Term
+	if id_value, found := has_keyword(object, &active_context, "@id"); found {
+		id, valid := string_value(id_value)
+		if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+		term, id_err := identifier_term(state, &active_context, id)
+		if id_err.code != .None do return {}, id_err
+		subject = term
+	} else {
+		term, node_err := blank_node(state)
+		if node_err.code != .None do return {}, node_err
+		subject = term
+	}
+
+	if type_value, found := has_keyword(object, &active_context, "@type"); found {
+		if types, array := array_from_value(type_value); array {
+			for index in 0..<len(types) {
+				type_item := types[index]
+				type_name, valid := string_value(type_item)
+				if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+				type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
+				if type_err.code != .None do return {}, type_err
+				if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), rdf.iri(type_iri), graph); emit_err.code != .None do return {}, emit_err
+			}
+		} else {
+			type_name, valid := string_value(type_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+			type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
+			if type_err.code != .None do return {}, type_err
+			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), rdf.iri(type_iri), graph); emit_err.code != .None do return {}, emit_err
+		}
+	}
+
+	for key, property_value in object {
+		keyword := keyword_for(&active_context, key)
+		if keyword == "@context" || keyword == "@id" || keyword == "@type" || keyword == "@value" || keyword == "@list" || keyword == "@index" do continue
+		if keyword == "@set" || keyword == "@direction" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if keyword == "@graph" {
+			graph_quad := graph
+			if graph_has_node_name(object, &active_context, top_level) {
+				graph_quad.has_graph = true
+				graph_quad.graph = subject
+			}
+			if graph_nodes, array := array_from_value(property_value); array {
+				for index in 0..<len(graph_nodes) {
+					node_value := graph_nodes[index]
+					node, valid := object_from_value(node_value)
+					if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+					if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
+				}
+			} else {
+				node, valid := object_from_value(property_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+				if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
+			}
+			continue
+		}
+		if keyword == "@included" {
+			included, array := array_from_value(property_value)
+			included_count := array ? len(included) : 1
+			for index in 0..<included_count {
+				node_value := array ? included[index] : property_value
+				node, valid := object_from_value(node_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+				if _, included_err := process_node(state, &active_context, node, graph); included_err.code != .None do return {}, included_err
+			}
+			continue
+		}
+		if keyword == "@reverse" {
+			reverse_object, valid := object_from_value(property_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Reverse_Property}
+			for reverse_key, reverse_value in reverse_object {
+				predicate_iri, predicate_err := expand_iri(state, &active_context, reverse_key, true, false)
+				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
+				definition := active_context.terms[reverse_key]
+				values, array := array_from_value(reverse_value)
+				value_count := array ? len(values) : 1
+				for index in 0..<value_count {
+					reverse_item := array ? values[index] : reverse_value
+					object_term, value_err := process_value(state, &active_context, definition, reverse_item, graph)
+					if value_err.code != .None || object_term.kind == .Literal { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
+					if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
+				}
+			}
+			continue
+		}
+		if keyword == "@nest" {
+			nested, valid := object_from_value(property_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+			// @nest is syntactic sugar: process its ordinary entries against the same subject.
+			for nested_key, nested_value in nested {
+				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
+				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
+				definition := active_context.terms[nested_key]
+				values, array := array_from_value(nested_value)
+				value_count := array ? len(values) : 1
+				if definition.container_list {
+					list, list_err := process_list(state, &active_context, definition, nested_value, graph)
+					if list_err.code != .None do return {}, list_err
+					if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None do return {}, emit_err
+					continue
+				}
+				for index in 0..<value_count {
+					item := array ? values[index] : nested_value
+					object_term, value_err := process_value(state, &active_context, definition, item, graph)
+					if value_err.code != .None do return {}, value_err
+					if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None do return {}, emit_err
+				}
+			}
+			continue
+		}
+		if len(keyword) > 0 do continue
+		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
+		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
+		definition := active_context.terms[key]
+		if definition.container_list {
+			list, list_err := process_list(state, &active_context, definition, property_value, graph)
+			if list_err.code != .None do return {}, list_err
+			if definition.reverse {
+				if list.kind == .Literal do return {}, Parse_Error{code = .Invalid_Reverse_Property}
+				if emit_err := emit(state, list, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
+			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None { return {}, emit_err }
+			continue
+		}
+		values, array := array_from_value(property_value)
+		value_count := array ? len(values) : 1
+		for index in 0..<value_count {
+			item := array ? values[index] : property_value
+			object_term, value_err := process_value(state, &active_context, definition, item, graph)
+			if value_err.code != .None do return {}, value_err
+			if definition.reverse {
+				if object_term.kind == .Literal do return {}, Parse_Error{code = .Invalid_Reverse_Property}
+				if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
+			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None { return {}, emit_err }
+		}
+	}
+	return subject, {}
+}
+
+@(private) process_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	if object, is_object := object_from_value(value); is_object {
+		if value_object, has_value := has_keyword(object, ctx, "@value"); has_value {
+			_ = value_object
+			return value_object_term(state, ctx, object)
+		}
+		if list, has_list := has_keyword(object, ctx, "@list"); has_list do return process_list(state, ctx, definition, list, graph)
+		return process_node(state, ctx, object, graph)
+	}
+	if _, is_array := array_from_value(value); is_array do return {}, Parse_Error{code = .Invalid_Value_Object}
+	return primitive_literal(state, ctx, definition, value)
+}
+
+@(private) scan_depth :: proc(input: string, maximum: int) -> Parse_Error {
+	depth := 0
+	in_string := false
+	escaped := false
+	line, column := 1, 1
+	for byte in input {
+		if in_string {
+			if escaped { escaped = false } else if byte == '\\' { escaped = true } else if byte == '"' { in_string = false }
+		} else {
+			switch byte {
+			case '"': in_string = true
+			case '{', '[':
+				depth += 1
+				if depth > maximum do return Parse_Error{code = .Nesting_Limit, line = line, column = column}
+			case '}', ']': if depth > 0 do depth -= 1
+			}
+		}
+		if byte == '\n' { line += 1; column = 1 } else { column += 1 }
+	}
+	return {}
+}
+
+// parse transforms one complete JSON-LD document to RDF dataset statements.
+// It retains input-derived JSON and ctx state until completion, then
+// destroys it before returning. Use max_document_bytes for untrusted input.
+parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawptr = nil) -> Parse_Error {
+	if sink == nil do return Parse_Error{code = .Missing_Sink, line = 1, column = 1}
+	if !utf8.valid_string(input) do return Parse_Error{code = .Invalid_UTF8, line = 1, column = 1}
+	max_document_bytes := options.max_document_bytes
+	if max_document_bytes == 0 do max_document_bytes = DEFAULT_MAX_DOCUMENT_BYTES
+	if max_document_bytes < 0 do return Parse_Error{code = .Invalid_Option, line = 1, column = 1}
+	if len(input) > max_document_bytes do return Parse_Error{code = .Document_Too_Large, line = 1, column = 1}
+	max_depth := options.max_nesting_depth
+	if max_depth == 0 do max_depth = DEFAULT_MAX_NESTING_DEPTH
+	if max_depth < 0 do return Parse_Error{code = .Invalid_Option, line = 1, column = 1}
+	if depth_err := scan_depth(input, max_depth); depth_err.code != .None do return depth_err
+	// core:encoding/json accepts the document grammar but its value parser does
+	// not retain a root value when trailing whitespace remains after an object.
+	// JSON permits that whitespace, so normalize it before materializing the AST.
+	document := strings.trim_space(input)
+	parsed, json_error := json.parse_string(document, .JSON, true)
+	if json_error != .None do return Parse_Error{code = .Invalid_JSON, line = 1, column = 1}
+	defer json.destroy_value(parsed)
+	max_contexts := options.max_contexts
+	if max_contexts == 0 do max_contexts = DEFAULT_MAX_CONTEXTS
+	max_remote := options.max_remote_contexts
+	if max_remote == 0 do max_remote = DEFAULT_MAX_REMOTE_CONTEXTS
+	if max_contexts < 0 || max_remote < 0 || options.max_quads < 0 do return Parse_Error{code = .Invalid_Option, line = 1, column = 1}
+	state := State{
+		sink = sink,
+		user_data = user_data,
+		scope = rdf.new_blank_node_scope(),
+		remote_urls = make(map[string]bool),
+		named_bnodes = make(map[string]rdf.Term),
+		max_contexts = max_contexts,
+		max_remote = max_remote,
+		max_quads = options.max_quads,
+		loader = options.document_loader,
+		loader_data = options.loader_data,
+	}
+	defer destroy_state(&state)
+	if blank_err := preassign_blank_nodes(&state, parsed); blank_err.code != .None do return blank_err
+	ctx, context_err := make_context(&state, nil)
+	if context_err.code != .None do return context_err
+	retain_context(&state, ctx)
+	if len(options.base_iri) > 0 {
+		if !has_iri_scheme(options.base_iri) do return Parse_Error{code = .Invalid_IRI}
+		base, base_err := resolve_iri(&state, options.base_iri, "")
+		if base_err.code != .None do return base_err
+		ctx.base_iri = base
+	}
+	graph: rdf.Quad
+	if array, is_array := array_from_value(parsed); is_array {
+		for index in 0..<len(array) {
+			value := array[index]
+			object, valid := object_from_value(value)
+			if !valid do return Parse_Error{code = .Invalid_Value_Object}
+			if _, process_err := process_node(&state, &ctx, object, graph, true); process_err.code != .None do return process_err
+		}
+		return {}
+	}
+	object, valid := object_from_value(parsed)
+	if !valid do return Parse_Error{code = .Invalid_Value_Object}
+	_, process_err := process_node(&state, &ctx, object, graph, true)
+	return process_err
+}

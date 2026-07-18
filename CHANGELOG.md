@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.16.0 - 2026-07-18
+
+- Add `rdfxml.write_triples`, an atomic deterministic RDF/XML writer for
+  complete default graphs. It uses XML-safe blank-node identifiers, preserves
+  source triple order, supports language, datatype, and XML Literal values,
+  and explicitly rejects RDF/XML-unrepresentable predicates and XML 1.0
+  characters.
+
 ## 0.15.0 - 2026-07-18
 
 - Add markup-bearing RDF/XML `rdf:parseType="Literal"` support with

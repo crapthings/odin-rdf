@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.5.0 - 2026-07-18
 
 - Add a streaming-safe Turtle writer with explicit prefix declarations,
   deterministic longest-namespace compaction, typed-literal datatype

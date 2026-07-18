@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.14.0 - 2026-07-18
 
 - Add `trig.format_quads`, an atomic batch formatter for complete RDF datasets.
   It groups default and named graphs, deterministically orders and deduplicates

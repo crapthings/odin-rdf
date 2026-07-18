@@ -2,6 +2,18 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.21.0 - 2026-07-18
+
+- Add bounded `odin-rdf canon`, `hash`, and `compare` commands for every
+  supported RDF input syntax. They use the existing RDFC-1.0 APIs only after a
+  complete owned dataset is collected under an explicit quad admission policy.
+- `canon` writes atomic canonical N-Quads, `hash` writes a SHA-256 or SHA-384
+  hexadecimal digest, and `compare` reports isomorphism with conventional
+  `0` (equal), `1` (different), and `2` (error) exit codes.
+- Add CLI coverage for syntax inference, hash selection, blank-node equality,
+  collector limits, and atomic file replacement. No existing public APIs
+  change.
+
 ## 0.20.0 - 2026-07-18
 
 - Add `canon.canonical_hash` for atomic SHA-256 or SHA-384 digests of a

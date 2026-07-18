@@ -4,6 +4,7 @@ import "core:testing"
 import "core:io"
 import "core:os"
 import "core:strings"
+import canon "../../rdf/canon"
 import convert "../../rdf/convert"
 import turtle "../../rdf/turtle"
 
@@ -423,6 +424,116 @@ ns1:g {
 }
 
 @(test)
+test_parses_integrity_commands_with_bounded_reader_options :: proc(t: ^testing.T) {
+	canon_options, canon_err := parse_integrity_command_args([]string{
+		"canon", "input.trig", "--output", "canonical.nq", "--algorithm=sha384", "--max-quads", "20",
+		"--max-records", "10", "--max-document-bytes", "4096",
+	})
+	testing.expect_value(t, canon_err.code, Command_Error_Code.None)
+	testing.expect_value(t, canon_options.command, Integrity_Command.Canon)
+	testing.expect_value(t, canon_options.input_format, convert.Format.TriG)
+	testing.expect_value(t, canon_options.output_path, "canonical.nq")
+	testing.expect_value(t, canon_options.hash_algorithm, canon.Hash_Algorithm.SHA_384)
+	testing.expect_value(t, canon_options.max_quads, 20)
+	testing.expect_value(t, canon_options.reader_limits.max_records, 10)
+	testing.expect_value(t, canon_options.reader_limits.max_document_bytes, 4096)
+
+	hash_options, hash_err := parse_integrity_command_args([]string{"hash", "input.nt"})
+	testing.expect_value(t, hash_err.code, Command_Error_Code.None)
+	testing.expect_value(t, hash_options.command, Integrity_Command.Hash)
+	testing.expect_value(t, hash_options.max_quads, canon.DEFAULT_MAX_QUADS)
+
+	compare_options, compare_err := parse_integrity_command_args([]string{"compare", "left.ttl", "right.trig"})
+	testing.expect_value(t, compare_err.code, Command_Error_Code.None)
+	testing.expect_value(t, compare_options.input_format, convert.Format.Turtle)
+	testing.expect_value(t, compare_options.other_format, convert.Format.TriG)
+
+	missing_options, missing_err := parse_integrity_command_args([]string{"compare", "left.nq"})
+	testing.expect_value(t, missing_err.code, Command_Error_Code.Missing_Compare_Input)
+	testing.expect_value(t, missing_options.command, Integrity_Command.Compare)
+
+	stdin_options, stdin_err := parse_integrity_command_args([]string{"compare", "-", "right.nq", "--from", "nquads"})
+	testing.expect_value(t, stdin_err.code, Command_Error_Code.Compare_Standard_Input)
+	testing.expect_value(t, stdin_options.command, Integrity_Command.Compare)
+
+	invalid_algorithm_options, invalid_algorithm_err := parse_integrity_command_args([]string{"hash", "input.nt", "--algorithm", "sha512"})
+	testing.expect_value(t, invalid_algorithm_err.code, Command_Error_Code.Invalid_Hash_Algorithm)
+	testing.expect_value(t, invalid_algorithm_options.command, Integrity_Command.Hash)
+}
+
+@(test)
+test_integrity_commands_canonicalize_hash_and_compare_atomically :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-canon-input.nq"
+	canonical_target :: "odin-rdf-cli-canon-output.nq"
+	hash_target :: "odin-rdf-cli-hash-output.txt"
+	left_path :: "odin-rdf-cli-compare-left.nq"
+	right_path :: "odin-rdf-cli-compare-right.nq"
+	different_path :: "odin-rdf-cli-compare-different.nq"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(canonical_target)
+		_ = os.remove(canonical_target + ".odin-rdf.tmp")
+		_ = os.remove(hash_target)
+		_ = os.remove(hash_target + ".odin-rdf.tmp")
+		_ = os.remove(left_path)
+		_ = os.remove(right_path)
+		_ = os.remove(different_path)
+	}
+	testing.expect(t, write_test_file(input_path, "<urn:z> <urn:p> <urn:o> .\n<urn:a> <urn:p> <urn:o> .\n<urn:z> <urn:p> <urn:o> .\n") == nil)
+	canon_options, canon_err := parse_integrity_command_args([]string{"canon", input_path, "--output", canonical_target})
+	testing.expect_value(t, canon_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(canon_options), 0)
+	buffer: [256]byte
+	contents, read_err := read_test_file(canonical_target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "<urn:a> <urn:p> <urn:o> .\n<urn:z> <urn:p> <urn:o> .\n")
+
+	testing.expect(t, write_test_file(input_path, "<urn:s> <urn:p> \"value\" .\n") == nil)
+	hash_options, hash_err := parse_integrity_command_args([]string{"hash", input_path, "--output", hash_target})
+	testing.expect_value(t, hash_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(hash_options), 0)
+	contents, read_err = read_test_file(hash_target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "469b8e68a9f9cc0f0a72e96fb6d3a55595f2fda5f518e79d218b20900b722d9b\n")
+
+	testing.expect(t, write_test_file(left_path, "_:left <urn:p> <urn:o> .\n<urn:s> <urn:p> _:left .\n") == nil)
+	testing.expect(t, write_test_file(right_path, "<urn:s> <urn:p> _:right .\n_:right <urn:p> <urn:o> .\n") == nil)
+	compare_options, compare_err := parse_integrity_command_args([]string{"compare", left_path, right_path})
+	testing.expect_value(t, compare_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(compare_options), 0)
+	limited_compare_options, limited_compare_err := parse_integrity_command_args([]string{"compare", left_path, right_path, "--max-quads", "1"})
+	testing.expect_value(t, limited_compare_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(limited_compare_options), 2)
+
+	testing.expect(t, write_test_file(different_path, "<urn:s> <urn:p> <urn:different> .\n") == nil)
+	different_options, different_err := parse_integrity_command_args([]string{"compare", left_path, different_path})
+	testing.expect_value(t, different_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(different_options), 1)
+}
+
+@(test)
+test_canon_preserves_an_existing_target_when_collection_hits_its_limit :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-canon-limit-input.nq"
+	target :: "odin-rdf-cli-canon-limit-output.nq"
+	temporary :: "odin-rdf-cli-canon-limit-output.nq.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	testing.expect(t, write_test_file(input_path, "<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n") == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options, parse_err := parse_integrity_command_args([]string{"canon", input_path, "--output", target, "--max-quads", "1"})
+	testing.expect_value(t, parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(options), 1)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
 test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 	messages := [Command_Error_Code]string{
 		.None                 = "no error",
@@ -444,6 +555,9 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Cannot_Infer_Input_Format = "cannot infer input RDF syntax; use --from",
 		.Cannot_Infer_Output_Format = "cannot infer output RDF syntax; use --to",
 		.Same_Input_Output    = "input and output paths must differ",
+		.Missing_Compare_Input = "compare requires two input paths",
+		.Compare_Standard_Input = "compare does not accept standard input",
+		.Invalid_Hash_Algorithm = "--algorithm must be sha256 or sha384",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])
 }

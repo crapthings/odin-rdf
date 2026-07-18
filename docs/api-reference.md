@@ -1,8 +1,7 @@
 # API reference
 
-This reference describes the current development surface; the latest tagged
-release is version 0.5.0. The source remains authoritative for exact Odin
-declarations.
+This reference describes the supported public surface in version 0.6.0. The
+source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
 

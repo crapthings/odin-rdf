@@ -15,7 +15,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.5.0` is the latest release and provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model. Current development also includes a streaming conversion adapter and `odin-rdf convert` command, pending the next release. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.6.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, a streaming conversion adapter, and the `odin-rdf convert` command. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
 RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. Turtle formatting remains separate from writing because document grouping, prefix discovery, and layout policy require a batch-oriented API.
 

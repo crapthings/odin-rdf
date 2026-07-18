@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.6.0 - 2026-07-18
 
 - Add `rdf/convert`, a streaming adapter for N-Triples, N-Quads, and Turtle
   readers and writers. It rejects named-graph conversions that would lose RDF

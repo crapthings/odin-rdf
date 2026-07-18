@@ -198,6 +198,9 @@ parse(input: string, sink: Sink, options: Parse_Options = {},
       user_data: rawptr = nil) -> Parse_Error
 parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
              user_data: rawptr = nil) -> Reader_Result
+write_prefixes(builder: ^strings.Builder, prefixes: []turtle.Prefix) -> Write_Error
+write_quad(builder: ^strings.Builder, quad: rdf.Quad,
+           options: Writer_Options = {}) -> Write_Error
 ```
 
 TriG emits `rdf.Quad` values for default and named graph statements. It supports
@@ -210,16 +213,25 @@ not have a line-safe or dot-only framing rule. `Reader_Options` adds a 64 KiB
 chunk size and `max_document_bytes`. See the [TriG design](trig-design.md) for
 ownership and conformance details.
 
+`Writer_Options.prefixes` uses `turtle.Prefix` declarations and the same
+longest-safe-namespace compaction policy as the Turtle writer. Call
+`write_prefixes` once before records when declarations are wanted.
+`write_quad` is atomic and streaming-safe: default-graph quads become a
+Turtle-compatible triple, and each named quad becomes an independent TriG
+graph block. It does not group graph blocks, reorder records, infer prefixes,
+or retain document state.
+
 ## Conversion `rdf/convert`
 
 ```odin
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`,
-`RDF_XML`, and `TriG`. `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, `TriG`, or input-only
+`JSON_LD` and `RDF_XML`. `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
-`turtle_prefixes: []turtle.Prefix` for explicit Turtle output declarations.
+`turtle_prefixes: []turtle.Prefix` for explicit Turtle and TriG output
+declarations.
 `Result` reports `statements` written, `bytes_read`, and an `Error`.
 
 | `Reader_Limits` field | Applies to | Zero value |
@@ -234,17 +246,17 @@ All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
 the destination writer.
 
-`Error.code` distinguishes invalid formats, invalid Turtle prefix configuration,
+`Error.code` distinguishes invalid formats, invalid Turtle/TriG prefix configuration,
 source parse errors, a named graph that the selected target cannot represent,
 serialization failures, and output-write failures. Source parse errors retain
 their one-based `line`, `column`, parser diagnostic in `detail`, and reader
 I/O error when available. Other failures have zero line and column.
 
 The adapter streams each validated statement directly to the selected writer.
-N-Triples and Turtle map to the N-Quads default graph when N-Quads is the
-target. N-Quads default-graph statements can map to triples, but a named graph
-is rejected for N-Triples and Turtle rather than silently losing data. The
-adapter does not flush or close either stream.
+N-Triples and Turtle map to the N-Quads or TriG default graph when those are
+targets. N-Quads default-graph statements can map to triples, while a named
+graph is rejected only for N-Triples and Turtle rather than silently losing
+data. The adapter does not flush or close either stream.
 
 ## Command `cmd/odin-rdf`
 
@@ -256,9 +268,9 @@ odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
   [--max-triples N] [--no-infer-prefixes]
 ```
 
-The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, input-only
-`jsonld`/`json-ld`/`json`, input-only `rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`,
-and input-only `trig`. It infers formats from file paths ending
+The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, `trig`,
+input-only `jsonld`/`json-ld`/`json`, and input-only
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. It infers formats from file paths ending
 in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, `.xml`, or `.trig`; explicit
 `--from` and `--to` options override that inference. `INPUT` and `--output`
 use `-` for standard input and output, which requires the matching explicit

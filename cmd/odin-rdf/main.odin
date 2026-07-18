@@ -303,26 +303,26 @@ print_help :: proc() {
 	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
   odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
-Formats: ntriples (nt), nquads (nq), turtle (ttl), jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only), trig (input only)
+Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only)
 
 INPUT and --output accept - for stdin and stdout. File output is written to a
 same-directory temporary file and replaces the destination only after a
-successful conversion and temporary-file close. Prefixes are used only for
-Turtle output and may be repeated; use --prefix =https://example.com/ for the
-default prefix.
+successful conversion and temporary-file close. Prefixes are used for Turtle
+and TriG output and may be repeated; use --prefix =https://example.com/ for
+the default prefix.
 
 convert infers a file syntax from the canonical .nt, .nq, .ttl, .jsonld, .json, .rdfxml, .rdf, .xml, and .trig extensions.
 Explicit --from and --to values override that inference. Standard input and
 output, as well as unrecognized file extensions, require the corresponding
 explicit format option.
 
-N-Quads named graphs can only be converted to N-Quads. The command rejects
-other targets rather than silently discarding graph names.
+Named graphs can be converted to N-Quads or TriG. The command rejects other
+targets rather than silently discarding graph names.
 
 convert accepts reader limits for untrusted input: --max-records N applies to
 all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,
 --max-statement-bytes N applies to Turtle, and --max-document-bytes N applies
-to JSON-LD and RDF/XML. Every N must be a positive decimal
+to JSON-LD, RDF/XML, and TriG. Every N must be a positive decimal
 integer.
 
 format accepts Turtle input and produces stable, grouped Turtle. It retains the

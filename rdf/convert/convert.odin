@@ -46,8 +46,9 @@ Reader_Limits :: struct {
 	max_document_bytes:  int,
 }
 
-// Options selects the source and destination syntax. Turtle output uses only
-// explicitly supplied prefixes; it never infers namespaces from input terms.
+// Options selects the source and destination syntax. Turtle and TriG output
+// use only explicitly supplied prefixes; they never infer namespaces from
+// input terms.
 Options :: struct {
 	input:           Format,
 	output:          Format,
@@ -56,8 +57,8 @@ Options :: struct {
 }
 
 // Error_Code identifies a conversion failure. Source_Parse_Error includes the
-// source parser's stable diagnostic in Error.detail. A named N-Quads graph is
-// rejected when the requested target has no graph representation.
+// source parser's stable diagnostic in Error.detail. A named graph is rejected
+// when the requested target has no graph representation.
 Error_Code :: enum {
 	None,
 	Unsupported_Input_Format,
@@ -162,8 +163,10 @@ Result :: struct {
 		state.error = Error{code = .Unsupported_Output_Format}
 		return false
 	case .TriG:
-		state.error = Error{code = .Unsupported_Output_Format}
-		return false
+		if err := trig.write_quad(&state.builder, rdf.default_graph_quad(triple), trig.Writer_Options{prefixes = state.turtle_options.prefixes}); err != .None {
+			set_serialization_error(state, trig.write_error_message(err))
+			return false
+		}
 	case:
 		state.error = Error{code = .Unsupported_Output_Format}
 		return false
@@ -179,16 +182,23 @@ Result :: struct {
 
 @(private) write_destination_quad :: proc(quad: rdf.Quad, data: rawptr) -> bool {
 	state := cast(^State)data
-	if state.format != .N_Quads && quad.has_graph {
+	if state.format != .N_Quads && state.format != .TriG && quad.has_graph {
 		state.error = Error{code = .Named_Graph_Not_Supported}
 		return false
 	}
-	if state.format != .N_Quads do return write_destination_triple(rdf.triple(quad), data)
+	if state.format != .N_Quads && state.format != .TriG do return write_destination_triple(rdf.triple(quad), data)
 
 	strings.builder_reset(&state.builder)
-	if err := nquads.write_quad(&state.builder, quad); err != .None {
-		set_serialization_error(state, nquads.write_error_message(err))
-		return false
+	if state.format == .N_Quads {
+		if err := nquads.write_quad(&state.builder, quad); err != .None {
+			set_serialization_error(state, nquads.write_error_message(err))
+			return false
+		}
+	} else {
+		if err := trig.write_quad(&state.builder, quad, trig.Writer_Options{prefixes = state.turtle_options.prefixes}); err != .None {
+			set_serialization_error(state, trig.write_error_message(err))
+			return false
+		}
 	}
 	if write_err := write_all(state.output, strings.to_string(state.builder)); write_err != .None {
 		state.error = Error{code = .Output_Write_Error, io_error = write_err}
@@ -209,13 +219,13 @@ Result :: struct {
 }
 
 // convert parses reader with the selected source syntax and writes each valid
-// RDF statement to output immediately. It does not retain a graph. N-Quads
-// named graphs may only target N-Quads; all other requested conversions fail
-// before the named statement is written. Reader ownership remains with the
-// caller, as does output flushing and closing.
+// RDF statement to output immediately. It does not retain a graph. Named
+// graphs can target N-Quads or TriG; other requested conversions fail before
+// the named statement is written. Reader ownership remains with the caller, as
+// does output flushing and closing.
 convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
 	result: Result
-	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle {
+	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle && options.output != .TriG {
 		result.error.code = .Unsupported_Output_Format
 		return result
 	}
@@ -236,7 +246,7 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 	}
 	defer strings.builder_destroy(&state.builder)
 
-	if options.output == .Turtle {
+	if options.output == .Turtle || options.output == .TriG {
 		if prefix_err := turtle.write_prefixes(&state.builder, options.turtle_prefixes); prefix_err != .None {
 			result.error = Error{code = .Invalid_Turtle_Prefixes, detail = turtle.write_error_message(prefix_err)}
 			return result

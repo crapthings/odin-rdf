@@ -69,6 +69,24 @@ test_converts_trig_to_nquads_with_document_bound :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_converts_dataset_syntax_to_streaming_trig :: proc(t: ^testing.T) {
+	input := "<urn:default> <urn:p> <urn:o> .\n<urn:named> <urn:p> <urn:o> <urn:g> .\n"
+	result, output := convert_text(input, Options{input = .N_Quads, output = .TriG})
+	testing.expect_value(t, result.error.code, Error_Code.None)
+	testing.expect_value(t, result.statements, u64(2))
+	testing.expect_value(t, output, "<urn:default> <urn:p> <urn:o> .\n<urn:g> { <urn:named> <urn:p> <urn:o> . }\n")
+}
+
+@(test)
+test_converts_ntriples_to_trig_with_explicit_prefixes :: proc(t: ^testing.T) {
+	input := "<https://example.test/s> <https://example.test/p> <https://example.test/o> .\n"
+	prefixes := []turtle.Prefix{{label = "ex", namespace = "https://example.test/"}}
+	result, output := convert_text(input, Options{input = .N_Triples, output = .TriG, turtle_prefixes = prefixes})
+	testing.expect_value(t, result.error.code, Error_Code.None)
+	testing.expect_value(t, output, "@prefix ex: <https://example.test/> .\nex:s ex:p ex:o .\n")
+}
+
+@(test)
 test_converts_ntriples_to_turtle_with_explicit_prefixes :: proc(t: ^testing.T) {
 	input := "<https://example.com/alice> <https://example.com/vocab/name> \"Alice\"^^<https://example.com/vocab/Name> .\n"
 	prefixes := []turtle.Prefix{

@@ -72,6 +72,7 @@ jobs:
       - run: odin check benchmarks/ntriples -vet -warnings-as-errors
       - run: odin check benchmarks/nquads -vet -warnings-as-errors
       - run: odin check benchmarks/turtle -vet -warnings-as-errors
+      - run: odin check benchmarks/formatter -vet -warnings-as-errors
       - run: odin check benchmarks/mixed -vet -warnings-as-errors
       - run: odin check tests/fuzz -vet -warnings-as-errors
       - run: BENCH_RUNS=1 BENCH_RECORDS=1000 BENCH_ROUNDS=1 ./scripts/run-benchmarks.sh

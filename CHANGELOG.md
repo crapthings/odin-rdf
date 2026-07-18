@@ -2,6 +2,12 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.9.1 - 2026-07-18
+
+- Add a reproducible batch Turtle formatter benchmark to the quality gate.
+- Document formatter peak-memory behavior and how to set a deployment-specific
+  `--max-triples` admission policy.
+
 ## 0.9.0 - 2026-07-18
 
 - Let `odin-rdf convert` infer `.nt`, `.nq`, and `.ttl` file formats while

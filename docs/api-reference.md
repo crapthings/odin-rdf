@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.9.0. The
+This reference describes the supported public surface in version 0.9.1. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract

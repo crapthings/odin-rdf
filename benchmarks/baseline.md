@@ -1,4 +1,4 @@
-# Parser benchmark baseline
+# Parser and formatter benchmark baseline
 
 This baseline is an orientation point for detecting performance regressions,
 not a portable performance guarantee. Results vary with the compiler, CPU,
@@ -33,3 +33,12 @@ The table reports the range and median of each process's best round.
    stable environment.
 5. Update this file intentionally when the compiler, workload, or a justified
    implementation change establishes a new baseline.
+
+## Formatter profiling
+
+The formatter workload was added after this parser-only reference. Establish a
+formatter baseline on the target machine with the same process/round protocol
+before comparing later changes. Record both its `best` throughput and a
+platform-specific peak-resident-memory measurement separately: the formatter
+retains the graph, sort index, and overlapping temporary/destination output, so
+RSS is not portable across machines or allocator implementations.

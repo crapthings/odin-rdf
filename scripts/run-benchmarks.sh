@@ -28,6 +28,13 @@ done
 
 run=1
 while [ "$run" -le "$runs" ]; do
+  printf '\nTurtle formatter process %s/%s\n' "$run" "$runs"
+  odin run "$root/benchmarks/formatter" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
+  run=$((run + 1))
+done
+
+run=1
+while [ "$run" -le "$runs" ]; do
   printf '\nN-Triples process %s/%s\n' "$run" "$runs"
   odin run "$root/benchmarks/ntriples" -o:speed -define:BENCH_RECORDS="$records" -define:BENCH_ROUNDS="$rounds"
   run=$((run + 1))

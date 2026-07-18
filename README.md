@@ -15,7 +15,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.9.0` adds ergonomic `.nt`, `.nq`, and `.ttl` file-format inference to `odin-rdf convert`, while preserving explicit `--from` and `--to` overrides for streams and unrecognized paths. The release line also includes bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.9.1` adds a reproducible Turtle formatter benchmark and deployment guidance for its graph-size bound. The release line also includes ergonomic `.nt`, `.nq`, and `.ttl` file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release.
 
@@ -68,7 +68,7 @@ examples/conversion/  Conversion with explicit reader limits
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
-benchmarks/          Reproducible parser benchmarks
+benchmarks/          Reproducible parser and formatter benchmarks
 ```
 
 ## API overview
@@ -224,7 +224,12 @@ on a parse or serialization error. It infers safe prefixes by default; repeat
 `--prefix LABEL=NAMESPACE` to provide declarations, and pass
 `--no-infer-prefixes` to use only those explicit declarations. Because format
 retains the graph, use `--max-triples N` to enforce an explicit collector bound;
-`N` must be a positive decimal integer.
+`N` must be a positive decimal integer. Peak memory also includes a sorted
+index and, during atomic commit, both temporary and destination formatted
+output. Treat the bound as a graph-size admission policy rather than a
+byte-precise memory cap. Reproduce the formatter workload in
+[`benchmarks`](benchmarks/README.md) on the target machine before choosing a
+production value.
 
 The [conversion design](docs/conversion-design.md) records the conversion
 matrix, error behavior, and file-output safety policy.

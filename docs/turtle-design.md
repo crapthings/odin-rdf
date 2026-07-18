@@ -113,10 +113,14 @@ subjects and predicates, and emits `a` for `rdf:type`. Its zero-value prefix
 policy is `Infer`: it keeps supplied declarations, adds familiar W3C labels
 when safe, and assigns sorted remaining namespaces `ns1`, `ns2`, and so on.
 `Explicit_Only` disables inference. Formatting is atomic with respect to the
-destination builder, but it needs memory proportional to the collected graph.
-The library accepts a caller-owned collection and does not impose a graph-size
-policy; the `odin-rdf format` command exposes `--max-triples N` for its own
-collector.
+destination builder, but it needs memory proportional to the collected graph,
+the sort index, and the complete output. A temporary document and the caller's
+destination builder overlap while the result commits atomically. The library
+accepts a caller-owned collection and does not impose a graph-size policy; the
+`odin-rdf format` command exposes `--max-triples N` for its own collector. That
+limit admits a maximum graph size, not a byte-precise memory budget; use the
+formatter benchmark and a platform memory profiler on the deployment machine
+before choosing its production value.
 
 Blank-node labels are syntax-local. Before formatting, the API rejects equal
 labels associated with different `Blank_Node_Scope` values: serializing either

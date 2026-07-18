@@ -448,6 +448,13 @@ test_parses_integrity_commands_with_bounded_reader_options :: proc(t: ^testing.T
 	testing.expect_value(t, compare_options.input_format, convert.Format.Turtle)
 	testing.expect_value(t, compare_options.other_format, convert.Format.TriG)
 
+	diff_options, diff_err := parse_integrity_command_args([]string{"diff", "before.ttl", "after.trig", "--output", "changes.nqdiff"})
+	testing.expect_value(t, diff_err.code, Command_Error_Code.None)
+	testing.expect_value(t, diff_options.command, Integrity_Command.Diff)
+	testing.expect_value(t, diff_options.input_format, convert.Format.Turtle)
+	testing.expect_value(t, diff_options.other_format, convert.Format.TriG)
+	testing.expect_value(t, diff_options.output_path, "changes.nqdiff")
+
 	missing_options, missing_err := parse_integrity_command_args([]string{"compare", "left.nq"})
 	testing.expect_value(t, missing_err.code, Command_Error_Code.Missing_Compare_Input)
 	testing.expect_value(t, missing_options.command, Integrity_Command.Compare)
@@ -455,6 +462,18 @@ test_parses_integrity_commands_with_bounded_reader_options :: proc(t: ^testing.T
 	stdin_options, stdin_err := parse_integrity_command_args([]string{"compare", "-", "right.nq", "--from", "nquads"})
 	testing.expect_value(t, stdin_err.code, Command_Error_Code.Compare_Standard_Input)
 	testing.expect_value(t, stdin_options.command, Integrity_Command.Compare)
+
+	missing_diff_options, missing_diff_err := parse_integrity_command_args([]string{"diff", "before.nq"})
+	testing.expect_value(t, missing_diff_err.code, Command_Error_Code.Missing_Diff_Input)
+	testing.expect_value(t, missing_diff_options.command, Integrity_Command.Diff)
+
+	stdin_diff_options, stdin_diff_err := parse_integrity_command_args([]string{"diff", "-", "after.nq", "--from", "nquads"})
+	testing.expect_value(t, stdin_diff_err.code, Command_Error_Code.Diff_Standard_Input)
+	testing.expect_value(t, stdin_diff_options.command, Integrity_Command.Diff)
+
+	same_output_options, same_output_err := parse_integrity_command_args([]string{"diff", "before.nq", "after.nq", "--output", "after.nq"})
+	testing.expect_value(t, same_output_err.code, Command_Error_Code.Same_Input_Output)
+	testing.expect_value(t, same_output_options.command, Integrity_Command.Diff)
 
 	invalid_algorithm_options, invalid_algorithm_err := parse_integrity_command_args([]string{"hash", "input.nt", "--algorithm", "sha512"})
 	testing.expect_value(t, invalid_algorithm_err.code, Command_Error_Code.Invalid_Hash_Algorithm)
@@ -469,6 +488,9 @@ test_integrity_commands_canonicalize_hash_and_compare_atomically :: proc(t: ^tes
 	left_path :: "odin-rdf-cli-compare-left.nq"
 	right_path :: "odin-rdf-cli-compare-right.nq"
 	different_path :: "odin-rdf-cli-compare-different.nq"
+	diff_before_path :: "odin-rdf-cli-diff-before.nq"
+	diff_after_path :: "odin-rdf-cli-diff-after.nq"
+	diff_target :: "odin-rdf-cli-diff-output.nqdiff"
 	defer {
 		_ = os.remove(input_path)
 		_ = os.remove(canonical_target)
@@ -478,6 +500,10 @@ test_integrity_commands_canonicalize_hash_and_compare_atomically :: proc(t: ^tes
 		_ = os.remove(left_path)
 		_ = os.remove(right_path)
 		_ = os.remove(different_path)
+		_ = os.remove(diff_before_path)
+		_ = os.remove(diff_after_path)
+		_ = os.remove(diff_target)
+		_ = os.remove(diff_target + ".odin-rdf.tmp")
 	}
 	testing.expect(t, write_test_file(input_path, "<urn:z> <urn:p> <urn:o> .\n<urn:a> <urn:p> <urn:o> .\n<urn:z> <urn:p> <urn:o> .\n") == nil)
 	canon_options, canon_err := parse_integrity_command_args([]string{"canon", input_path, "--output", canonical_target})
@@ -509,6 +535,31 @@ test_integrity_commands_canonicalize_hash_and_compare_atomically :: proc(t: ^tes
 	different_options, different_err := parse_integrity_command_args([]string{"compare", left_path, different_path})
 	testing.expect_value(t, different_err.code, Command_Error_Code.None)
 	testing.expect_value(t, run_integrity_command(different_options), 1)
+
+	testing.expect(t, write_test_file(diff_before_path, "<urn:a> <urn:p> <urn:o> .\n<urn:shared> <urn:p> <urn:o> .\n") == nil)
+	testing.expect(t, write_test_file(diff_after_path, "<urn:b> <urn:p> <urn:o> .\n<urn:shared> <urn:p> <urn:o> .\n") == nil)
+	diff_options, diff_err := parse_integrity_command_args([]string{"diff", diff_before_path, diff_after_path, "--output", diff_target})
+	testing.expect_value(t, diff_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(diff_options), 1)
+	contents, read_err = read_test_file(diff_target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "- <urn:a> <urn:p> <urn:o> .\n+ <urn:b> <urn:p> <urn:o> .\n")
+
+	equal_diff_options, equal_diff_err := parse_integrity_command_args([]string{"diff", diff_before_path, diff_before_path, "--output", diff_target})
+	testing.expect_value(t, equal_diff_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(equal_diff_options), 0)
+	contents, read_err = read_test_file(diff_target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "")
+
+	testing.expect(t, write_test_file(diff_target, "previous\n") == nil)
+	limited_diff_options, limited_diff_err := parse_integrity_command_args([]string{"diff", left_path, right_path, "--output", diff_target, "--max-quads", "1"})
+	testing.expect_value(t, limited_diff_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_integrity_command(limited_diff_options), 2)
+	contents, read_err = read_test_file(diff_target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(diff_target + ".odin-rdf.tmp"))
 }
 
 @(test)
@@ -557,6 +608,8 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Same_Input_Output    = "input and output paths must differ",
 		.Missing_Compare_Input = "compare requires two input paths",
 		.Compare_Standard_Input = "compare does not accept standard input",
+		.Missing_Diff_Input = "diff requires two input paths",
+		.Diff_Standard_Input = "diff does not accept standard input",
 		.Invalid_Hash_Algorithm = "--algorithm must be sha256 or sha384",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])

@@ -19,7 +19,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.21.0` adds bounded `odin-rdf canon`, `hash`, and `compare` workflows for complete RDF datasets. Version `0.20.0` adds RDFC-1.0 canonical dataset hashes and collision-independent isomorphism checks for integrity, cache, and signing-protocol inputs. Version `0.19.0` adds a complete, resource-bounded implementation of W3C RDF Dataset Canonicalization 1.0 (RDFC-1.0), including SHA-256 and SHA-384 and canonical N-Quads output. Version `0.18.0` adds a stateful RDF/XML document writer for large default-graph streams, with explicit namespaces and a bounded blank-node map. Version `0.17.0` made RDF/XML a bounded, atomic conversion target for complete default graphs. Version `0.16.0` added its deterministic batch writer. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.22.0` adds bounded `odin-rdf diff` for deterministic canonical RDF dataset change review. Version `0.21.0` adds bounded `odin-rdf canon`, `hash`, and `compare` workflows for complete RDF datasets. Version `0.20.0` adds RDFC-1.0 canonical dataset hashes and collision-independent isomorphism checks for integrity, cache, and signing-protocol inputs. Version `0.19.0` adds a complete, resource-bounded implementation of W3C RDF Dataset Canonicalization 1.0 (RDFC-1.0), including SHA-256 and SHA-384 and canonical N-Quads output. Version `0.18.0` adds a stateful RDF/XML document writer for large default-graph streams, with explicit namespaces and a bounded blank-node map. Version `0.17.0` made RDF/XML a bounded, atomic conversion target for complete default graphs. Version `0.16.0` added its deterministic batch writer. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API. RDF/XML has bounded document input and a separate complete-graph writer plus a bounded batch conversion target, not a streaming one. Both boundaries are documented rather than silently approximated.
 
@@ -241,6 +241,7 @@ cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 ./odin-rdf canon input.trig --output canonical.nq --max-quads 100000
 ./odin-rdf hash input.ttl --algorithm sha384
 ./odin-rdf compare previous.trig current.trig
+./odin-rdf diff before.trig after.trig --output changes.nqdiff
 ```
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`,
@@ -284,13 +285,19 @@ graph-size admission policy rather than a byte-precise memory cap. Reproduce the
 [`benchmarks`](benchmarks/README.md) on the target machine before choosing a
 production value.
 
-`canon`, `hash`, and `compare` are the dataset-integrity commands. They accept
+`canon`, `hash`, `compare`, and `diff` are the dataset-integrity commands. They accept
 every supported input syntax and retain a complete owned dataset before doing
 any work, so their standard output and file targets remain untouched on source
 or canonicalization failure. `canon` writes canonical N-Quads, while `hash`
 writes its lowercase hexadecimal SHA-256 digest by default (or SHA-384 with
 `--algorithm sha384`). `compare` accepts two file paths, prints `equal` or
 `different`, and exits 0, 1, or 2 for equality, difference, or an error.
+`diff` accepts two file paths and emits a deterministic canonical N-Quads line
+diff (`- ` for removed, `+ ` for added), returning 0 when equal, 1 when changed,
+or 2 on error. It is not a minimum blank-node edit script: a structural change
+can change canonical blank-node identifiers. Both commands accept independently
+inferred input formats; `diff --output` is atomically replaced only after both
+datasets canonicalize successfully.
 `--max-quads N` bounds both collection and canonicalization and defaults to
 100,000; source-side `--max-records`, `--max-line-bytes`,
 `--max-statement-bytes`, and `--max-document-bytes` retain their normal

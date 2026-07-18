@@ -2,6 +2,19 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.22.0 - 2026-07-18
+
+- Add bounded `odin-rdf diff BEFORE AFTER` for deterministic canonical dataset
+  change review across every supported input syntax. It canonicalizes both
+  complete datasets under the existing RDFC-1.0 and reader limits, then emits
+  sorted canonical N-Quads lines prefixed with `- ` (removed) or `+ ` (added).
+- `diff` accepts an atomic `--output` target and returns `0` for no changes,
+  `1` for changes, or `2` for an input, canonicalization, or output error.
+  It intentionally does not claim to be a minimum blank-node edit script.
+- Add CLI coverage for two-input syntax inference, bounded failure, deterministic
+  output, empty equal output, and stable diagnostic text. No public library API
+  changes.
+
 ## 0.21.0 - 2026-07-18
 
 - Add bounded `odin-rdf canon`, `hash`, and `compare` commands for every

@@ -200,6 +200,24 @@ values. IRI predicates must have an XML Name local part after a `#`, `/`, or
 characters return a `Write_Error`. `rdf:XMLLiteral` values must be valid XML
 fragments. This batch writer is not a streaming conversion target.
 
+```odin
+init_document_writer(writer: ^Document_Writer, builder: ^strings.Builder,
+                     options: Document_Writer_Options = {}) -> Write_Error
+write_document_triple(writer: ^Document_Writer, triple: rdf.Triple) -> Write_Error
+finish_document_writer(writer: ^Document_Writer) -> Write_Error
+destroy_document_writer(writer: ^Document_Writer)
+```
+
+The stateful writer is the separate, explicit-prefix path for long documents.
+`Namespace {prefix, iri}` declarations are emitted on the root element; every
+non-RDF predicate must split to one of those exact namespace IRIs. A zero
+`max_blank_nodes` selects the bounded 100,000-node default, while a negative
+value is invalid. The writer copies callback-scoped blank-node labels, so
+identity remains stable across calls. `write_document_triple` validates and
+buffers each record before appending it, but an initialized document is
+inherently streaming: callers must call `finish_document_writer` to close it.
+Namespace slices and strings must remain valid until `destroy_document_writer`.
+
 ## TriG `rdf/trig`
 
 ```odin

@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add an explicit-prefix stateful RDF/XML document writer with per-record
+  atomicity, copied and capacity-bounded blank-node identity, and a runnable
+  streaming example. Extend RDF/XML QName validation to the XML 1.0 Fifth
+  Edition NCName grammar.
+
 ## 0.17.0 - 2026-07-18
 
 - Add RDF/XML as an explicit bounded batch `convert` target. It requires a

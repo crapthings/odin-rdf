@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.4.1 - 2026-07-18
 
 - Correct the Turtle W3C documentation after the 313-case gate landed.
 - Run the Turtle example in the cross-platform CI matrix.

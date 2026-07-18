@@ -38,5 +38,6 @@ migration. Both N-Triples and N-Quads now use `rdf/internal/termlex` while
 retaining ownership of their document grammars and public errors. N-Quads scans
 each statement once instead of constructing and reparsing synthetic N-Triples.
 
-The implemented [Turtle parser design](turtle-design.md) defines Turtle's
-grammar, streaming, ownership, transient parse-state, and conformance boundaries.
+The implemented [Turtle parser and writer design](turtle-design.md) defines
+Turtle grammar, streaming, ownership, transient parse-state, conformance
+boundaries, and explicit-prefix serialization policy.

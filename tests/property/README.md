@@ -8,6 +8,8 @@ languages, datatypes, Unicode, and escaped values, then verifies that:
 - bounded readers with chunk sizes 1, 2, 7, 64, and the default produce the
   same records and canonical output;
 - N-Triples and N-Quads writers accept every generated model value;
+- Turtle writer output, including explicit prefix compaction, parses back to the
+  same canonical N-Triples document for 512 generated safe RDF triples;
 - Turtle memory and bounded-reader parsing agree across deterministic random bytes; and
 - 512 deterministic random byte inputs produce identical error codes and source
   locations through memory and reader entry points at chunk sizes 1 and 7.

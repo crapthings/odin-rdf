@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add a streaming-safe Turtle writer with explicit prefix declarations,
+  deterministic longest-namespace compaction, typed-literal datatype
+  compaction, and canonical IRIREF fallback.
+- Add a Turtle-to-Turtle streaming conversion example and writer documentation.
+
 ## 0.4.1 - 2026-07-18
 
 - Correct the Turtle W3C documentation after the 313-case gate landed.

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>odin-rdf — Streaming RDF for Odin</title>
-  <meta name="description" content="A streaming-first RDF 1.1 toolkit for Odin with conformant Turtle, N-Triples, and N-Quads parsers, bounded readers, and atomic writers.">
+  <meta name="description" content="A streaming-first RDF 1.1 toolkit for Odin with conformant Turtle parsing, explicit Turtle writing, bounded readers, and atomic writers.">
   <meta name="keywords" content="Odin, RDF, RDF 1.1, Turtle, N-Triples, N-Quads, semantic web, linked data, streaming parser, W3C">
   <meta name="author" content="odin-rdf contributors">
   <meta name="theme-color" content="#f7f8f2">
@@ -12,11 +12,11 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://crapthings.github.io/odin-rdf/">
   <meta property="og:title" content="odin-rdf — Streaming RDF for Odin">
-  <meta property="og:description" content="Standards-driven Turtle, N-Triples, and N-Quads parsing with explicit memory ownership.">
+  <meta property="og:description" content="Standards-driven Turtle parsing and writing with explicit memory ownership.">
   <meta property="og:image" content="https://crapthings.github.io/odin-rdf/assets/odin-rdf-banner.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="odin-rdf — Streaming RDF for Odin">
-  <meta name="twitter:description" content="Standards-driven Turtle, N-Triples, and N-Quads parsing with explicit memory ownership.">
+  <meta name="twitter:description" content="Standards-driven Turtle parsing and writing with explicit memory ownership.">
   <meta name="twitter:image" content="https://crapthings.github.io/odin-rdf/assets/odin-rdf-banner.jpg">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
@@ -55,7 +55,7 @@
           <span class="text-olive-700">built the Odin way.</span>
         </h1>
         <p class="mt-7 max-w-2xl text-lg leading-8 text-olive-800/75 sm:text-xl">
-          A small, streaming-first RDF toolkit with conformant Turtle, N-Triples, and N-Quads parsers, bounded readers, and atomic writers. Explicit lifetimes. Predictable limits. No graph store attached.
+          A small, streaming-first RDF toolkit with conformant Turtle parsing, explicit Turtle writing, bounded readers, and atomic writers. Explicit lifetimes. Predictable limits. No graph store attached.
         </p>
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
           <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Start parsing</a>
@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.4.0 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, and Turtle syntax. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.5.0 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, and explicit-prefix Turtle writing. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
           <a href="https://www.w3.org/TR/turtle/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C Turtle specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -178,7 +178,7 @@ err := ttl.parse(input, consume)
               <li>Triple position invariants</li>
               <li>N-Triples parser and writer</li>
               <li>Quad model and N-Quads syntax</li>
-              <li>Conformant Turtle parser</li>
+              <li>Conformant Turtle parser and writer</li>
               <li>UTF-8 and escape handling</li>
               <li>W3C syntax conformance suite</li>
             </ul>
@@ -230,7 +230,7 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.4.0</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.5.0</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Build the RDF layer you actually need.</h2>
           <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Start with a focused, verified syntax foundation. Keep storage, inference, and application vocabulary choices in your own architecture.</p>
         </div>

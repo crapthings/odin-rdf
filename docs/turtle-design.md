@@ -1,7 +1,8 @@
-# Turtle parser design
+# Turtle parser and writer design
 
 This document defines the implementation contract for the RDF 1.1 Turtle
-parser introduced in version 0.4.0.
+parser introduced in version 0.4.0 and the streaming writer added in version
+0.5.0.
 
 The normative baseline is the W3C [RDF 1.1 Turtle Recommendation][turtle]. The
 acceptance suite is the official [`w3c/rdf-tests` Turtle manifest][tests],
@@ -23,9 +24,9 @@ mapping to RDF triples:
   Unicode and string escapes;
 - integer, decimal, double, and boolean literal shorthands.
 
-RDF/XML, JSON-LD, RDF-star, storage, querying, and a Turtle writer are outside
-this milestone. A writer needs separate prefix and formatting policy and must
-not delay parser conformance.
+RDF/XML, JSON-LD, RDF-star, storage, querying, and batch Turtle formatting are
+outside this milestone. Version 0.5.0 adds a separate streaming writer with an
+explicit prefix table; it does not delay or alter parser conformance.
 
 ## Public API
 
@@ -72,6 +73,32 @@ nodes for that document.
 Directive callbacks are intentionally absent: declarations affect parser state
 but do not represent RDF triples. They can be added later without weakening the
 core API.
+
+## Writer v1
+
+The writer is deliberately separate from the parser and remains streaming-safe:
+
+```odin
+Prefix :: struct { label: string, namespace: string }
+Writer_Options :: struct { prefixes: []Prefix }
+
+write_prefixes :: proc(builder: ^strings.Builder, prefixes: []Prefix) -> Write_Error
+write_term :: proc(builder: ^strings.Builder, term: rdf.Term,
+                   options: Writer_Options = {}) -> Write_Error
+write_triple :: proc(builder: ^strings.Builder, triple: rdf.Triple,
+                     options: Writer_Options = {}) -> Write_Error
+```
+
+Callers declare prefixes explicitly, then may pass the same ordered table to
+every term or triple write. The writer chooses the longest matching namespace,
+preserves declaration order on ties, and uses a prefixed name only when its
+local part is safe without escaping. Otherwise it writes a full IRIREF. Every
+operation is atomic with respect to its destination builder.
+
+Writer v1 does not infer prefixes, retain graph state, group predicate/object
+lists, abbreviate `a`, rebuild property lists or collections, or impose a
+document layout. Those are formatter decisions that require batch state and
+will remain a separate API.
 
 ## Parser architecture
 
@@ -216,9 +243,12 @@ Implementation landed as reviewable, always-green changes:
 5. Add the incremental reader, close all 313 official cases, and add
    differential property/fuzz coverage.
 6. Advertise Turtle in README and landing page only after the gate passes.
+7. Add a separate, explicit-prefix streaming writer without weakening parser
+   conformance or adding document-wide state.
 
 Each stage preserved released syntax behavior. Version 0.4.0 is a minor release
-because it adds a package; shared internal refactors stay hidden.
+because it adds a package; version 0.5.0 is a minor release because it adds a
+writer API. Shared internal refactors stay hidden.
 
 [turtle]: https://www.w3.org/TR/turtle/
 [tests]: https://github.com/w3c/rdf-tests/tree/d3e844aaa3e2f2b5250f2d1c988ce58870d6bc86/rdf/rdf11/rdf-turtle

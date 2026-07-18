@@ -15,9 +15,9 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.4.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser, and an RDF dataset model. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.5.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
 
-RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. Turtle writing is intentionally separate because prefix and formatting policy require their own API.
+RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. Turtle formatting remains separate from writing because document grouping, prefix discovery, and layout policy require a batch-oriented API.
 
 The project is tested with Odin `dev-2026-07` and CI tracks the current Odin toolchain on Linux, macOS, and Windows.
 
@@ -56,10 +56,11 @@ flowchart LR
 rdf/                 Syntax-independent RDF terms, triples, and quads
 rdf/ntriples/        N-Triples parser, writer, and unit tests
 rdf/nquads/          N-Quads parser, writer, and unit tests
-rdf/turtle/          Turtle parser, IRI resolution, and bounded reader
+rdf/turtle/          Turtle parser, writer, IRI resolution, and bounded reader
 examples/minimal/    Tiny educational example with no library dependency
 examples/basic/      Streaming parser API example
 examples/turtle/     Turtle directives and compact graph example
+examples/turtle_writer/ Streaming Turtle-to-Turtle conversion example
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
@@ -78,9 +79,10 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `nquads.parse`, `nquads.parse_reader`, and `nquads.write_quad` provide the corresponding RDF dataset pipeline.
 - `turtle.parse(input, sink, options)` covers RDF 1.1 Turtle directives, relative IRIs, compact predicate/object lists, literal shorthands, property lists, and collections.
 - `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
+- `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
 - `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
 - `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
-- Every public error enum has a matching stable, allocation-free message function across `rdf`, `ntriples`, and `nquads`.
+- Every public error enum has a matching stable, allocation-free message function across `rdf` and all syntax packages.
 
 Strings passed to a sink may point into the caller's input or a temporary parser buffer. They are valid only for the duration of that callback. Copy values or encode them into application-owned IDs before returning if they need to outlive the callback.
 
@@ -143,6 +145,21 @@ err := turtle.parse(input, print_triple)
 
 See [`examples/turtle`](examples/turtle/main.odin) for a complete example.
 
+Turtle writing is streaming-safe: declare an explicit prefix table once, then
+write every parsed triple directly to the destination. The writer chooses the
+longest safe namespace match and otherwise preserves the IRI as `<...>`:
+
+```odin
+prefixes := []turtle.Prefix{{label = "ex", namespace = "https://example.com/"}}
+options := turtle.Writer_Options{prefixes = prefixes}
+turtle.write_prefixes(&builder, prefixes)
+turtle.write_triple(&builder, triple, options)
+```
+
+See [`examples/turtle_writer`](examples/turtle_writer/main.odin) for a runnable
+Turtle-to-Turtle streaming conversion example. It deliberately does not group
+triples, infer prefixes, or reformat property lists and collections.
+
 Error helpers follow one stable naming convention: parsers expose
 `parse_error_message`, writers expose `write_error_message`, and the core model
 uses a descriptive `<operation>_error_message` name. These functions are
@@ -162,6 +179,7 @@ odin run tests/fuzz -o:speed -sanitize:address
 odin run examples/minimal
 odin run examples/basic
 odin run examples/turtle
+odin run examples/turtle_writer
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/run-w3c-turtle-tests.sh
@@ -174,8 +192,8 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Design a Turtle writer with explicit prefix selection and formatting policy.
-2. Add a buffered, batch-oriented writer API after profiling converter workloads.
+1. Add a buffered, batch-oriented Turtle formatter after profiling converter workloads.
+2. Add a small format-conversion CLI around the streaming parser and writer APIs.
 3. Evaluate RDF/XML or JSON-LD before committing to graph storage and SPARQL APIs.
 
 ## License

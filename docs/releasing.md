@@ -31,6 +31,7 @@ odin run examples/minimal
 odin run examples/basic
 odin run examples/nquads
 odin run examples/turtle
+odin run examples/turtle_writer
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/run-w3c-turtle-tests.sh

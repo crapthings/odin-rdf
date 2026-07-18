@@ -1,4 +1,4 @@
-// Package turtle provides an RDF 1.1 Turtle parser.
+// Package turtle provides RDF 1.1 Turtle parsing and streaming serialization.
 package turtle
 
 import "core:strings"

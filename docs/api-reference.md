@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.4.0. The
+This reference describes the supported public surface in version 0.5.0. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -78,6 +78,11 @@ parse(input: string, sink: Sink, options: Parse_Options = {},
       user_data: rawptr = nil) -> Parse_Error
 parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
              user_data: rawptr = nil) -> Reader_Result
+write_prefixes(builder: ^strings.Builder, prefixes: []Prefix) -> Write_Error
+write_term(builder: ^strings.Builder, term: rdf.Term,
+           options: Writer_Options = {}) -> Write_Error
+write_triple(builder: ^strings.Builder, triple: rdf.Triple,
+             options: Writer_Options = {}) -> Write_Error
 ```
 
 | `Parse_Options` field | Zero value | Meaning |
@@ -101,6 +106,15 @@ parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
 `bytes_read`. Turtle validates a complete top-level statement before emitting
 any of its expanded triples, so syntax and configured-limit failures do not
 partially commit that statement. Earlier valid statements remain emitted.
+
+`Prefix {label, namespace}` configures an explicit Turtle namespace; an empty
+label is the default prefix. `Writer_Options.prefixes` uses that table to choose
+the longest matching safe namespace, preserving declaration order on ties.
+`write_prefixes` emits the declarations once, while `write_term` and
+`write_triple` are atomic and streaming-safe. They fall back to canonical
+IRIREFs when a compact prefixed name would need escaping. The writer does not
+infer prefixes, group triples, use property-list/collection abbreviations, or
+format a complete document; those require a future batch formatter.
 
 ## Memory and reader entry points
 

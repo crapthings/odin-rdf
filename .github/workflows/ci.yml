@@ -32,6 +32,7 @@ jobs:
       - run: odin run examples/basic
       - run: odin run examples/nquads
       - run: odin run examples/turtle
+      - run: odin run examples/turtle_writer
 
   w3c:
     runs-on: ubuntu-latest

@@ -5,6 +5,7 @@ import "core:testing"
 import rdf "../../rdf"
 import nquads "../../rdf/nquads"
 import ntriples "../../rdf/ntriples"
+import turtle "../../rdf/turtle"
 
 CASE_COUNT :: 512
 
@@ -22,6 +23,16 @@ random_iri :: proc(state: ^u64) -> rdf.Term {
 		"urn:odin-rdf:plain",
 		"https://example.test/resource",
 		"urn:odin-rdf:space path",
+		"urn:odin-rdf:snowman:☃",
+		"tag:example.test,2026:value",
+	}
+	return rdf.iri(values[next_random(state) % u64(len(values))])
+}
+
+random_turtle_iri :: proc(state: ^u64) -> rdf.Term {
+	values := [4]string{
+		"urn:odin-rdf:plain",
+		"https://example.test/resource",
 		"urn:odin-rdf:snowman:☃",
 		"tag:example.test,2026:value",
 	}
@@ -198,6 +209,42 @@ test_nquads_memory_reader_and_writer_property :: proc(t: ^testing.T) {
 		testing.expect_value(t, strings.to_string(reader_output), strings.to_string(memory))
 		strings.builder_destroy(&reader_output)
 	}
+}
+
+@(test)
+test_turtle_writer_roundtrips_generated_rdf_model :: proc(t: ^testing.T) {
+	seed := u64(0x547572746c655752)
+	prefixes := []turtle.Prefix{
+		{label = "od", namespace = "urn:odin-rdf:"},
+		{label = "ex", namespace = "https://example.test/"},
+	}
+	options := turtle.Writer_Options{prefixes = prefixes}
+	turtle_output := strings.builder_make()
+	defer strings.builder_destroy(&turtle_output)
+	testing.expect_value(t, turtle.write_prefixes(&turtle_output, prefixes), turtle.Write_Error.None)
+	expected := strings.builder_make()
+	defer strings.builder_destroy(&expected)
+	for _ in 0..<CASE_COUNT {
+		subject := next_random(&seed) & 1 == 0 ? random_turtle_iri(&seed) : random_blank_node(&seed)
+		object: rdf.Term
+		switch next_random(&seed) % 3 {
+		case 0: object = random_turtle_iri(&seed)
+		case 1: object = random_blank_node(&seed)
+		case:   object = random_literal(&seed)
+		}
+		triple := rdf.Triple{subject = subject, predicate = random_turtle_iri(&seed), object = object}
+		testing.expect_value(t, turtle.write_triple(&turtle_output, triple, options), turtle.Write_Error.None)
+		testing.expect_value(t, ntriples.write_triple(&expected, triple), ntriples.Write_Error.None)
+	}
+
+	canonical := strings.builder_make()
+	defer strings.builder_destroy(&canonical)
+	state := Triple_Write_State{builder = &canonical}
+	parse_error := turtle.parse(strings.to_string(turtle_output), write_triple_sink, {}, &state)
+	testing.expect_value(t, parse_error.code, turtle.Error_Code.None)
+	testing.expect_value(t, state.write_error, ntriples.Write_Error.None)
+	testing.expect_value(t, state.count, u64(CASE_COUNT))
+	testing.expect_value(t, strings.to_string(canonical), strings.to_string(expected))
 }
 
 @(test)

@@ -15,7 +15,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.8.0` adds `convert.Reader_Limits` and matching `odin-rdf convert` flags, giving every streaming conversion an explicit record, line, or Turtle-statement bound. The release line also includes batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.9.0` adds ergonomic `.nt`, `.nq`, and `.ttl` file-format inference to `odin-rdf convert`, while preserving explicit `--from` and `--to` overrides for streams and unrecognized paths. The release line also includes bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release.
 
@@ -191,15 +191,18 @@ tool:
 ```sh
 odin build cmd/odin-rdf -out:odin-rdf
 
-./odin-rdf convert input.ttl --from turtle --to ntriples --output output.nt
-./odin-rdf convert input.nt --from ntriples --to turtle \
+./odin-rdf convert input.ttl --output output.nt
+./odin-rdf convert input.nt --to turtle \
   --prefix ex=https://example.com/ --output output.ttl
 cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 ./odin-rdf format input.ttl --output formatted.ttl
 ```
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
-`-` denotes standard input or output. File targets are streamed into a
+For file paths, `convert` infers the corresponding syntax from `.nt`, `.nq`,
+or `.ttl`; explicit `--from` and `--to` override that inference. `-` denotes
+standard input or output and always requires the corresponding explicit format,
+as do unrecognized extensions. File targets are streamed into a
 same-directory temporary file and replace the destination only after the
 conversion succeeds and the temporary file closes successfully. Standard output
 is intentionally streaming, so a later input error can leave earlier valid
@@ -263,9 +266,8 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Profile batch formatter memory use and add optional collection limits before treating it as a large-graph tool.
-2. Add configurable conversion reader limits and ergonomic file-format inference without weakening explicit loss checks.
-3. Evaluate RDF/XML or JSON-LD before committing to graph storage and SPARQL APIs.
+1. Profile batch formatter memory use and document practical graph-size guidance around its explicit `--max-triples` bound.
+2. Evaluate RDF/XML or JSON-LD before committing to graph storage and SPARQL APIs.
 
 ## License
 

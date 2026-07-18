@@ -2,6 +2,12 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.9.0 - 2026-07-18
+
+- Let `odin-rdf convert` infer `.nt`, `.nq`, and `.ttl` file formats while
+  retaining explicit `--from`/`--to` overrides and strict format requirements
+  for standard streams and unrecognized extensions.
+
 ## 0.8.0 - 2026-07-18
 
 - Add `convert.Reader_Limits` and `odin-rdf convert` limits for records,

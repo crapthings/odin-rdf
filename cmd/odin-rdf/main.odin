@@ -18,14 +18,14 @@ Command_Error_Code :: enum {
 	Unknown_Option,
 	Missing_Input,
 	Extra_Input,
-	Missing_From,
-	Missing_To,
 	Invalid_Format,
 	Invalid_Prefix,
 	Invalid_Max_Records,
 	Invalid_Max_Line_Bytes,
 	Invalid_Max_Statement_Bytes,
 	Invalid_Max_Triples,
+	Cannot_Infer_Input_Format,
+	Cannot_Infer_Output_Format,
 	Same_Input_Output,
 }
 
@@ -38,14 +38,14 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Unknown_Option:       return "unknown option"
 	case .Missing_Input:        return "expected an input path or - for standard input"
 	case .Extra_Input:          return "only one input path is supported"
-	case .Missing_From:         return "--from is required"
-	case .Missing_To:           return "--to is required"
 	case .Invalid_Format:       return "unsupported RDF syntax"
 	case .Invalid_Prefix:       return "--prefix must use LABEL=NAMESPACE"
 	case .Invalid_Max_Records:  return "--max-records must be a positive decimal integer"
 	case .Invalid_Max_Line_Bytes: return "--max-line-bytes must be a positive decimal integer"
 	case .Invalid_Max_Statement_Bytes: return "--max-statement-bytes must be a positive decimal integer"
 	case .Invalid_Max_Triples:  return "--max-triples must be a positive decimal integer"
+	case .Cannot_Infer_Input_Format: return "cannot infer input RDF syntax; use --from"
+	case .Cannot_Infer_Output_Format: return "cannot infer output RDF syntax; use --to"
 	case .Same_Input_Output:    return "input and output paths must differ"
 	}
 	return "unknown error"
@@ -81,6 +81,16 @@ parse_format :: proc(value: string) -> (convert.Format, bool) {
 	case "nquads", "n-quads", "nq":      return .N_Quads, true
 	case "turtle", "ttl":                 return .Turtle, true
 	}
+	return {}, false
+}
+
+// infer_format_from_path recognizes only the canonical file extensions used by
+// the command. It deliberately does not inspect input bytes: callers using
+// stdin, stdout, or an unrecognized filename must choose a syntax explicitly.
+infer_format_from_path :: proc(path: string) -> (convert.Format, bool) {
+	if len(path) >= len(".nt") && path[len(path) - len(".nt"):] == ".nt" do return .N_Triples, true
+	if len(path) >= len(".nq") && path[len(path) - len(".nq"):] == ".nq" do return .N_Quads, true
+	if len(path) >= len(".ttl") && path[len(path) - len(".ttl"):] == ".ttl" do return .Turtle, true
 	return {}, false
 }
 
@@ -186,9 +196,17 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 		has_input = true
 	}
 
-	if !has_from do return options, Command_Error{code = .Missing_From}
-	if !has_to do return options, Command_Error{code = .Missing_To}
 	if !has_input do return options, Command_Error{code = .Missing_Input}
+	if !has_from {
+		format, ok := infer_format_from_path(options.input_path)
+		if !ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.input_path}
+		options.input_format = format
+	}
+	if !has_to {
+		format, ok := infer_format_from_path(options.output_path)
+		if !ok do return options, Command_Error{code = .Cannot_Infer_Output_Format, value = options.output_path}
+		options.output_format = format
+	}
 	if options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path {
 		return options, Command_Error{code = .Same_Input_Output}
 	}
@@ -264,7 +282,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 
 print_help :: proc() {
 	fmt.println(`Usage:
-  odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N]
+	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N]
   odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl)
@@ -274,6 +292,11 @@ same-directory temporary file and replaces the destination only after a
 successful conversion and temporary-file close. Prefixes are used only for
 Turtle output and may be repeated; use --prefix =https://example.com/ for the
 default prefix.
+
+convert infers a file syntax from the canonical .nt, .nq, and .ttl extensions.
+Explicit --from and --to values override that inference. Standard input and
+output, as well as unrecognized file extensions, require the corresponding
+explicit format option.
 
 N-Quads named graphs can only be converted to N-Quads. The command rejects
 other targets rather than silently discarding graph names.
@@ -290,6 +313,7 @@ prefixes supplied explicitly. Use --max-triples N to reject an input before
 the collector retains more than N triples.
 
 Examples:
+  odin-rdf convert input.ttl --output output.nt
   odin-rdf convert input.ttl --from turtle --to ntriples --output output.nt
   odin-rdf convert - --from ntriples --to turtle --prefix ex=https://example.com/
   odin-rdf format input.ttl --output formatted.ttl

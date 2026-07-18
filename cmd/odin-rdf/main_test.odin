@@ -77,18 +77,63 @@ test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_requires_an_explicit_input_and_formats :: proc(t: ^testing.T) {
+test_infers_formats_from_canonical_file_extensions :: proc(t: ^testing.T) {
+	options, err := parse_convert_args([]string{"convert", "input.ttl", "--output", "output.nq"})
+	defer delete(options.prefixes)
+	testing.expect_value(t, err.code, Command_Error_Code.None)
+	testing.expect_value(t, options.input_format, convert.Format.Turtle)
+	testing.expect_value(t, options.output_format, convert.Format.N_Quads)
+
+	override_options, override_err := parse_convert_args([]string{"convert", "input.nt", "--from", "turtle", "--to", "nquads", "--output", "output.ttl"})
+	defer delete(override_options.prefixes)
+	testing.expect_value(t, override_err.code, Command_Error_Code.None)
+	testing.expect_value(t, override_options.input_format, convert.Format.Turtle)
+	testing.expect_value(t, override_options.output_format, convert.Format.N_Quads)
+}
+
+@(test)
+test_requires_an_explicit_format_when_it_cannot_be_inferred :: proc(t: ^testing.T) {
 	options, missing_input := parse_convert_args([]string{"convert", "--from", "ntriples", "--to", "turtle"})
 	defer delete(options.prefixes)
 	testing.expect_value(t, missing_input.code, Command_Error_Code.Missing_Input)
 
 	missing_from_options, missing_from := parse_convert_args([]string{"convert", "-", "--to", "turtle"})
 	defer delete(missing_from_options.prefixes)
-	testing.expect_value(t, missing_from.code, Command_Error_Code.Missing_From)
+	testing.expect_value(t, missing_from.code, Command_Error_Code.Cannot_Infer_Input_Format)
 
-	missing_to_options, missing_to := parse_convert_args([]string{"convert", "-", "--from", "ntriples"})
+	missing_to_options, missing_to := parse_convert_args([]string{"convert", "input.nt"})
 	defer delete(missing_to_options.prefixes)
-	testing.expect_value(t, missing_to.code, Command_Error_Code.Missing_To)
+	testing.expect_value(t, missing_to.code, Command_Error_Code.Cannot_Infer_Output_Format)
+
+	unknown_input_options, unknown_input := parse_convert_args([]string{"convert", "input.rdf", "--to", "ntriples"})
+	defer delete(unknown_input_options.prefixes)
+	testing.expect_value(t, unknown_input.code, Command_Error_Code.Cannot_Infer_Input_Format)
+
+	unknown_output_options, unknown_output := parse_convert_args([]string{"convert", "input.nt", "--output", "output.rdf"})
+	defer delete(unknown_output_options.prefixes)
+	testing.expect_value(t, unknown_output.code, Command_Error_Code.Cannot_Infer_Output_Format)
+}
+
+@(test)
+test_convert_command_infers_file_formats_end_to_end :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-inferred-input.ttl"
+	target :: "odin-rdf-cli-inferred-output.nq"
+	temporary :: "odin-rdf-cli-inferred-output.nq.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	testing.expect(t, write_test_file(input_path, "<urn:s> <urn:p> <urn:o> .\n") == nil)
+	options, err := parse_convert_args([]string{"convert", input_path, "--output", target})
+	defer delete(options.prefixes)
+	testing.expect_value(t, err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_convert(options), 0)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "<urn:s> <urn:p> <urn:o> .\n")
+	testing.expect(t, !os.exists(temporary))
 }
 
 @(test)
@@ -278,14 +323,14 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Unknown_Option       = "unknown option",
 		.Missing_Input        = "expected an input path or - for standard input",
 		.Extra_Input          = "only one input path is supported",
-		.Missing_From         = "--from is required",
-		.Missing_To           = "--to is required",
 		.Invalid_Format       = "unsupported RDF syntax",
 		.Invalid_Prefix       = "--prefix must use LABEL=NAMESPACE",
 		.Invalid_Max_Records  = "--max-records must be a positive decimal integer",
 		.Invalid_Max_Line_Bytes = "--max-line-bytes must be a positive decimal integer",
 		.Invalid_Max_Statement_Bytes = "--max-statement-bytes must be a positive decimal integer",
 		.Invalid_Max_Triples  = "--max-triples must be a positive decimal integer",
+		.Cannot_Infer_Input_Format = "cannot infer input RDF syntax; use --from",
+		.Cannot_Infer_Output_Format = "cannot infer output RDF syntax; use --to",
 		.Same_Input_Output    = "input and output paths must differ",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])

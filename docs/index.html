@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.8.0 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, explicit-prefix Turtle writing, deterministic Turtle formatting with an explicit CLI graph bound, and loss-aware syntax conversion with explicit source limits. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.9.0 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, explicit-prefix Turtle writing, deterministic Turtle formatting with an explicit CLI graph bound, and loss-aware syntax conversion with explicit source limits and file-format inference. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
           <a href="https://www.w3.org/TR/turtle/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C Turtle specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -222,7 +222,7 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">odin-rdf format</span> input.ttl --max-triples 100000
 
 <span class="text-olive-300/70"># bound a streaming conversion</span>
-<span class="text-amber-200">odin-rdf convert</span> input.nt --from nt --to nq --max-records 100000
+<span class="text-amber-200">odin-rdf convert</span> input.nt --output output.nq --max-records 100000
 
 <span class="text-olive-300/70"># run the official pinned conformance suite</span>
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
@@ -238,9 +238,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.8.0</p>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Set input boundaries without giving up streaming.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Bound records, physical lines, or Turtle statements at the conversion boundary—then keep the same pipeline-friendly callback model.</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.9.0</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Convert files with fewer flags, not weaker guarantees.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Infer `.nt`, `.nq`, and `.ttl` paths while keeping streams explicit, named-graph loss checks intact, and source limits at the conversion boundary.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

@@ -70,5 +70,9 @@ unchanged. A pre-existing temporary file is treated as a safety error rather
 than overwritten.
 
 The command rejects an input and output path with the same literal spelling.
-It deliberately does not infer a format from a filename: `--from` and `--to`
-are required so that scripts stay explicit as more RDF syntaxes are added.
+For non-stdio paths it infers syntax only from the canonical `.nt`, `.nq`, and
+`.ttl` extensions. Explicit `--from` and `--to` values override the inferred
+formats. The command never inspects bytes to guess a syntax: `-` and an
+unrecognized extension require the corresponding explicit option. This keeps
+pipe behavior and future syntax additions unambiguous while removing redundant
+flags from ordinary file-to-file conversions.

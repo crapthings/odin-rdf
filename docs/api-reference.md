@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.8.0. The
+This reference describes the supported public surface in version 0.9.0. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -165,7 +165,7 @@ adapter does not flush or close either stream.
 ## Command `cmd/odin-rdf`
 
 ```sh
-odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] \
+odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] \
   [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] \
   [--max-statement-bytes N]
 odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
@@ -173,7 +173,10 @@ odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
-`INPUT` and `--output` use `-` for standard input and output. Output files use
+It infers formats from file paths ending in `.nt`, `.nq`, or `.ttl`; explicit
+`--from` and `--to` options override that inference. `INPUT` and `--output`
+use `-` for standard input and output, which requires the matching explicit
+format option; unrecognized extensions do too. Output files use
 a same-directory exclusive temporary path named `<target>.odin-rdf.tmp`; the
 target is replaced only after conversion and close succeed. Existing temporary
 files are never overwritten. Standard output deliberately remains streaming

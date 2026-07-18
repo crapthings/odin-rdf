@@ -125,6 +125,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	max_attributes: int,
 	max_nesting:    int,
 	max_quads:      int,
+	literal_sources: [dynamic]string,
+	literal_index:   int,
 }
 
 @(private) destroy_state :: proc(state: ^State) {
@@ -132,6 +134,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	delete(state.owned)
 	if state.named_bnodes != nil do delete(state.named_bnodes)
 	if state.used_ids != nil do delete(state.used_ids)
+	delete(state.literal_sources)
 }
 
 @(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {
@@ -305,7 +308,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		case string:
 			strings.write_string(&builder, actual)
 		case xml.Element_ID:
-			append(&children, actual)
+			if doc.elements[actual].kind == .Element do append(&children, actual)
 		}
 	}
 	if len(children) > 0 && len(strings.to_string(builder)) > 0 do mixed = true
@@ -460,7 +463,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	defer delete(text)
 	has_property_attributes, property_attribute_err := has_property_attributes(state, element, namespaces)
 	if property_attribute_err.code != .None do return property_attribute_err
-	if mixed && !is_whitespace(text) do return Parse_Error{code = .Invalid_Property_Element}
+	is_literal_parse_type := has_parse_type && parse_type != "Resource" && parse_type != "Collection"
+	if !is_literal_parse_type && mixed && !is_whitespace(text) do return Parse_Error{code = .Invalid_Property_Element}
 	if (has_resource ? 1 : 0) + (has_node_id ? 1 : 0) + (has_datatype ? 1 : 0) + (has_parse_type ? 1 : 0) > 1 do return Parse_Error{code = .Invalid_Property_Element}
 	if has_parse_type && has_property_attributes do return Parse_Error{code = .Invalid_Property_Element}
 	if has_node_id && !valid_xml_name(node_id) do return Parse_Error{code = .Invalid_Attribute}
@@ -510,10 +514,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					}
 				}
 			}
-		case "Literal":
-			if len(children) > 0 do return Parse_Error{code = .Unsupported_Feature}
-			object = rdf.typed_literal(text, RDF_XML_LITERAL)
-		case: return Parse_Error{code = .Invalid_Property_Element}
+		case:
+			literal, literal_err := canonical_xml_literal(state, doc, element_id, namespaces)
+			if literal_err.code != .None do return literal_err
+			object = rdf.typed_literal(literal, RDF_XML_LITERAL)
 		}
 	} else if len(children) > 0 {
 		if !is_whitespace(text) || len(children) != 1 do return Parse_Error{code = .Invalid_Property_Element}
@@ -585,14 +589,23 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 	if max_nesting == 0 do max_nesting = DEFAULT_MAX_NESTING_DEPTH
 	if max_document_bytes < 0 || max_elements < 0 || max_attributes < 0 || max_nesting < 0 || options.max_quads < 0 do return Parse_Error{code = .Invalid_Option, line = 1, column = 1}
 	if len(input) > max_document_bytes do return Parse_Error{code = .Document_Too_Large, line = 1, column = 1}
-	document, xml_error := xml.parse(input, xml.Options{flags = {.Error_on_Unsupported, .Unbox_CDATA, .Decode_SGML_Entities}}, "", nil)
+	literal_sources, literal_source_err := collect_literal_sources(input)
+	if literal_source_err.code != .None do return literal_source_err
+	document, xml_error := xml.parse(input, xml.Options{flags = {.Error_on_Unsupported, .Unbox_CDATA, .Decode_SGML_Entities, .Intern_Comments}}, "", nil)
 	if document == nil || xml_error != .None {
+		delete(literal_sources)
 		if document != nil do xml.destroy(document)
 		return Parse_Error{code = .Invalid_XML}
 	}
 	defer xml.destroy(document)
-	if int(document.element_count) == 0 do return Parse_Error{code = .Invalid_Root}
-	if int(document.element_count) > max_elements do return Parse_Error{code = .Element_Limit}
+	if int(document.element_count) == 0 {
+		delete(literal_sources)
+		return Parse_Error{code = .Invalid_Root}
+	}
+	if int(document.element_count) > max_elements {
+		delete(literal_sources)
+		return Parse_Error{code = .Element_Limit}
+	}
 	state := State{
 		sink = sink,
 		user_data = user_data,
@@ -602,6 +615,7 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		max_attributes = max_attributes,
 		max_nesting = max_nesting,
 		max_quads = options.max_quads,
+		literal_sources = literal_sources,
 	}
 	defer destroy_state(&state)
 	root := document.elements[0]

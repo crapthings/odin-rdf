@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.15.0 - 2026-07-18
+
+- Add markup-bearing RDF/XML `rdf:parseType="Literal"` support with
+  token-preserved XML Literal serialization, including mixed content, comments,
+  namespace propagation, explicit end tags, and canonical attribute ordering.
+- Expand the pinned RDF/XML core conformance gate from 169 to 173 cases by
+  enabling the four XML Literal namespace and canonicalization fixtures.
+
 ## 0.14.0 - 2026-07-18
 
 - Add `trig.format_quads`, an atomic batch formatter for complete RDF datasets.

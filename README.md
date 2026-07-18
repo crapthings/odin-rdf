@@ -62,7 +62,7 @@ rdf/ntriples/        N-Triples parser, writer, and unit tests
 rdf/nquads/          N-Quads parser, writer, and unit tests
 rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bounded reader
 rdf/jsonld/          Bounded JSON-LD-to-RDF dataset processor
-rdf/rdfxml/          Bounded RDF/XML-to-RDF dataset processor
+rdf/rdfxml/          Bounded RDF/XML processor with batch and stateful writers
 rdf/trig/            Bounded RDF 1.1 TriG parser and streaming-safe writer
 rdf/dataset/         Owned, capacity-bounded dataset collector
 rdf/convert/         Streaming syntax-to-syntax conversion adapter
@@ -72,6 +72,7 @@ examples/basic/      Streaming parser API example
 examples/turtle/     Turtle directives and compact graph example
 examples/turtle_writer/ Streaming Turtle-to-Turtle conversion example
 examples/turtle_formatter/ Batch Turtle formatting example
+examples/rdfxml_writer/ Stateful RDF/XML document writer example
 examples/conversion/  Conversion with explicit reader limits
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
@@ -93,7 +94,7 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
 - `jsonld.parse(input, sink, options)` and `jsonld.parse_reader(reader, sink, options)` transform a bounded JSON-LD document into RDF quads. Remote contexts require an explicit loader callback.
 - `rdfxml.parse(input, sink, options)` and `rdfxml.parse_reader(reader, sink, options)` transform a bounded RDF/XML document into default-graph RDF quads. They do not fetch external resources and preserve markup-bearing `rdf:parseType="Literal"` content as `rdf:XMLLiteral`.
-- `rdfxml.write_triples(builder, triples)` atomically appends a deterministic RDF/XML document for a complete default graph. It preserves triple order, remaps blank nodes to XML-safe IDs, and accepts plain, language, typed, and XML Literal values.
+- `rdfxml.write_triples(builder, triples)` atomically appends a deterministic RDF/XML document for a complete default graph. `rdfxml.init_document_writer`, `write_document_triple`, and `finish_document_writer` provide the separate stateful path for large streams with explicit root-level namespaces and a bounded blank-node map.
 - `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists.
 - `trig.write_prefixes` and `trig.write_quad` atomically serialize explicit prefixes and individual dataset quads. Each named graph quad is emitted as an independent graph block, so output preserves order and stays streaming-safe without retaining a dataset.
 - `trig.format_quads(builder, quads, options)` is the explicit batch path: it groups a complete dataset by graph, sorts and deduplicates quads, and can infer safe prefixes for terms and graph names.
@@ -319,7 +320,7 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Consider a stateful RDF/XML document writer, then reassess storage and SPARQL APIs.
+1. Reassess JSON-LD output/canonicalization and storage/SPARQL APIs as separate product directions.
 
 ## License
 

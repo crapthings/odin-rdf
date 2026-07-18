@@ -236,13 +236,33 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return false
 }
 
+// valid_xml_name accepts the XML 1.0 Fifth Edition NCName production. RDF/XML
+// uses NCNames for rdf:ID, rdf:nodeID, namespace prefixes, and property local
+// parts, so colon is intentionally excluded even though it is valid in a full
+// XML Name.
+@(private) valid_xml_name_start :: proc(r: rune) -> bool {
+	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_' ||
+		(r >= 0xc0 && r <= 0xd6) || (r >= 0xd8 && r <= 0xf6) ||
+		(r >= 0xf8 && r <= 0x2ff) || (r >= 0x370 && r <= 0x37d) ||
+		(r >= 0x37f && r <= 0x1fff) || (r >= 0x200c && r <= 0x200d) ||
+		(r >= 0x2070 && r <= 0x218f) || (r >= 0x2c00 && r <= 0x2fef) ||
+		(r >= 0x3001 && r <= 0xd7ff) || (r >= 0xf900 && r <= 0xfdcf) ||
+		(r >= 0xfdf0 && r <= 0xfffd) || (r >= 0x10000 && r <= 0xeffff)
+}
+
+@(private) valid_xml_name_char :: proc(r: rune) -> bool {
+	return valid_xml_name_start(r) || (r >= '0' && r <= '9') || r == '-' || r == '.' ||
+		r == 0xb7 || (r >= 0x300 && r <= 0x36f) || (r >= 0x203f && r <= 0x2040)
+}
+
 @(private) valid_xml_name :: proc(value: string) -> bool {
-	if len(value) == 0 do return false
-	first := value[0]
-	if !((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_') do return false
-	for index in 1..<len(value) {
-		c := value[index]
-		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.' || c >= 0x80) do return false
+	if len(value) == 0 || !utf8.valid_string(value) do return false
+	first, width := utf8.decode_rune_in_string(value)
+	if !valid_xml_name_start(first) do return false
+	for position := width; position < len(value); {
+		r, next_width := utf8.decode_rune_in_string(value[position:])
+		if !valid_xml_name_char(r) do return false
+		position += next_width
 	}
 	return true
 }

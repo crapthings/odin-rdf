@@ -5,6 +5,7 @@ import "core:testing"
 import "core:io"
 import rdf ".."
 import nquads "../nquads"
+import ntriples "../ntriples"
 
 @(private) Collect_State :: struct {
 	builder: strings.Builder,
@@ -16,6 +17,17 @@ import nquads "../nquads"
 	if nquads.write_quad(&state.builder, quad) != .None do return false
 	state.quads += 1
 	return true
+}
+
+@(private) Document_Write_State :: struct {
+	writer: ^Document_Writer,
+	error:  Write_Error,
+}
+
+@(private) write_document_sink :: proc(triple: rdf.Triple, user_data: rawptr) -> bool {
+	state := cast(^Document_Write_State)user_data
+	state.error = write_document_triple(state.writer, triple)
+	return state.error == .None
 }
 
 @(private) parse_to_nquads :: proc(input: string, options: Options = {}) -> (string, Parse_Error) {
@@ -212,19 +224,177 @@ test_write_triples_fails_atomically_for_unrepresentable_data :: proc(t: ^testing
 }
 
 @(test)
+test_document_writer_streams_explicit_namespaces_and_blank_nodes :: proc(t: ^testing.T) {
+	namespaces := []Namespace{{prefix = "ex", iri = "https://example.test/"}}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	writer: Document_Writer
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = namespaces, max_blank_nodes = 2}), Write_Error.None)
+	defer destroy_document_writer(&writer)
+	shared := rdf.blank_node("callback-label", rdf.Blank_Node_Scope(9))
+	testing.expect_value(t, write_document_triple(&writer, rdf.Triple{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/knows"),
+		object = shared,
+	}), Write_Error.None)
+	testing.expect_value(t, write_document_triple(&writer, rdf.Triple{
+		subject = shared,
+		predicate = rdf.iri("https://example.test/label"),
+		object = rdf.language_literal("B & C", "en"),
+	}), Write_Error.None)
+	testing.expect_value(t, write_document_triple(&writer, rdf.Triple{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri(RDF_TYPE),
+		object = rdf.iri("https://example.test/Person"),
+	}), Write_Error.None)
+	testing.expect_value(t, finish_document_writer(&writer), Write_Error.None)
+	written := strings.to_string(builder)
+	testing.expect(t, strings.contains(written, `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ex="https://example.test/">`))
+	testing.expect(t, strings.contains(written, `<ex:knows rdf:nodeID="b0"/>`))
+	testing.expect(t, strings.contains(written, `<ex:label xml:lang="en">B &amp; C</ex:label>`))
+	testing.expect(t, strings.contains(written, `<rdf:type rdf:resource="https://example.test/Person"/>`))
+	actual, parse_err := parse_to_nquads(written)
+	defer delete(actual)
+	testing.expect_value(t, parse_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <https://example.test/knows> _:b0 .`))
+	testing.expect(t, strings.contains(actual, `_:b0 <https://example.test/label> "B & C"@en .`))
+}
+
+@(test)
+test_document_writer_owns_blank_nodes_from_reused_reader_callbacks :: proc(t: ^testing.T) {
+	namespaces := []Namespace{{prefix = "ex", iri = "https://example.test/"}}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	writer: Document_Writer
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = namespaces, max_blank_nodes = 1}), Write_Error.None)
+	defer destroy_document_writer(&writer)
+	input := "<https://example.test/s> <https://example.test/knows> _:shared .\n_:shared <https://example.test/label> \"value\" .\n"
+	reader_state: strings.Reader
+	state := Document_Write_State{writer = &writer}
+	parsed := ntriples.parse_reader(strings.to_reader(&reader_state, input), write_document_sink, ntriples.Reader_Options{chunk_size = 1}, &state)
+	testing.expect_value(t, parsed.error.code, ntriples.Error_Code.None)
+	testing.expect_value(t, state.error, Write_Error.None)
+	testing.expect_value(t, finish_document_writer(&writer), Write_Error.None)
+	written := strings.to_string(builder)
+	testing.expect(t, strings.contains(written, `<ex:knows rdf:nodeID="b0"/>`))
+	testing.expect(t, strings.contains(written, `<rdf:Description rdf:nodeID="b0">`))
+}
+
+@(test)
+test_document_writer_rejects_bad_records_without_partial_output :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "prefix")
+	invalid_namespaces := []Namespace{{prefix = "1bad", iri = "https://example.test/"}}
+	writer: Document_Writer
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = invalid_namespaces}), Write_Error.Invalid_Namespace_Prefix)
+	testing.expect_value(t, strings.to_string(builder), "prefix")
+	namespaces := []Namespace{{prefix = "ex", iri = "https://example.test/"}}
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = namespaces, max_blank_nodes = 1}), Write_Error.None)
+	defer destroy_document_writer(&writer)
+	first := rdf.Triple{
+		subject = rdf.blank_node("one", rdf.Blank_Node_Scope(1)),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.literal("first"),
+	}
+	testing.expect_value(t, write_document_triple(&writer, first), Write_Error.None)
+	before := strings.clone(strings.to_string(builder)) or_else ""
+	defer delete(before)
+	missing_namespace := rdf.Triple{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://other.test/value"),
+		object = rdf.literal("value"),
+	}
+	testing.expect_value(t, write_document_triple(&writer, missing_namespace), Write_Error.Missing_Predicate_Namespace)
+	testing.expect_value(t, strings.to_string(builder), before)
+	limited := rdf.Triple{
+		subject = rdf.blank_node("two", rdf.Blank_Node_Scope(1)),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.literal("second"),
+	}
+	testing.expect_value(t, write_document_triple(&writer, limited), Write_Error.Blank_Node_Limit)
+	testing.expect_value(t, strings.to_string(builder), before)
+	testing.expect_value(t, write_document_triple(&writer, first), Write_Error.None)
+	testing.expect_value(t, finish_document_writer(&writer), Write_Error.None)
+	testing.expect_value(t, finish_document_writer(&writer), Write_Error.Writer_Closed)
+	testing.expect_value(t, write_document_triple(&writer, first), Write_Error.Writer_Closed)
+}
+
+@(test)
+test_document_writer_validates_namespace_and_capacity_options_before_output :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "prefix")
+	writer: Document_Writer
+	testing.expect_value(t, init_document_writer(&writer, nil), Write_Error.Missing_Output)
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{max_blank_nodes = -1}), Write_Error.Invalid_Writer_Options)
+	reserved := []Namespace{{prefix = "rdf", iri = "https://example.test/"}}
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = reserved}), Write_Error.Reserved_Namespace_Prefix)
+	duplicate := []Namespace{
+		{prefix = "ex", iri = "https://one.test/"},
+		{prefix = "ex", iri = "https://two.test/"},
+	}
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = duplicate}), Write_Error.Duplicate_Namespace_Prefix)
+	invalid_iri := []Namespace{{prefix = "ex", iri = "relative"}}
+	testing.expect_value(t, init_document_writer(&writer, &builder, Document_Writer_Options{namespaces = invalid_iri}), Write_Error.Invalid_Namespace_IRI)
+	testing.expect_value(t, strings.to_string(builder), "prefix")
+}
+
+@(test)
+test_xml_ncname_validation_accepts_combining_marks_only_after_start :: proc(t: ^testing.T) {
+	testing.expect(t, valid_xml_name("é\u0301"))
+	testing.expect(t, valid_xml_name("A\u203Fname"))
+	testing.expect(t, !valid_xml_name("\u0301bad"))
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	valid := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/é\u0301"),
+		object = rdf.literal("value"),
+	}}
+	testing.expect_value(t, write_triples(&builder, valid[:]), Write_Error.None)
+	invalid := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/\u0301bad"),
+		object = rdf.literal("value"),
+	}}
+	before := strings.clone(strings.to_string(builder)) or_else ""
+	defer delete(before)
+	testing.expect_value(t, write_triples(&builder, invalid[:]), Write_Error.Invalid_Property_Name)
+	testing.expect_value(t, strings.to_string(builder), before)
+}
+
+@(test)
 test_write_error_messages_are_stable :: proc(t: ^testing.T) {
-	codes := [15]Write_Error{
-		.None, .Invalid_Term_Kind, .Invalid_Subject, .Invalid_Predicate, .Invalid_IRI,
-		.Invalid_Blank_Node, .Invalid_Language_Tag, .Invalid_UTF8, .Unexpected_Language,
-		.Unexpected_Datatype, .Missing_Literal_Datatype, .Invalid_Language_Datatype,
-		.Invalid_Property_Name, .Reserved_Predicate, .Invalid_XML_Literal,
+	messages := [Write_Error]string{
+		.None                        = "no error",
+		.Invalid_Term_Kind           = "invalid RDF term kind",
+		.Invalid_Subject             = "subject must be an IRI or blank node",
+		.Invalid_Predicate           = "predicate must be an IRI",
+		.Invalid_IRI                 = "invalid absolute IRI",
+		.Invalid_Blank_Node          = "invalid blank-node label",
+		.Invalid_Language_Tag        = "invalid language tag",
+		.Invalid_UTF8                = "invalid UTF-8",
+		.Unexpected_Language         = "language tag is only valid on a literal",
+		.Unexpected_Datatype         = "datatype is only valid on a literal",
+		.Missing_Literal_Datatype    = "literal datatype is required",
+		.Invalid_Language_Datatype   = "language-tagged literal must use rdf:langString",
+		.Invalid_Property_Name       = "predicate IRI cannot be represented as an RDF/XML QName",
+		.Reserved_Predicate          = "predicate is reserved by RDF/XML syntax",
+		.Invalid_XML_Literal         = "rdf:XMLLiteral value is not a valid XML fragment",
+		.Invalid_XML_Character       = "RDF term contains a character not representable in XML 1.0",
+		.Missing_Output              = "output builder is required",
+		.Invalid_Writer_Options      = "writer options must not be negative",
+		.Invalid_Namespace_Prefix    = "namespace prefix must be an XML NCName",
+		.Invalid_Namespace_IRI       = "namespace IRI must be an absolute XML-safe IRI",
+		.Duplicate_Namespace_Prefix  = "duplicate namespace prefix",
+		.Reserved_Namespace_Prefix   = "namespace prefix is reserved by XML or RDF/XML",
+		.Missing_Predicate_Namespace = "predicate namespace has no declared prefix",
+		.Blank_Node_Limit            = "blank-node limit reached",
+		.Writer_Not_Active           = "RDF/XML document writer is not active",
+		.Writer_Already_Active       = "RDF/XML document writer is already active",
+		.Writer_Closed               = "RDF/XML document writer is already closed",
+		.Out_Of_Memory               = "memory allocation failed",
 	}
-	messages := [15]string{
-		"no error", "invalid RDF term kind", "subject must be an IRI or blank node", "predicate must be an IRI", "invalid absolute IRI",
-		"invalid blank-node label", "invalid language tag", "invalid UTF-8", "language tag is only valid on a literal",
-		"datatype is only valid on a literal", "literal datatype is required", "language-tagged literal must use rdf:langString",
-		"predicate IRI cannot be represented as an RDF/XML QName", "predicate is reserved by RDF/XML syntax", "rdf:XMLLiteral value is not a valid XML fragment",
-	}
-	for code, index in codes do testing.expect_value(t, write_error_message(code), messages[index])
-	testing.expect_value(t, write_error_message(.Invalid_XML_Character), "RDF term contains a character not representable in XML 1.0")
+	for code in Write_Error do testing.expect_value(t, write_error_message(code), messages[code])
 }

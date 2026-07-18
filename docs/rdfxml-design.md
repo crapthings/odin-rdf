@@ -45,10 +45,19 @@ Named graphs are rejected before any XML is written. This applies equally to
 standard output and file targets; it is intentionally distinct from the other
 streaming conversion destinations.
 
+`Document_Writer` is the separate stateful path for streams too large to retain
+as one graph. It emits an RDF/XML prolog and caller-supplied namespace
+declarations once, then validates and appends one `rdf:Description` per call.
+It keeps a copied blank-node label map with a default 100,000-node admission
+limit, preserving identity across transient parser callbacks without an
+unbounded hidden map. A failed record does not append XML, but callers must
+explicitly finish the document; this mode therefore is not used by the atomic
+`convert` target.
+
 ## Explicitly deferred
 
-Full XML Name grammar coverage and a stateful streaming document writer are
-separate milestones.
+No RDF/XML output feature is currently deferred. Storage, querying, and RDF
+schema semantics remain separate layers.
 
 ## Conformance gate
 

@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.6.0. The
+This reference describes the supported public surface in version 0.7.0. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -83,6 +83,8 @@ write_term(builder: ^strings.Builder, term: rdf.Term,
            options: Writer_Options = {}) -> Write_Error
 write_triple(builder: ^strings.Builder, triple: rdf.Triple,
              options: Writer_Options = {}) -> Write_Error
+format_triples(builder: ^strings.Builder, triples: []rdf.Triple,
+               options: Format_Options = {}) -> Write_Error
 ```
 
 | `Parse_Options` field | Zero value | Meaning |
@@ -113,8 +115,18 @@ the longest matching safe namespace, preserving declaration order on ties.
 `write_prefixes` emits the declarations once, while `write_term` and
 `write_triple` are atomic and streaming-safe. They fall back to canonical
 IRIREFs when a compact prefixed name would need escaping. The writer does not
-infer prefixes, group triples, use property-list/collection abbreviations, or
-format a complete document; those require a future batch formatter.
+infer prefixes, group triples, or retain document state.
+
+`format_triples` is the separate, batch-oriented path. It atomically appends a
+complete document, sorts triples deterministically, groups predicate/object
+lists, uses `a` for `rdf:type`, and removes exact duplicate triples.
+`Format_Options.prefix_policy` defaults to `Infer`, which adds known W3C labels
+where safe and otherwise uses deterministic `ns1`, `ns2`, ... labels.
+`Explicit_Only` retains only caller-provided declarations. Formatting needs the
+complete triple collection and does not preserve source layout, comments, or
+statement order. It rejects two blank nodes with the same label from different
+non-identical source scopes, because Turtle would otherwise serialize them as
+one node.
 
 ## Conversion `rdf/convert`
 
@@ -144,6 +156,8 @@ adapter does not flush or close either stream.
 ```sh
 odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] \
   [--prefix LABEL=NAMESPACE]
+odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
+  [--no-infer-prefixes]
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
@@ -152,6 +166,11 @@ a same-directory exclusive temporary path named `<target>.odin-rdf.tmp`; the
 target is replaced only after conversion and close succeed. Existing temporary
 files are never overwritten. Standard output deliberately remains streaming
 and can contain earlier records if a later parse error occurs.
+
+`format` accepts Turtle input, retains its complete graph, and writes grouped,
+deterministic Turtle. It does not emit partial output after a parse or
+formatting failure. Prefix inference is enabled by default; use
+`--no-infer-prefixes` to use only repeated explicit `--prefix` declarations.
 
 ## Memory and reader entry points
 

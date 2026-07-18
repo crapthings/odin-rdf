@@ -15,9 +15,9 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.6.0` provides production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, a streaming conversion adapter, and the `odin-rdf convert` command. The syntax packages share tested internal lexical primitives and support complete UTF-8 input, escape decoding, strict syntax validation, bounded-memory streaming, and early termination through sink callbacks.
+Version `0.7.0` adds a batch Turtle formatter and the `odin-rdf format` command. It intentionally retains the complete graph to group triples, infer safe prefixes, and choose deterministic document layout. The release also includes production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, and a streaming conversion adapter.
 
-RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release. Turtle formatting remains separate from writing because document grouping, prefix discovery, and layout policy require a batch-oriented API.
+RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release.
 
 The project is tested with Odin `dev-2026-07` and CI tracks the current Odin toolchain on Linux, macOS, and Windows.
 
@@ -56,7 +56,7 @@ flowchart LR
 rdf/                 Syntax-independent RDF terms, triples, and quads
 rdf/ntriples/        N-Triples parser, writer, and unit tests
 rdf/nquads/          N-Quads parser, writer, and unit tests
-rdf/turtle/          Turtle parser, writer, IRI resolution, and bounded reader
+rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bounded reader
 rdf/convert/         Streaming syntax-to-syntax conversion adapter
 cmd/odin-rdf/        Command-line converter built on the adapter
 examples/minimal/    Tiny educational example with no library dependency
@@ -82,6 +82,7 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `turtle.parse(input, sink, options)` covers RDF 1.1 Turtle directives, relative IRIs, compact predicate/object lists, literal shorthands, property lists, and collections.
 - `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
 - `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
+- `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
 - `convert.convert(reader, output, options)` connects the bounded readers and writers without retaining a graph; it rejects a named N-Quads graph when the selected output cannot represent it.
 - `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
 - `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
@@ -163,6 +164,19 @@ See [`examples/turtle_writer`](examples/turtle_writer/main.odin) for a runnable
 Turtle-to-Turtle streaming conversion example. It deliberately does not group
 triples, infer prefixes, or reformat property lists and collections.
 
+For a complete graph already retained by your application, use the batch
+formatter instead. It sorts terms, groups repeated subjects and predicates,
+uses `a` for `rdf:type`, removes exact duplicate triples, and writes only after
+the entire document is valid. It does not preserve source ordering or comments:
+
+```odin
+options := turtle.Format_Options{
+    prefixes = []turtle.Prefix{{label = "ex", namespace = "https://example.com/"}},
+    prefix_policy = .Explicit_Only,
+}
+err := turtle.format_triples(&builder, triples, options)
+```
+
 ## Command-line conversion
 
 Build the repository command when you want a small, dependency-free conversion
@@ -175,6 +189,7 @@ odin build cmd/odin-rdf -out:odin-rdf
 ./odin-rdf convert input.nt --from ntriples --to turtle \
   --prefix ex=https://example.com/ --output output.ttl
 cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
+./odin-rdf format input.ttl --output formatted.ttl
 ```
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
@@ -188,6 +203,12 @@ records on the pipe. Turtle prefixes are always explicit and repeatable; use
 N-Quads default-graph records convert to all three syntaxes. A named graph can
 only target N-Quads; the command rejects every lossy target rather than dropping
 the graph name.
+
+`format` accepts Turtle input only. It parses the complete graph before writing,
+so neither standard output nor a target file receives partial formatted output
+on a parse or serialization error. It infers safe prefixes by default; repeat
+`--prefix LABEL=NAMESPACE` to provide declarations, and pass
+`--no-infer-prefixes` to use only those explicit declarations.
 
 The [conversion design](docs/conversion-design.md) records the conversion
 matrix, error behavior, and file-output safety policy.
@@ -227,7 +248,7 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Add a buffered, batch-oriented Turtle formatter after profiling converter workloads.
+1. Profile batch formatter memory use and add optional collection limits before treating it as a large-graph tool.
 2. Add configurable conversion reader limits and ergonomic file-format inference without weakening explicit loss checks.
 3. Evaluate RDF/XML or JSON-LD before committing to graph storage and SPARQL APIs.
 

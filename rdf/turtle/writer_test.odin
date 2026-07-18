@@ -99,6 +99,7 @@ test_write_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Unexpected_Datatype       = "datatype is only valid on a literal",
 		.Missing_Literal_Datatype  = "literal datatype is required",
 		.Invalid_Language_Datatype = "language-tagged literal must use rdf:langString",
+		.Ambiguous_Blank_Node_Label = "blank-node label refers to multiple source scopes",
 	}
 	for code in Write_Error do testing.expect_value(t, write_error_message(code), messages[code])
 }

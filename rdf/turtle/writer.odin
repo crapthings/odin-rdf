@@ -39,6 +39,7 @@ Write_Error :: enum {
 	Unexpected_Datatype,
 	Missing_Literal_Datatype,
 	Invalid_Language_Datatype,
+	Ambiguous_Blank_Node_Label,
 }
 
 // write_error_message returns a stable, allocation-free description.
@@ -58,7 +59,8 @@ write_error_message :: proc(code: Write_Error) -> string {
 	case .Unexpected_Language:       return "language tag is only valid on a literal"
 	case .Unexpected_Datatype:       return "datatype is only valid on a literal"
 	case .Missing_Literal_Datatype:  return "literal datatype is required"
-	case .Invalid_Language_Datatype: return "language-tagged literal must use rdf:langString"
+	case .Invalid_Language_Datatype:  return "language-tagged literal must use rdf:langString"
+	case .Ambiguous_Blank_Node_Label: return "blank-node label refers to multiple source scopes"
 	}
 	return "unknown error"
 }

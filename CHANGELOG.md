@@ -2,6 +2,18 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 - 2026-07-18
+
+- Add `turtle.format_triples`, an atomic batch formatter that groups triples,
+  uses Turtle predicate/object-list syntax, emits `a` for valid `rdf:type`,
+  removes exact duplicates, and produces deterministic output.
+- Add safe automatic prefix inference with familiar RDF, RDFS, XSD, OWL, SKOS,
+  and Dublin Core labels plus deterministic generated labels.
+- Add `odin-rdf format` for Turtle input with atomic file replacement,
+  explicit-prefix control, and safe blank-node scope collision rejection.
+- Preserve writer validation when using `a`, improve formatter lookup scaling,
+  and add formatter round-trip and CLI failure-atomicity regression tests.
+
 ## 0.6.0 - 2026-07-18
 
 - Add `rdf/convert`, a streaming adapter for N-Triples, N-Quads, and Turtle

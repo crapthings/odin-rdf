@@ -1,8 +1,8 @@
-# Turtle parser and writer design
+# Turtle parser, writer, and formatter design
 
 This document defines the implementation contract for the RDF 1.1 Turtle
-parser introduced in version 0.4.0 and the streaming writer added in version
-0.5.0.
+parser introduced in version 0.4.0, the streaming writer added in version
+0.5.0, and the batch formatter added in version 0.7.0.
 
 The normative baseline is the W3C [RDF 1.1 Turtle Recommendation][turtle]. The
 acceptance suite is the official [`w3c/rdf-tests` Turtle manifest][tests],
@@ -24,9 +24,9 @@ mapping to RDF triples:
   Unicode and string escapes;
 - integer, decimal, double, and boolean literal shorthands.
 
-RDF/XML, JSON-LD, RDF-star, storage, querying, and batch Turtle formatting are
-outside this milestone. Version 0.5.0 adds a separate streaming writer with an
-explicit prefix table; it does not delay or alter parser conformance.
+RDF/XML, JSON-LD, RDF-star, storage, and querying are outside this milestone.
+The streaming writer and batch formatter are separate APIs; neither delays or
+alters parser conformance.
 
 ## Public API
 
@@ -98,7 +98,27 @@ operation is atomic with respect to its destination builder.
 Writer v1 does not infer prefixes, retain graph state, group predicate/object
 lists, abbreviate `a`, rebuild property lists or collections, or impose a
 document layout. Those are formatter decisions that require batch state and
-will remain a separate API.
+remain a separate API.
+
+## Batch formatter
+
+`format_triples(builder, triples, options)` formats a complete triple
+collection into a deterministic Turtle document. It is intentionally not a
+source formatter: comments, whitespace, directive spelling, input statement
+order, property-list syntax, and collection syntax have already been lowered by
+the parser and are not reconstructed.
+
+The formatter sorts RDF terms, removes exact duplicate triples, groups common
+subjects and predicates, and emits `a` for `rdf:type`. Its zero-value prefix
+policy is `Infer`: it keeps supplied declarations, adds familiar W3C labels
+when safe, and assigns sorted remaining namespaces `ns1`, `ns2`, and so on.
+`Explicit_Only` disables inference. Formatting is atomic with respect to the
+destination builder, but it needs memory proportional to the collected graph.
+
+Blank-node labels are syntax-local. Before formatting, the API rejects equal
+labels associated with different `Blank_Node_Scope` values: serializing either
+as one Turtle label would silently conflate distinct RDF nodes. The streaming
+writer cannot make that document-wide determination and remains unchanged.
 
 ## Parser architecture
 

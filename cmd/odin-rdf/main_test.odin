@@ -5,6 +5,7 @@ import "core:io"
 import "core:os"
 import "core:strings"
 import convert "../../rdf/convert"
+import turtle "../../rdf/turtle"
 
 @(private) write_test_file :: proc(path, text: string) -> os.Error {
 	file, create_err := os.create(path)
@@ -41,6 +42,25 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(options.prefixes), 2)
 	testing.expect_value(t, options.prefixes[0].label, "ex")
 	testing.expect_value(t, options.prefixes[1].label, "")
+}
+
+@(test)
+test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
+	args := []string{
+		"format", "input.ttl", "--output=output.ttl", "--prefix", "ex=https://example.com/", "--no-infer-prefixes",
+	}
+	options, err := parse_format_command_args(args)
+	defer delete(options.prefixes)
+	testing.expect_value(t, err.code, Command_Error_Code.None)
+	testing.expect_value(t, options.input_path, "input.ttl")
+	testing.expect_value(t, options.output_path, "output.ttl")
+	testing.expect(t, !options.infer_prefixes)
+	testing.expect_value(t, len(options.prefixes), 1)
+	testing.expect_value(t, options.prefixes[0].label, "ex")
+
+	missing_input_options, missing_input := parse_format_command_args([]string{"format"})
+	defer delete(missing_input_options.prefixes)
+	testing.expect_value(t, missing_input.code, Command_Error_Code.Missing_Input)
 }
 
 @(test)
@@ -106,6 +126,68 @@ test_file_output_preserves_existing_target_after_conversion_failure :: proc(t: ^
 	input := strings.to_reader(&input_state, "<urn:s> <urn:p> <urn:o> <urn:g> .\n")
 	result := convert_to_file(input, target, convert.Options{input = .N_Quads, output = .N_Triples})
 	testing.expect_value(t, result.error.code, convert.Error_Code.Named_Graph_Not_Supported)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
+test_format_file_output_is_grouped_and_replaces_after_success :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-format-input.ttl"
+	target :: "odin-rdf-cli-format-output.ttl"
+	temporary :: "odin-rdf-cli-format-output.ttl.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	input := `<https://example.com/alice> <https://example.com/name> "Alice" .
+<https://example.com/alice> <https://example.com/knows> <https://example.com/bob> .
+`
+	testing.expect(t, write_test_file(input_path, input) == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options := Format_Command_Options{
+		input_path = input_path,
+		output_path = target,
+		prefixes = make([dynamic]turtle.Prefix),
+		infer_prefixes = true,
+	}
+	defer delete(options.prefixes)
+	testing.expect_value(t, run_format(options), 0)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	expected := `@prefix ns1: <https://example.com/> .
+
+ns1:alice ns1:knows ns1:bob ;
+    ns1:name "Alice" .
+`
+	testing.expect_value(t, contents, expected)
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
+test_format_file_output_preserves_existing_target_after_parse_failure :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-format-invalid-input.ttl"
+	target :: "odin-rdf-cli-format-invalid-output.ttl"
+	temporary :: "odin-rdf-cli-format-invalid-output.ttl.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	testing.expect(t, write_test_file(input_path, `<https://example.com/s> <https://example.com/p> .\n`) == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options := Format_Command_Options{
+		input_path = input_path,
+		output_path = target,
+		prefixes = make([dynamic]turtle.Prefix),
+		infer_prefixes = true,
+	}
+	defer delete(options.prefixes)
+	testing.expect_value(t, run_format(options), 1)
 	buffer: [256]byte
 	contents, read_err := read_test_file(target, &buffer)
 	testing.expect(t, read_err == nil)

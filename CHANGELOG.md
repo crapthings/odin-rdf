@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.17.0 - 2026-07-18
 
 - Add RDF/XML as an explicit bounded batch `convert` target. It requires a
   positive `max_records` admission limit, retains owned default-graph terms,

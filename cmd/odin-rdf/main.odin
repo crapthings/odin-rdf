@@ -7,8 +7,13 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import rdf "../../rdf"
+import canon "../../rdf/canon"
 import convert "../../rdf/convert"
 import dataset "../../rdf/dataset"
+import jsonld "../../rdf/jsonld"
+import nquads "../../rdf/nquads"
+import ntriples "../../rdf/ntriples"
+import rdfxml "../../rdf/rdfxml"
 import trig "../../rdf/trig"
 import turtle "../../rdf/turtle"
 
@@ -32,6 +37,9 @@ Command_Error_Code :: enum {
 	Cannot_Infer_Input_Format,
 	Cannot_Infer_Output_Format,
 	Same_Input_Output,
+	Missing_Compare_Input,
+	Compare_Standard_Input,
+	Invalid_Hash_Algorithm,
 }
 
 command_error_message :: proc(code: Command_Error_Code) -> string {
@@ -55,6 +63,9 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Cannot_Infer_Input_Format: return "cannot infer input RDF syntax; use --from"
 	case .Cannot_Infer_Output_Format: return "cannot infer output RDF syntax; use --to"
 	case .Same_Input_Output:    return "input and output paths must differ"
+	case .Missing_Compare_Input: return "compare requires two input paths"
+	case .Compare_Standard_Input: return "compare does not accept standard input"
+	case .Invalid_Hash_Algorithm: return "--algorithm must be sha256 or sha384"
 	}
 	return "unknown error"
 }
@@ -83,6 +94,27 @@ Format_Command_Options :: struct {
 	max_triples: int,
 	max_quads: int,
 	help: bool,
+}
+
+Integrity_Command :: enum {
+	Canon,
+	Hash,
+	Compare,
+}
+
+// Integrity_Command_Options configures commands that retain one complete,
+// explicitly bounded dataset before using the RDFC-1.0 integrity APIs.
+Integrity_Command_Options :: struct {
+	command:       Integrity_Command,
+	input_path:    string,
+	other_path:    string,
+	output_path:   string,
+	input_format:  convert.Format,
+	other_format:  convert.Format,
+	reader_limits: convert.Reader_Limits,
+	max_quads:     int,
+	hash_algorithm: canon.Hash_Algorithm,
+	help:          bool,
 }
 
 parse_format :: proc(value: string) -> (convert.Format, bool) {
@@ -125,6 +157,14 @@ parse_positive_decimal :: proc(value: string) -> (int, bool) {
 	for c in value do if c < '0' || c > '9' do return 0, false
 	parsed, ok := strconv.parse_int(value, 10)
 	return parsed, ok && parsed > 0
+}
+
+parse_hash_algorithm :: proc(value: string) -> (canon.Hash_Algorithm, bool) {
+	switch value {
+	case "sha256", "sha-256": return .SHA_256, true
+	case "sha384", "sha-384": return .SHA_384, true
+	}
+	return {}, false
 }
 
 // parse_convert_args accepts conventional Unix-style options. Prefixes may be
@@ -329,10 +369,142 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 	return options, {}
 }
 
+// parse_integrity_command_args parses the bounded canon, hash, and compare
+// workflows. --from applies to both inputs of compare; otherwise each file
+// infers its own format from its extension. The command-level max_quads bound
+// applies both to owned collection and RDFC-1.0 canonicalization.
+parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Options, Command_Error) {
+	options := Integrity_Command_Options{output_path = "-", max_quads = canon.DEFAULT_MAX_QUADS}
+	if len(args) == 0 do return options, Command_Error{code = .Missing_Command}
+	if args[0] == "--help" || args[0] == "-h" {
+		options.help = true
+		return options, {}
+	}
+	switch args[0] {
+	case "canon": options.command = .Canon
+	case "hash": options.command = .Hash
+	case "compare": options.command = .Compare
+	case: return options, Command_Error{code = .Unknown_Command, value = args[0]}
+	}
+
+	has_from, positional_only := false, false
+	input_count := 0
+	for i := 1; i < len(args); i += 1 {
+		arg := args[i]
+		if !positional_only && (arg == "--help" || arg == "-h") {
+			options.help = true
+			return options, {}
+		}
+		if !positional_only && arg == "--" {
+			positional_only = true
+			continue
+		}
+
+		value: string
+		needs_value := false
+		if !positional_only && (arg == "--from" || arg == "--output" || arg == "-o" || arg == "--algorithm" || arg == "--max-quads" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
+			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
+			i += 1
+			value = args[i]
+			needs_value = true
+		}
+		if !positional_only && (arg == "--from" || strings.has_prefix(arg, "--from=")) {
+			if !needs_value do value = arg[len("--from="):]
+			format, ok := parse_format(value)
+			if !ok do return options, Command_Error{code = .Invalid_Format, value = value}
+			options.input_format = format
+			has_from = true
+			continue
+		}
+		if !positional_only && (arg == "--output" || arg == "-o" || strings.has_prefix(arg, "--output=")) {
+			if options.command == .Compare do return options, Command_Error{code = .Unknown_Option, value = arg}
+			if !needs_value do value = arg[len("--output="):]
+			if len(value) == 0 do return options, Command_Error{code = .Missing_Option_Value, value = "--output"}
+			options.output_path = value
+			continue
+		}
+		if !positional_only && (arg == "--algorithm" || strings.has_prefix(arg, "--algorithm=")) {
+			if !needs_value do value = arg[len("--algorithm="):]
+			algorithm, ok := parse_hash_algorithm(value)
+			if !ok do return options, Command_Error{code = .Invalid_Hash_Algorithm, value = value}
+			options.hash_algorithm = algorithm
+			continue
+		}
+		if !positional_only && (arg == "--max-quads" || strings.has_prefix(arg, "--max-quads=")) {
+			if !needs_value do value = arg[len("--max-quads="):]
+			max_quads, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Quads, value = value}
+			options.max_quads = max_quads
+			continue
+		}
+		if !positional_only && (arg == "--max-records" || strings.has_prefix(arg, "--max-records=")) {
+			if !needs_value do value = arg[len("--max-records="):]
+			max_records, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Records, value = value}
+			options.reader_limits.max_records = max_records
+			continue
+		}
+		if !positional_only && (arg == "--max-line-bytes" || strings.has_prefix(arg, "--max-line-bytes=")) {
+			if !needs_value do value = arg[len("--max-line-bytes="):]
+			max_line_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Line_Bytes, value = value}
+			options.reader_limits.max_line_bytes = max_line_bytes
+			continue
+		}
+		if !positional_only && (arg == "--max-statement-bytes" || strings.has_prefix(arg, "--max-statement-bytes=")) {
+			if !needs_value do value = arg[len("--max-statement-bytes="):]
+			max_statement_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Statement_Bytes, value = value}
+			options.reader_limits.max_statement_bytes = max_statement_bytes
+			continue
+		}
+		if !positional_only && (arg == "--max-document-bytes" || strings.has_prefix(arg, "--max-document-bytes=")) {
+			if !needs_value do value = arg[len("--max-document-bytes="):]
+			max_document_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Document_Bytes, value = value}
+			options.reader_limits.max_document_bytes = max_document_bytes
+			continue
+		}
+		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
+		if input_count == 0 {
+			options.input_path = arg
+		} else if input_count == 1 && options.command == .Compare {
+			options.other_path = arg
+		} else {
+			return options, Command_Error{code = .Extra_Input, value = arg}
+		}
+		input_count += 1
+	}
+	if options.command == .Compare {
+		if input_count != 2 do return options, Command_Error{code = .Missing_Compare_Input}
+		if options.input_path == "-" || options.other_path == "-" do return options, Command_Error{code = .Compare_Standard_Input}
+	} else if input_count == 0 {
+		return options, Command_Error{code = .Missing_Input}
+	}
+	if has_from {
+		if options.command == .Compare do options.other_format = options.input_format
+		if options.command != .Compare && options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
+		return options, {}
+	}
+	format, ok := infer_format_from_path(options.input_path)
+	if !ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.input_path}
+	options.input_format = format
+	if options.command == .Compare {
+		other_format, other_ok := infer_format_from_path(options.other_path)
+		if !other_ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.other_path}
+		options.other_format = other_format
+	}
+	if options.command != .Compare && options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
+	return options, {}
+}
+
 print_help :: proc() {
 	fmt.println(`Usage:
 	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
+	  odin-rdf canon INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf hash INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; bounded batch output)
 
@@ -367,6 +539,16 @@ and infers safe prefixes by default. Use --no-infer-prefixes to emit IRIREFs
 except for explicitly supplied prefixes. Use --max-triples N for Turtle or
 --max-quads N for TriG to reject input before retained output exceeds the cap.
 
+canon, hash, and compare retain a complete owned RDF dataset before processing.
+They accept every supported input syntax, infer each file input independently,
+and default --max-quads to 100000. Set --max-quads N to choose the shared
+collection and canonicalization admission bound. Use the source reader limits
+for untrusted input; compare accepts two file paths (not standard input),
+prints equal or different, and exits 0 or 1 respectively (2 on an error).
+hash writes a lowercase hexadecimal SHA-256 digest by default; --algorithm
+sha384 selects SHA-384. These commands prepare integrity and signing-protocol
+inputs; they do not sign data or add storage/query behavior.
+
 Examples:
   odin-rdf convert input.ttl --output output.nt
   odin-rdf convert input.ttl --from turtle --to ntriples --output output.nt
@@ -374,6 +556,9 @@ Examples:
   odin-rdf convert - --from ntriples --to turtle --prefix ex=https://example.com/
   odin-rdf format input.ttl --output formatted.ttl
   odin-rdf format input.trig --output formatted.trig --max-quads 100000
+  odin-rdf canon input.trig --output canonical.nq --max-quads 100000
+  odin-rdf hash input.ttl --algorithm sha384
+  odin-rdf compare left.trig right.trig
 `)
 }
 
@@ -632,6 +817,168 @@ run_format :: proc(options: Format_Command_Options) -> int {
 	return 0
 }
 
+// collect_integrity_dataset parses one supported input syntax into an owned,
+// capacity-bounded quad collection. It is intentionally separate from convert:
+// canonicalization requires a complete dataset and must not masquerade as a
+// streaming output path.
+set_integrity_collection_error :: proc(result: ^convert.Result, collector: ^dataset.Collector, line, column: int, detail: string, reader_error: io.Error = .None) {
+	if collector.last_error != .None {
+		result.error = convert.Error{code = .Graph_Collection_Error, detail = dataset.error_message(collector.last_error)}
+	} else {
+		result.error = convert.Error{code = .Source_Parse_Error, line = line, column = column, detail = detail, io_error = reader_error}
+	}
+}
+
+collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, limits: convert.Reader_Limits, collector: ^dataset.Collector) -> convert.Result {
+	result: convert.Result
+	#partial switch format {
+	case .N_Triples:
+		parsed := ntriples.parse_reader(reader, dataset.triple_sink, ntriples.Reader_Options{
+			chunk_size = limits.chunk_size,
+			max_line_bytes = limits.max_line_bytes,
+			max_triples = u64(limits.max_records),
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, ntriples.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .N_Quads:
+		parsed := nquads.parse_reader(reader, dataset.sink, nquads.Reader_Options{
+			chunk_size = limits.chunk_size,
+			max_line_bytes = limits.max_line_bytes,
+			max_quads = u64(limits.max_records),
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, nquads.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .Turtle:
+		parsed := turtle.parse_reader(reader, dataset.triple_sink, turtle.Reader_Options{
+			parse = turtle.Parse_Options{max_triples = limits.max_records},
+			chunk_size = limits.chunk_size,
+			max_statement_bytes = limits.max_statement_bytes,
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .JSON_LD:
+		parsed := jsonld.parse_reader(reader, dataset.sink, jsonld.Reader_Options{
+			chunk_size = limits.chunk_size,
+			max_document_bytes = limits.max_document_bytes,
+			parse = jsonld.Options{max_quads = limits.max_records},
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .RDF_XML:
+		parsed := rdfxml.parse_reader(reader, dataset.sink, rdfxml.Reader_Options{
+			chunk_size = limits.chunk_size,
+			max_document_bytes = limits.max_document_bytes,
+			parse = rdfxml.Options{max_quads = limits.max_records},
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, rdfxml.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .TriG:
+		parsed := trig.parse_reader(reader, dataset.sink, trig.Reader_Options{
+			chunk_size = limits.chunk_size,
+			max_document_bytes = limits.max_document_bytes,
+			parse = trig.Parse_Options{max_quads = limits.max_records},
+		}, collector)
+		result.bytes_read = parsed.bytes_read
+		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
+	case:
+		result.error.code = .Unsupported_Input_Format
+	}
+	if result.error.code == .None do result.statements = u64(len(collector.quads))
+	return result
+}
+
+load_integrity_dataset :: proc(path: string, format: convert.Format, limits: convert.Reader_Limits, max_quads: int, collector: ^dataset.Collector) -> convert.Error {
+	if init_err := dataset.init(collector, dataset.Options{max_quads = max_quads}); init_err != .None do return convert.Error{code = .Graph_Collection_Error, detail = dataset.error_message(init_err)}
+	input_file := os.stdin
+	close_input := false
+	if path != "-" {
+		file, open_err := os.open(path)
+		if open_err != nil do return convert.Error{code = .Source_Parse_Error, detail = os.error_string(open_err)}
+		input_file = file
+		close_input = true
+	}
+	defer if close_input do _ = os.close(input_file)
+	return collect_integrity_dataset(os.to_reader(input_file), format, limits, collector).error
+}
+
+report_integrity_error :: proc(format: convert.Format, path: string, err: convert.Error) {
+	if err.code == .Source_Parse_Error && err.line == 0 && len(err.detail) > 0 {
+		fmt.eprintfln("odin-rdf: cannot open input %q: %s", path, err.detail)
+		return
+	}
+	report_convert_error(format, path, err)
+}
+
+write_integrity_result :: proc(text, output_path: string) -> int {
+	if output_path == "-" {
+		if write_err := write_all(os.to_writer(os.stdout), text); write_err != .None {
+			fmt.eprintfln("odin-rdf: output write error: %v", write_err)
+			return 1
+		}
+		return 0
+	}
+	if write_err, detail := write_format_file(text, output_path); write_err != .None {
+		if len(detail) > 0 {
+			fmt.eprintfln("odin-rdf: output write error: %s", detail)
+		} else {
+			fmt.eprintfln("odin-rdf: output write error: %v", write_err)
+		}
+		return 1
+	}
+	return 0
+}
+
+run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
+	left: dataset.Collector
+	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left)
+	defer dataset.destroy(&left)
+	if left_error.code != .None {
+		report_integrity_error(options.input_format, options.input_path, left_error)
+		if options.command == .Compare do return 2
+		return 1
+	}
+
+	if options.command == .Compare {
+		right: dataset.Collector
+		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right)
+		defer dataset.destroy(&right)
+		if right_error.code != .None {
+			report_integrity_error(options.other_format, options.other_path, right_error)
+			return 2
+		}
+		equal, canon_error := canon.isomorphic(left.quads[:], right.quads[:], canon.Options{
+			hash_algorithm = options.hash_algorithm,
+			max_quads = options.max_quads,
+		})
+		if canon_error != .None {
+			fmt.eprintfln("odin-rdf: dataset comparison error: %s", canon.error_message(canon_error))
+			return 2
+		}
+		if equal {
+			fmt.println("equal")
+			return 0
+		}
+		fmt.println("different")
+		return 1
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	canon_options := canon.Options{hash_algorithm = options.hash_algorithm, max_quads = options.max_quads}
+	canon_error := canon.Error_Code.None
+	if options.command == .Canon {
+		canon_error = canon.canonicalize(&builder, left.quads[:], canon_options)
+	} else {
+		canon_error = canon.canonical_hash(&builder, left.quads[:], canon_options)
+		if canon_error == .None do strings.write_byte(&builder, '\n')
+	}
+	if canon_error != .None {
+		fmt.eprintfln("odin-rdf: canonicalization error: %s", canon.error_message(canon_error))
+		return 1
+	}
+	return write_integrity_result(strings.to_string(builder), options.output_path)
+}
+
 main :: proc() {
 	if len(os.args) > 1 && os.args[1] == "format" {
 		options, parse_err := parse_format_command_args(os.args[1:])
@@ -645,6 +992,19 @@ main :: proc() {
 			exit_code = run_format(options)
 		}
 		delete(options.prefixes)
+		os.exit(exit_code)
+	}
+	if len(os.args) > 1 && (os.args[1] == "canon" || os.args[1] == "hash" || os.args[1] == "compare") {
+		options, parse_err := parse_integrity_command_args(os.args[1:])
+		exit_code := 0
+		if options.help {
+			print_help()
+		} else if parse_err.code != .None {
+			report_command_error(parse_err)
+			exit_code = 2
+		} else {
+			exit_code = run_integrity_command(options)
+		}
 		os.exit(exit_code)
 	}
 

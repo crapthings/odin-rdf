@@ -348,6 +348,12 @@ odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] \
 odin-rdf format INPUT [--from turtle|trig] [--output PATH] \
   [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] \
   [--no-infer-prefixes]
+odin-rdf canon INPUT [--from FORMAT] [--output PATH] \
+  [--algorithm sha256|sha384] [--max-quads N] [reader limits]
+odin-rdf hash INPUT [--from FORMAT] [--output PATH] \
+  [--algorithm sha256|sha384] [--max-quads N] [reader limits]
+odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] \
+  [--max-quads N] [reader limits]
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, `trig`,
@@ -379,6 +385,16 @@ repeated explicit `--prefix` declarations. `--max-triples N` bounds retained
 Turtle triples, while `--max-quads N` bounds retained TriG quads. Each is
 required to be a positive decimal integer when present and is only valid for
 its corresponding input syntax.
+
+`canon`, `hash`, and `compare` accept every supported input syntax and collect
+one complete, owned dataset before calling `rdf/canon`. Their default
+`--max-quads` is 100,000 and bounds both the collector and canonicalization;
+reader-limit options have the same syntax-specific behavior as `convert`.
+`canon` writes atomic canonical N-Quads and `hash` writes a lowercase
+hexadecimal SHA-256 digest by default (SHA-384 with `--algorithm sha384`).
+`compare` accepts two file paths, may infer a different format for each, prints
+`equal` or `different`, and returns exit status 0, 1, or 2 for equal,
+different, or an error. They do not implement signing, storage, or querying.
 
 ## Memory and reader entry points
 

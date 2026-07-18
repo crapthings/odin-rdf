@@ -233,6 +233,11 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">odin-rdf convert</span> input.nt --output output.nq --max-records 100000
 <span class="text-amber-200">odin-rdf convert</span> input.nt --output output.rdf --max-records 100000
 
+<span class="text-olive-300/70"># canonicalize, hash, or compare a bounded dataset</span>
+<span class="text-amber-200">odin-rdf canon</span> input.trig --output canonical.nq --max-quads 100000
+<span class="text-amber-200">odin-rdf hash</span> input.ttl --algorithm sha384
+<span class="text-amber-200">odin-rdf compare</span> previous.trig current.trig
+
 <span class="text-olive-300/70"># run the official pinned conformance suite</span>
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
 <span class="text-amber-200">./scripts/run-w3c-nquads-tests.sh</span>
@@ -249,9 +254,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.20.0</p>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Canonical RDF datasets, ready to compare.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">RDFC-1.0 canonical N-Quads gives complete RDF datasets stable blank-node labels. The integrity helpers add SHA-256 or SHA-384 digests and collision-independent isomorphism checks, with explicit limits for adversarial graph shapes.</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.21.0</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Canonical RDF datasets, ready for the shell.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">RDFC-1.0 canonical N-Quads gives complete RDF datasets stable blank-node labels. Canonicalize, hash, or compare them directly from the command line, with an explicit bounded collection policy for adversarial graph shapes.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

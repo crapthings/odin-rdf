@@ -56,6 +56,10 @@ from a parser-originated stop.
 ```odin
 canonicalize(builder: ^strings.Builder, quads: []rdf.Quad,
              options: Options = {}) -> Error_Code
+canonical_hash(builder: ^strings.Builder, quads: []rdf.Quad,
+               options: Options = {}) -> Error_Code
+isomorphic(left, right: []rdf.Quad,
+           options: Options = {}) -> (bool, Error_Code)
 ```
 
 `canonicalize` implements W3C RDF Dataset Canonicalization 1.0 (RDFC-1.0) for
@@ -77,6 +81,14 @@ The output follows RDFC-1.0's canonical N-Quads escaping rules, which differ
 in a few control-character cases from ordinary N-Quads serialization. Use this
 API for stable equality, fixture, or signing inputs; it is deliberately batch
 oriented and does not introduce graph storage or query state.
+
+`canonical_hash` atomically appends the lowercase hexadecimal SHA-256 or
+SHA-384 digest of that same canonical N-Quads form. It is appropriate for
+integrity records, cache keys, and higher-level signing protocols; it does not
+sign or verify data itself. `isomorphic` canonicalizes both complete datasets
+under the same limits and compares their canonical text. It permits different
+blank-node labels and scopes, but does not rely on hash equality, so a digest
+collision cannot affect its result.
 
 ## N-Triples `rdf/ntriples`
 

@@ -15,6 +15,13 @@ Blank-node identity uses both `Term.value` and `Term.scope`, so parser results
 from independent sources cannot accidentally collapse merely because their
 source labels match.
 
+`canonical_hash` and `isomorphic` are deliberately thin integrity helpers over
+the same algorithm. The former returns a digest of canonical N-Quads for cache,
+integrity, or signing-protocol input; it does not implement a signature scheme.
+The latter compares canonical text rather than digests, so its boolean result
+does not depend on hash collision resistance. Neither helper introduces a
+graph store, query language, or retained dataset state.
+
 ## Algorithm and output
 
 The implementation follows RDFC-1.0's first-degree and N-degree hashing,
@@ -45,4 +52,5 @@ their workload. A limit failure leaves the destination builder unchanged.
 `scripts/run-w3c-rdf-canon-tests.sh` downloads one pinned revision of the W3C
 RDFC test suite and runs its 64 canonicalization vectors, including SHA-384,
 plus its clique resource-limit negative case. Local unit tests cover atomic
-output, duplicate removal, stable errors, and RDFC-specific escaping.
+output, duplicate removal, stable errors, RDFC-specific escaping, canonical
+hashes, and blank-node-isomorphic datasets with unrelated source labels.

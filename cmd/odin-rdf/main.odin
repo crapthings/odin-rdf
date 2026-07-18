@@ -42,6 +42,7 @@ Command_Error_Code :: enum {
 	Missing_Diff_Input,
 	Diff_Standard_Input,
 	Invalid_Hash_Algorithm,
+	Context_Requires_JSONLD,
 }
 
 command_error_message :: proc(code: Command_Error_Code) -> string {
@@ -70,6 +71,7 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Missing_Diff_Input: return "diff requires two input paths"
 	case .Diff_Standard_Input: return "diff does not accept standard input"
 	case .Invalid_Hash_Algorithm: return "--algorithm must be sha256 or sha384"
+	case .Context_Requires_JSONLD: return "--context requires JSON-LD output"
 	}
 	return "unknown error"
 }
@@ -84,6 +86,7 @@ Command_Options :: struct {
 	output_path: string,
 	input_format: convert.Format,
 	output_format: convert.Format,
+	context_path: string,
 	prefixes: [dynamic]turtle.Prefix,
 	reader_limits: convert.Reader_Limits,
 	help: bool,
@@ -199,7 +202,7 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
+		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--context" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -226,6 +229,12 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 			if !needs_value do value = arg[len("--output="):]
 			if len(value) == 0 do return options, Command_Error{code = .Missing_Option_Value, value = "--output"}
 			options.output_path = value
+			continue
+		}
+		if !positional_only && (arg == "--context" || strings.has_prefix(arg, "--context=")) {
+			if !needs_value do value = arg[len("--context="):]
+			if len(value) == 0 do return options, Command_Error{code = .Missing_Option_Value, value = "--context"}
+			options.context_path = value
 			continue
 		}
 		if !positional_only && (arg == "--prefix" || strings.has_prefix(arg, "--prefix=")) {
@@ -278,7 +287,12 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 		if !ok do return options, Command_Error{code = .Cannot_Infer_Output_Format, value = options.output_path}
 		options.output_format = format
 	}
+	if len(options.context_path) > 0 && options.output_format != .JSON_LD do return options, Command_Error{code = .Context_Requires_JSONLD}
+	if options.context_path == "-" do return options, Command_Error{code = .Context_Requires_JSONLD}
 	if options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path {
+		return options, Command_Error{code = .Same_Input_Output}
+	}
+	if len(options.context_path) > 0 && options.context_path == options.output_path && options.output_path != "-" {
 		return options, Command_Error{code = .Same_Input_Output}
 	}
 	return options, {}
@@ -515,14 +529,14 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 
 print_help :: proc() {
 	fmt.println(`Usage:
-	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--context PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
 	  odin-rdf canon INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf hash INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf diff BEFORE AFTER [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 
-Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; bounded batch output)
+Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; bounded batch output), rdfxml (rdf-xml, rdf, xml; bounded batch output)
 
 INPUT and --output accept - for stdin and stdout. File output is written to a
 same-directory temporary file and replaces the destination only after a
@@ -538,9 +552,15 @@ explicit format option.
 Named graphs can be converted to N-Quads or TriG. The command rejects other
 targets rather than silently discarding graph names.
 
-RDF/XML output retains the complete default graph and writes one document only
-after parsing succeeds. It requires --max-records N; this is its graph-size
-admission bound and applies before standard output or a target file receives XML.
+RDF/XML and JSON-LD output retain a complete dataset and write one document
+only after parsing succeeds. Each requires --max-records N; this is its
+dataset-size admission bound and applies before standard output or a target
+file receives XML or JSON-LD.
+
+--context PATH selects context-directed JSON-LD compaction instead of expanded
+JSON-LD output. It requires JSON-LD output, a positive --max-records N bound,
+and a regular context file; remote contexts still require the library API's
+explicit loader callback.
 
 convert accepts reader limits for untrusted input: --max-records N applies to
 all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,
@@ -640,6 +660,7 @@ convert_to_file :: proc(input: io.Reader, output_path: string, options: convert.
 }
 
 run_convert :: proc(options: Command_Options) -> int {
+	if len(options.context_path) > 0 do return run_compact_convert(options)
 	input_file := os.stdin
 	close_input := false
 	if options.input_path != "-" {
@@ -671,6 +692,58 @@ run_convert :: proc(options: Command_Options) -> int {
 		return 1
 	}
 	return 0
+}
+
+// run_compact_convert is the explicit context-directed JSON-LD batch path.
+// It uses the same bounded collector and temporary-file output policy as the
+// integrity commands, rather than adding a context parameter to streaming
+// record conversion.
+run_compact_convert :: proc(options: Command_Options) -> int {
+	if options.reader_limits.max_records <= 0 {
+		fmt.eprintfln("odin-rdf: --context requires a positive --max-records limit")
+		return 1
+	}
+	collector: dataset.Collector
+	collect_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.reader_limits.max_records, &collector)
+	defer dataset.destroy(&collector)
+	if collect_error.code != .None {
+		report_integrity_error(options.input_format, options.input_path, collect_error)
+		return 1
+	}
+	context_file, open_error := os.open(options.context_path)
+	if open_error != nil {
+		fmt.eprintfln("odin-rdf: cannot open context %q: %s", options.context_path, os.error_string(open_error))
+		return 1
+	}
+	context_size, size_error := os.file_size(context_file)
+	_ = os.close(context_file)
+	if size_error != nil {
+		fmt.eprintfln("odin-rdf: cannot inspect context %q: %s", options.context_path, os.error_string(size_error))
+		return 1
+	}
+	max_context_bytes := options.reader_limits.max_document_bytes
+	if max_context_bytes == 0 do max_context_bytes = jsonld.DEFAULT_MAX_DOCUMENT_BYTES
+	if context_size < 0 || context_size > i64(max_context_bytes) {
+		fmt.eprintfln("odin-rdf: context %q exceeds configured document byte limit", options.context_path)
+		return 1
+	}
+	context_document, read_error := os.read_entire_file(options.context_path, context.allocator)
+	if read_error != nil {
+		fmt.eprintfln("odin-rdf: cannot read context %q: %s", options.context_path, os.error_string(read_error))
+		return 1
+	}
+	defer delete(context_document)
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	compact_error := jsonld.compact(&builder, collector.quads[:], string(context_document), jsonld.Compact_Options{
+		context_options = jsonld.Options{max_document_bytes = options.reader_limits.max_document_bytes},
+		serializer_options = jsonld.Serialize_Options{max_quads = options.reader_limits.max_records},
+	})
+	if compact_error != .None {
+		fmt.eprintfln("odin-rdf: JSON-LD compaction error: %s", jsonld.compact_error_message(compact_error))
+		return 1
+	}
+	return write_integrity_result(strings.to_string(builder), options.output_path)
 }
 
 Format_Graph :: struct {

@@ -49,8 +49,8 @@ Reader_Limits :: struct {
 
 // Options selects the source and destination syntax. Turtle and TriG output
 // use only explicitly supplied prefixes; they never infer namespaces from
-// input terms. RDF/XML output retains a complete default graph and therefore
-// requires a positive reader_limits.max_records admission bound.
+// input terms. RDF/XML and JSON-LD output retain complete datasets and
+// therefore require a positive reader_limits.max_records admission bound.
 Options :: struct {
 	input:           Format,
 	output:          Format,
@@ -67,6 +67,7 @@ Error_Code :: enum {
 	Unsupported_Output_Format,
 	Invalid_Reader_Limits,
 	RDF_XML_Record_Limit_Required,
+	JSON_LD_Record_Limit_Required,
 	Invalid_Turtle_Prefixes,
 	Source_Parse_Error,
 	Named_Graph_Not_Supported,
@@ -83,6 +84,7 @@ error_message :: proc(code: Error_Code) -> string {
 	case .Unsupported_Output_Format: return "unsupported output format"
 	case .Invalid_Reader_Limits:     return "reader limits must not be negative"
 	case .RDF_XML_Record_Limit_Required: return "RDF/XML output requires a positive max-records limit"
+	case .JSON_LD_Record_Limit_Required: return "JSON-LD output requires a positive max-records limit"
 	case .Invalid_Turtle_Prefixes:   return "invalid Turtle prefix configuration"
 	case .Source_Parse_Error:        return "source parse error"
 	case .Named_Graph_Not_Supported: return "named graphs cannot be represented by the output format"
@@ -256,6 +258,19 @@ Result :: struct {
 	return collect_rdfxml_quad(rdf.default_graph_quad(triple), data)
 }
 
+@(private) collect_jsonld_quad :: proc(quad: rdf.Quad, data: rawptr) -> bool {
+	state := cast(^Batch_State)data
+	if collect_err := dataset.add(&state.collector, quad); collect_err != .None {
+		state.error = Error{code = .Graph_Collection_Error, detail = dataset.error_message(collect_err)}
+		return false
+	}
+	return true
+}
+
+@(private) collect_jsonld_triple :: proc(triple: rdf.Triple, data: rawptr) -> bool {
+	return collect_jsonld_quad(rdf.default_graph_quad(triple), data)
+}
+
 @(private) convert_to_rdfxml :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
 	result: Result
 	state := Batch_State{}
@@ -337,6 +352,87 @@ Result :: struct {
 	return result
 }
 
+// convert_to_jsonld retains a bounded complete dataset because expanded JSON-LD
+// is one JSON document. It emits nothing until parsing and dataset
+// serialization have both succeeded.
+@(private) convert_to_jsonld :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
+	result: Result
+	state := Batch_State{}
+	if init_err := dataset.init(&state.collector, dataset.Options{max_quads = options.reader_limits.max_records}); init_err != .None {
+		result.error = Error{code = .Graph_Collection_Error, detail = dataset.error_message(init_err)}
+		return result
+	}
+	defer dataset.destroy(&state.collector)
+
+	switch options.input {
+	case .N_Triples:
+		parsed := ntriples.parse_reader(reader, collect_jsonld_triple, ntriples.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_triples = u64(options.reader_limits.max_records),
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, ntriples.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .N_Quads:
+		parsed := nquads.parse_reader(reader, collect_jsonld_quad, nquads.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_quads = u64(options.reader_limits.max_records),
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, nquads.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .Turtle:
+		parsed := turtle.parse_reader(reader, collect_jsonld_triple, turtle.Reader_Options{
+			parse = turtle.Parse_Options{max_triples = options.reader_limits.max_records},
+			chunk_size = options.reader_limits.chunk_size,
+			max_statement_bytes = options.reader_limits.max_statement_bytes,
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .JSON_LD:
+		parsed := jsonld.parse_reader(reader, collect_jsonld_quad, jsonld.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .RDF_XML:
+		parsed := rdfxml.parse_reader(reader, collect_jsonld_quad, rdfxml.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = rdfxml.Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, rdfxml.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .TriG:
+		parsed := trig.parse_reader(reader, collect_jsonld_quad, trig.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = trig.Parse_Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
+	}
+	if state.error.code != .None {
+		result.error = state.error
+		return result
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	if serialize_err := jsonld.serialize(&builder, state.collector.quads[:], jsonld.Serialize_Options{max_quads = options.reader_limits.max_records}); serialize_err != .None {
+		result.error = Error{code = .Serialization_Error, detail = jsonld.serialize_error_message(serialize_err)}
+		return result
+	}
+	if output_err := write_all(output, strings.to_string(builder)); output_err != .None {
+		result.error = Error{code = .Output_Write_Error, io_error = output_err}
+		return result
+	}
+	result.statements = u64(len(state.collector.quads))
+	return result
+}
+
 // convert parses reader with the selected source syntax. Most targets write
 // each valid RDF statement immediately. RDF/XML is the intentional exception:
 // it retains one max_records-bounded default graph, then writes one complete
@@ -345,7 +441,7 @@ Result :: struct {
 // Reader ownership remains with the caller, as does output flushing and closing.
 convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
 	result: Result
-	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle && options.output != .RDF_XML && options.output != .TriG {
+	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle && options.output != .JSON_LD && options.output != .RDF_XML && options.output != .TriG {
 		result.error.code = .Unsupported_Output_Format
 		return result
 	}
@@ -363,6 +459,13 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 			return result
 		}
 		return convert_to_rdfxml(reader, output, options)
+	}
+	if options.output == .JSON_LD {
+		if options.reader_limits.max_records == 0 {
+			result.error.code = .JSON_LD_Record_Limit_Required
+			return result
+		}
+		return convert_to_jsonld(reader, output, options)
 	}
 
 	state := State{

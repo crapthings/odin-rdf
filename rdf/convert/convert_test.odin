@@ -71,6 +71,46 @@ test_converts_complete_default_graph_to_bounded_rdfxml :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_converts_complete_dataset_to_bounded_jsonld :: proc(t: ^testing.T) {
+	input := "<https://example.test/alice> <https://schema.org/name> \"Alice\" .\n<https://example.test/inside> <https://schema.org/name> \"Inside\" <https://example.test/graph> .\n"
+	result, output := convert_text(input, Options{
+		input = .N_Quads,
+		output = .JSON_LD,
+		reader_limits = {max_records = 2},
+	})
+	testing.expect_value(t, result.error.code, Error_Code.None)
+	testing.expect_value(t, result.statements, u64(2))
+	testing.expect_value(t, result.bytes_read, u64(len(input)))
+	testing.expect(t, strings.contains(output, `"@id": "https://example.test/alice"`))
+	testing.expect(t, strings.contains(output, `"@id": "https://example.test/graph"`))
+	testing.expect(t, strings.contains(output, `"@graph": [`))
+
+	limited, limited_output := convert_text(input, Options{
+		input = .N_Quads,
+		output = .JSON_LD,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, limited.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, limited.error.detail, "quad limit reached")
+	testing.expect_value(t, limited_output, "")
+}
+
+@(test)
+test_jsonld_output_requires_bound_and_never_writes_partial_dataset :: proc(t: ^testing.T) {
+	input := "<urn:s> <urn:p> <urn:o> .\n<urn:broken> <urn:p>"
+	unbounded, unbounded_output := convert_text(input, Options{input = .N_Triples, output = .JSON_LD})
+	testing.expect_value(t, unbounded.error.code, Error_Code.JSON_LD_Record_Limit_Required)
+	testing.expect_value(t, unbounded_output, "")
+	failed, failed_output := convert_text(input, Options{
+		input = .N_Triples,
+		output = .JSON_LD,
+		reader_limits = {max_records = 2},
+	})
+	testing.expect_value(t, failed.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, failed_output, "")
+}
+
+@(test)
 test_rdfxml_output_requires_bound_and_never_writes_partial_graph :: proc(t: ^testing.T) {
 	input := "<urn:s> <urn:p> <urn:o> .\n<urn:broken> <urn:p>"
 	unbounded, unbounded_output := convert_text(input, Options{input = .N_Triples, output = .RDF_XML})
@@ -318,6 +358,7 @@ test_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Unsupported_Output_Format = "unsupported output format",
 		.Invalid_Reader_Limits     = "reader limits must not be negative",
 		.RDF_XML_Record_Limit_Required = "RDF/XML output requires a positive max-records limit",
+		.JSON_LD_Record_Limit_Required = "JSON-LD output requires a positive max-records limit",
 		.Invalid_Turtle_Prefixes   = "invalid Turtle prefix configuration",
 		.Source_Parse_Error        = "source parse error",
 		.Named_Graph_Not_Supported = "named graphs cannot be represented by the output format",

@@ -16,6 +16,8 @@ RDF_TYPE  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDF_FIRST :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
 RDF_REST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
 RDF_NIL   :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
+RDF_LIST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#List"
+RDF_JSON  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
 XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
 XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
 XSD_DOUBLE  :: "http://www.w3.org/2001/XMLSchema#double"
@@ -125,7 +127,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	type:           string,
 	language:       string,
 	has_language:   bool,
+	language_null:  bool,
 	container_list: bool,
+	container_set:  bool,
+	container_language: bool,
+	container_index: bool,
+	index:          string,
+	has_index:      bool,
 	reverse:        bool,
 }
 
@@ -284,6 +292,44 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return own(state, value)
 }
 
+@(private) apply_container :: proc(definition: ^Term_Definition, value: json.Value) -> bool {
+	items: [dynamic]json.Value
+	defer delete(items)
+	if _, is_string := string_value(value); is_string {
+		append(&items, value)
+	} else if array, is_array := array_from_value(value); is_array {
+		for item in array do append(&items, item)
+	} else {
+		return false
+	}
+	if len(items) == 0 do return false
+	for item in items {
+		container, valid := string_value(item)
+		if !valid do return false
+		switch container {
+		case "@list":
+			if definition.container_list do return false
+			definition.container_list = true
+		case "@set":
+			if definition.container_set do return false
+			definition.container_set = true
+		case "@language":
+			if definition.container_language do return false
+			definition.container_language = true
+		case "@index":
+			if definition.container_index do return false
+			definition.container_index = true
+		case: return false
+		}
+	}
+	// The supported 1.1 combinations retain the same RDF interpretation as
+	// their single-container counterparts. Graph/id/type containers need the
+	// expanded-document layer and remain rejected for now.
+	if definition.container_list && (definition.container_language || definition.container_index) do return false
+	if definition.container_language && definition.container_index do return false
+	return true
+}
+
 @(private) apply_context :: proc(state: ^State, current: ^Context, value: json.Value) -> (Context, Parse_Error) {
 	if array, ok := array_from_value(value); ok {
 		result := current^
@@ -342,7 +388,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	if language_value, found := object_value(object, "@language"); found {
 		if language, valid := string_value(language_value); valid {
-			result.language, make_error = own(state, strings.to_lower(language))
+			lowercase := strings.to_lower(language)
+			result.language, make_error = own(state, lowercase)
+			delete(lowercase)
 			if make_error.code != .None do return {}, make_error
 			result.has_language = true
 		} else {
@@ -408,21 +456,33 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if language_value, found := object_value(definition_object, "@language"); found {
 			#partial switch null in language_value {
-			case json.Null:
-				definition.language = ""
-				definition.has_language = false
+		case json.Null:
+			definition.language = ""
+			definition.has_language = false
+			definition.language_null = true
 			case:
 				language, valid := string_value(language_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
-				definition.language, make_error = own(state, strings.to_lower(language))
+				lowercase := strings.to_lower(language)
+				definition.language, make_error = own(state, lowercase)
+				delete(lowercase)
 				if make_error.code != .None do return {}, make_error
 				definition.has_language = true
 			}
 		}
 		if container_value, found := object_value(definition_object, "@container"); found {
-			container, valid := string_value(container_value)
-			if !valid || (container != "@list" && container != "@set") do return {}, Parse_Error{code = .Invalid_Term_Definition}
-			definition.container_list = container == "@list"
+			if !apply_container(&definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		}
+		if index_value, found := object_value(definition_object, "@index"); found {
+			index_name, valid := string_value(index_value)
+			if !valid || !definition.container_index do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if index_name == "@index" {
+				definition.index = "@index"
+			} else {
+				definition.index, make_error = expand_iri(state, &result, index_name, true, true)
+				if make_error.code != .None do return {}, make_error
+			}
+			definition.has_index = true
 		}
 		result.terms[term] = definition
 	}
@@ -566,6 +626,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			return rdf.typed_literal(text, definition.type), {}
 		}
 		if definition.has_language do return rdf.language_literal(text, definition.language), {}
+		if definition.language_null do return rdf.literal(text), {}
 		if ctx.has_language do return rdf.language_literal(text, ctx.language), {}
 		return rdf.literal(text), {}
 	case json.Boolean:
@@ -584,6 +645,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 @(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object) -> (rdf.Term, Parse_Error) {
 	value, found := object_value(object, "@value")
 	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
+	if type_value, has_type := object_value(object, "@type"); has_type {
+		type_name, valid := string_value(type_value)
+		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+		if type_name == "@json" {
+			encoded, marshal_error := json.marshal(value)
+			if marshal_error != nil do return {}, Parse_Error{code = .Invalid_Value_Object}
+			defer delete(encoded)
+			lexical, own_error := own(state, string(encoded))
+			if own_error.code != .None do return {}, own_error
+			return rdf.typed_literal(lexical, RDF_JSON), {}
+		}
+	}
 	#partial switch actual in value {
 	case json.Null:
 		return {}, Parse_Error{code = .Invalid_Value_Object}
@@ -646,6 +719,97 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 	}
 	return first, {}
+}
+
+// process_language_map turns a language container into its RDF values. The
+// language is part of the RDF literal, so it remains available to FromRDF and
+// can later be compacted back into a language map.
+@(private) process_language_map :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	map_object, valid := object_from_value(value)
+	if !valid {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	for language, mapped_value in map_object {
+		mapped_definition := definition
+		mapped_definition.has_language = false
+		mapped_definition.language_null = false
+		if language == "@none" {
+			mapped_definition.language_null = true
+		} else {
+			lowercase := strings.to_lower(language)
+			language_value, own_error := own(state, lowercase)
+			delete(lowercase)
+			if own_error.code != .None {
+				delete(result)
+				return {}, own_error
+			}
+			mapped_definition.language = language_value
+			mapped_definition.has_language = true
+		}
+		values, array := array_from_value(mapped_value)
+		count := array ? len(values) : 1
+		for index in 0..<count {
+			item := array ? values[index] : mapped_value
+			term, err := process_value(state, ctx, mapped_definition, item, graph)
+			if err.code != .None {
+				delete(result)
+				return {}, err
+			}
+			append(&result, term)
+		}
+	}
+	return result, {}
+}
+
+// process_index_map deliberately treats ordinary @index entries as JSON-LD
+// annotation: RDF has no index slot. A custom @index property, however, is
+// data and becomes a normal RDF statement as required by JSON-LD 1.1.
+@(private) process_index_map :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	map_object, valid := object_from_value(value)
+	if !valid {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	for index_key, mapped_value in map_object {
+		values, array := array_from_value(mapped_value)
+		count := array ? len(values) : 1
+		for index in 0..<count {
+			item := array ? values[index] : mapped_value
+			term, err := process_value(state, ctx, definition, item, graph)
+			if err.code != .None {
+				delete(result)
+				return {}, err
+			}
+			if definition.has_index && definition.index != "@index" && index_key != "@none" {
+				if term.kind == .Literal {
+					delete(result)
+					return {}, Parse_Error{code = .Invalid_Value_Object}
+				}
+				if emit_err := emit(state, term, rdf.iri(definition.index), rdf.literal(index_key), graph); emit_err.code != .None {
+					delete(result)
+					return {}, emit_err
+				}
+			}
+			append(&result, term)
+		}
+	}
+	return result, {}
+}
+
+// A container map is distinguished from an ordinary node/value object by its
+// keys. Accepting an ordinary value here keeps RDF-originated compact output
+// parseable when index annotations were intentionally unavailable to restore.
+@(private) is_container_map :: proc(value: json.Value) -> bool {
+	object, valid := object_from_value(value)
+	if !valid do return false
+	for key in object {
+		// @none is a valid language/index map key, not a node-object keyword.
+		if strings.has_prefix(key, "@") && key != "@none" do return false
+	}
+	return true
 }
 
 @(private) process_node :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad, top_level := false) -> (rdf.Term, Parse_Error) {
@@ -778,6 +942,33 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
 		definition := active_context.terms[key]
+		if (definition.container_language || definition.container_index) && is_container_map(property_value) {
+			mapped: [dynamic]rdf.Term
+			mapped_error: Parse_Error
+			if definition.container_language {
+				mapped, mapped_error = process_language_map(state, &active_context, definition, property_value, graph)
+			} else {
+				mapped, mapped_error = process_index_map(state, &active_context, definition, property_value, graph)
+			}
+			if mapped_error.code != .None do return {}, mapped_error
+			for mapped_term in mapped {
+				if definition.reverse {
+					if mapped_term.kind == .Literal {
+						delete(mapped)
+						return {}, Parse_Error{code = .Invalid_Reverse_Property}
+					}
+					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+						delete(mapped)
+						return {}, emit_err
+					}
+				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+					delete(mapped)
+					return {}, emit_err
+				}
+			}
+			delete(mapped)
+			continue
+		}
 		if definition.container_list {
 			list, list_err := process_list(state, &active_context, definition, property_value, graph)
 			if list_err.code != .None do return {}, list_err

@@ -193,6 +193,10 @@ parse(input: string, sink: Sink, options: Options = {},
       user_data: rawptr = nil) -> Parse_Error
 parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
              user_data: rawptr = nil) -> Reader_Result
+serialize(builder: ^strings.Builder, quads: []rdf.Quad,
+          options: Serialize_Options = {}) -> Serialize_Error
+compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
+        options: Compact_Options = {}) -> Compact_Error
 ```
 
 JSON-LD emits `rdf.Quad` values and retains a complete document. `Options`
@@ -206,6 +210,33 @@ document bound through `max_document_bytes`. `Reader_Result` reports `quads`,
 `bytes_read`, and any underlying `reader_error`. See the [JSON-LD design
 boundary](jsonld-design.md) for the supported to-RDF profile and deliberately
 deferred JSON-LD API features.
+
+`serialize` atomically appends deterministic expanded JSON-LD for a complete
+dataset, including named graphs. `Serialize_Options.max_quads` defaults to
+100,000 and bounds the retained/sorted dataset; exact duplicate quads are
+removed. It rejects an identical blank-node label from different source scopes,
+because JSON-LD would otherwise merge two RDF nodes. It deliberately does not
+compact IRIs or infer a context. `use_rdf_type` preserves `rdf:type` as an IRI
+property; `use_native_types` emits valid booleans, integers, and finite doubles
+as JSON scalars. Complete and partial RDF lists are collapsed only when their
+blank nodes are not shared in another graph. Valid `rdf:JSON` typed literals
+are emitted as `@json` values and `@json` value objects parse back to
+`rdf:JSON`.
+
+`compact` adds an atomic context-directed output API. `context_text` accepts a
+JSON context definition, context array, or a document containing `@context`.
+`Compact_Options.context_options` carries the same base IRI, resource limits,
+and opt-in document loader policy as `parse`; `serializer_options` carries the
+dataset admission and RDF output choices. The default array policy compacts a
+single ordinary value to a scalar and preserves `@list`/`@set` containers;
+`Preserve` retains ordinary arrays. Native boolean, integer, and finite double
+values are emitted by default; `native_type_policy = .Lexical` retains lexical
+value objects. Language containers compact retained RDF language literals as
+language maps. Index containers are accepted on input; ordinary `@index`
+annotations cannot be reconstructed after RDF conversion, while custom index
+properties remain RDF statements. The CLI exposes the same operation through
+`odin-rdf convert --to jsonld --context context.jsonld`; without `--context`,
+it intentionally emits deterministic expanded JSON-LD.
 
 ## RDF/XML `rdf/rdfxml`
 
@@ -304,8 +335,8 @@ complete caller-owned dataset and does not preserve statement order or layout.
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, `TriG`, input-only
-`JSON_LD`, or `RDF_XML` (a bounded batch output target). `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, `TriG`, `JSON_LD`, or
+`RDF_XML`. JSON-LD and RDF/XML are bounded batch output targets. `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
 `turtle_prefixes: []turtle.Prefix` for explicit Turtle and TriG output
 declarations.
@@ -314,15 +345,15 @@ declarations.
 | `Reader_Limits` field | Applies to | Zero value |
 | --- | --- | --- |
 | `chunk_size` | All source readers | Syntax default (64 KiB). |
-| `max_records` | All source readers; required for RDF/XML output | Unlimited for streaming targets. |
+| `max_records` | All source readers; required for RDF/XML and JSON-LD output | Unlimited for streaming targets. |
 | `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
 | `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
 | `max_document_bytes` | JSON-LD, RDF/XML, TriG | Syntax default (16 MiB). |
 
 All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
-the destination writer. RDF/XML output requires it to be positive and uses it
-as the owned graph admission bound.
+the destination writer. RDF/XML and JSON-LD output require it to be positive
+and use it as the owned dataset admission bound.
 
 `Error.code` distinguishes invalid formats, invalid Turtle/TriG prefix configuration,
 source parse errors, a named graph that the selected target cannot represent,
@@ -331,10 +362,10 @@ their one-based `line`, `column`, parser diagnostic in `detail`, and reader
 I/O error when available. Other failures have zero line and column.
 
 The adapter streams each validated statement directly to the selected writer,
-except for RDF/XML. RDF/XML retains a complete bounded default graph, then
-writes one document only after parsing and serialization succeed; standard
+except for RDF/XML and JSON-LD. Both retain a complete bounded dataset, then
+write one document only after parsing and serialization succeed; standard
 output remains untouched on a parse or writer failure. N-Triples and Turtle
-map to the N-Quads, TriG, or RDF/XML default graph when those are targets.
+map to the N-Quads, TriG, RDF/XML, or JSON-LD default graph when those are targets.
 N-Quads default-graph statements can map to triples, while a named graph is
 rejected for N-Triples, Turtle, and RDF/XML rather than silently losing data.
 The adapter does not flush or close either stream.
@@ -359,7 +390,7 @@ odin-rdf diff BEFORE AFTER [--from FORMAT] [--output PATH] \
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, `trig`,
-input-only `jsonld`/`json-ld`/`json`, and
+`jsonld`/`json-ld`/`json`, and
 `rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. RDF/XML output requires
 `--max-records N` and is batch-atomic. It infers formats from file paths ending
 in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, `.xml`, or `.trig`; explicit
@@ -375,8 +406,15 @@ RDF/XML output is the complete-graph exception and remains empty until success.
 `convert` accepts `--max-records N` for all input syntaxes,
 `--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
 Turtle, plus `--max-document-bytes N` for JSON-LD, RDF/XML, and TriG. RDF/XML
-output requires `--max-records N`. Each `N` is a positive decimal integer; the CLI maps the values to
+and JSON-LD output require `--max-records N`. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
+
+`convert --to jsonld --context PATH` reads one local JSON-LD context document
+and invokes `jsonld.compact` after bounded dataset collection. `PATH` cannot be
+standard input and cannot be the output path. This remains all-or-nothing for
+standard output and file targets; `--max-document-bytes` bounds both JSON-LD
+input and the context file. Without `--context`, JSON-LD conversion emits the
+deterministic expanded form.
 
 `format` accepts Turtle or TriG input, inferring `.ttl` or `.trig` file paths;
 standard input requires `--from turtle` or `--from trig`. It retains the

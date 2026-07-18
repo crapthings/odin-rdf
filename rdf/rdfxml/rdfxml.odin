@@ -1,6 +1,7 @@
 // Package rdfxml transforms a bounded RDF/XML document into RDF dataset
-// statements. It accepts RDF/XML input only; serialization is deliberately
-// left to the N-Triples, N-Quads, and Turtle packages.
+// statements and serializes a complete caller-owned default graph as RDF/XML.
+// It intentionally does not provide record-by-record serialization because an
+// RDF/XML document needs graph-wide namespace and node decisions.
 package rdfxml
 
 import xml "core:encoding/xml"

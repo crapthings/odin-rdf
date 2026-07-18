@@ -334,7 +334,7 @@ print_help :: proc() {
 	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
 
-Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only)
+Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; bounded batch output)
 
 INPUT and --output accept - for stdin and stdout. File output is written to a
 same-directory temporary file and replaces the destination only after a
@@ -349,6 +349,10 @@ explicit format option.
 
 Named graphs can be converted to N-Quads or TriG. The command rejects other
 targets rather than silently discarding graph names.
+
+RDF/XML output retains the complete default graph and writes one document only
+after parsing succeeds. It requires --max-records N; this is its graph-size
+admission bound and applies before standard output or a target file receives XML.
 
 convert accepts reader limits for untrusted input: --max-records N applies to
 all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,

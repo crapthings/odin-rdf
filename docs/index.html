@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF and RDF/XML-to-RDF input, plus conformant TriG parsing and streaming-safe TriG serialization alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic Turtle formatting, and loss-aware conversion. These document processors have explicit limits and no hidden network client or graph store.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF and bidirectional RDF/XML default-graph processing, plus conformant TriG parsing and streaming-safe TriG serialization alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic Turtle formatting, and loss-aware conversion. These document processors have explicit limits and no hidden network client or graph store.</p>
           <a href="https://www.w3.org/TR/rdf-syntax-grammar/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDF/XML syntax specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -180,7 +180,7 @@ err := ttl.parse(input, consume)
               <li>Quad model and N-Quads syntax</li>
               <li>Conformant Turtle parser, writer, and formatter</li>
               <li>Bounded JSON-LD-to-RDF dataset conversion</li>
-              <li>Bounded RDF/XML-to-RDF input</li>
+              <li>Bounded RDF/XML input, writer, and batch conversion</li>
               <li>Conformant TriG parser, streaming writer, and dataset formatter</li>
               <li>Owned, capacity-bounded quad collection</li>
               <li>Streaming syntax conversion CLI</li>
@@ -191,7 +191,7 @@ err := ttl.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>RDF/XML streaming writer and conversion target</li>
+              <li>RDF/XML stateful streaming writer</li>
               <li>JSON-LD compaction, framing, and writer APIs</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
@@ -227,8 +227,9 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">odin-rdf format</span> input.ttl --output formatted.ttl
 <span class="text-amber-200">odin-rdf format</span> input.ttl --max-triples 100000
 
-<span class="text-olive-300/70"># bound a streaming conversion</span>
+<span class="text-olive-300/70"># stream records or atomically write a bounded RDF/XML graph</span>
 <span class="text-amber-200">odin-rdf convert</span> input.nt --output output.nq --max-records 100000
+<span class="text-amber-200">odin-rdf convert</span> input.nt --output output.rdf --max-records 100000
 
 <span class="text-olive-300/70"># run the official pinned conformance suite</span>
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
@@ -245,9 +246,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.14.0</p>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">TriG datasets, now formatted.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">TriG runs all 355 pinned W3C cases through memory and bounded-reader paths. Its streaming writer now pairs with an explicit batch formatter for deterministic, grouped dataset documents.</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.16.0</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">RDF/XML, now written.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">RDF/XML now pairs bounded input with deterministic complete-graph serialization, including XML Literal values and XML-safe blank-node identifiers.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

@@ -71,5 +71,5 @@ other quad parsers. It copies callback-scoped strings, preserves source order
 and duplicates, and exposes a maximum-quad admission limit. It intentionally
 does not imply graph lookup, deduplication, indexing, or SPARQL semantics.
 
-RDF/XML XML Literal input is now covered by its dedicated 173-case core gate;
-RDF/XML serialization remains intentionally separate.
+RDF/XML XML Literal input is covered by its dedicated 173-case core gate;
+RDF/XML also has a separate batch writer and bounded conversion target.

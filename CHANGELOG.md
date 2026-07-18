@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.10.0 - 2026-07-18
+
+- Add bounded JSON-LD-to-RDF dataset processing with local contexts, opt-in
+  remote document loading, explicit document/context/quad limits, and
+  N-Triples/N-Quads/Turtle conversion targets.
+- Add `.jsonld` and `.json` conversion inference plus `--max-document-bytes`.
+
 ## 0.9.1 - 2026-07-18
 
 - Add a reproducible batch Turtle formatter benchmark to the quality gate.

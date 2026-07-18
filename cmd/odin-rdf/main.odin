@@ -23,6 +23,7 @@ Command_Error_Code :: enum {
 	Invalid_Max_Records,
 	Invalid_Max_Line_Bytes,
 	Invalid_Max_Statement_Bytes,
+	Invalid_Max_Document_Bytes,
 	Invalid_Max_Triples,
 	Cannot_Infer_Input_Format,
 	Cannot_Infer_Output_Format,
@@ -43,6 +44,7 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Invalid_Max_Records:  return "--max-records must be a positive decimal integer"
 	case .Invalid_Max_Line_Bytes: return "--max-line-bytes must be a positive decimal integer"
 	case .Invalid_Max_Statement_Bytes: return "--max-statement-bytes must be a positive decimal integer"
+	case .Invalid_Max_Document_Bytes: return "--max-document-bytes must be a positive decimal integer"
 	case .Invalid_Max_Triples:  return "--max-triples must be a positive decimal integer"
 	case .Cannot_Infer_Input_Format: return "cannot infer input RDF syntax; use --from"
 	case .Cannot_Infer_Output_Format: return "cannot infer output RDF syntax; use --to"
@@ -80,6 +82,7 @@ parse_format :: proc(value: string) -> (convert.Format, bool) {
 	case "ntriples", "n-triples", "nt": return .N_Triples, true
 	case "nquads", "n-quads", "nq":      return .N_Quads, true
 	case "turtle", "ttl":                 return .Turtle, true
+	case "jsonld", "json-ld", "json":      return .JSON_LD, true
 	}
 	return {}, false
 }
@@ -91,6 +94,8 @@ infer_format_from_path :: proc(path: string) -> (convert.Format, bool) {
 	if len(path) >= len(".nt") && path[len(path) - len(".nt"):] == ".nt" do return .N_Triples, true
 	if len(path) >= len(".nq") && path[len(path) - len(".nq"):] == ".nq" do return .N_Quads, true
 	if len(path) >= len(".ttl") && path[len(path) - len(".ttl"):] == ".ttl" do return .Turtle, true
+	if len(path) >= len(".jsonld") && path[len(path) - len(".jsonld"):] == ".jsonld" do return .JSON_LD, true
+	if len(path) >= len(".json") && path[len(path) - len(".json"):] == ".json" do return .JSON_LD, true
 	return {}, false
 }
 
@@ -135,7 +140,7 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes") {
+		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -188,6 +193,13 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 			max_statement_bytes, ok := parse_positive_decimal(value)
 			if !ok do return options, Command_Error{code = .Invalid_Max_Statement_Bytes, value = value}
 			options.reader_limits.max_statement_bytes = max_statement_bytes
+			continue
+		}
+		if !positional_only && (arg == "--max-document-bytes" || strings.has_prefix(arg, "--max-document-bytes=")) {
+			if !needs_value do value = arg[len("--max-document-bytes="):]
+			max_document_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Document_Bytes, value = value}
+			options.reader_limits.max_document_bytes = max_document_bytes
 			continue
 		}
 		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
@@ -282,10 +294,10 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 
 print_help :: proc() {
 	fmt.println(`Usage:
-	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N]
+	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
   odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
-Formats: ntriples (nt), nquads (nq), turtle (ttl)
+Formats: ntriples (nt), nquads (nq), turtle (ttl), jsonld (json-ld, json; input only)
 
 INPUT and --output accept - for stdin and stdout. File output is written to a
 same-directory temporary file and replaces the destination only after a
@@ -293,7 +305,7 @@ successful conversion and temporary-file close. Prefixes are used only for
 Turtle output and may be repeated; use --prefix =https://example.com/ for the
 default prefix.
 
-convert infers a file syntax from the canonical .nt, .nq, and .ttl extensions.
+convert infers a file syntax from the canonical .nt, .nq, .ttl, .jsonld, and .json extensions.
 Explicit --from and --to values override that inference. Standard input and
 output, as well as unrecognized file extensions, require the corresponding
 explicit format option.
@@ -302,8 +314,9 @@ N-Quads named graphs can only be converted to N-Quads. The command rejects
 other targets rather than silently discarding graph names.
 
 convert accepts reader limits for untrusted input: --max-records N applies to
-all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads, and
---max-statement-bytes N applies to Turtle. Every N must be a positive decimal
+all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,
+--max-statement-bytes N applies to Turtle, and --max-document-bytes N applies
+to JSON-LD. Every N must be a positive decimal
 integer.
 
 format accepts Turtle input and produces stable, grouped Turtle. It retains the
@@ -315,6 +328,7 @@ the collector retains more than N triples.
 Examples:
   odin-rdf convert input.ttl --output output.nt
   odin-rdf convert input.ttl --from turtle --to ntriples --output output.nt
+  odin-rdf convert input.jsonld --output output.nq --max-document-bytes 16777216
   odin-rdf convert - --from ntriples --to turtle --prefix ex=https://example.com/
   odin-rdf format input.ttl --output formatted.ttl
 `)

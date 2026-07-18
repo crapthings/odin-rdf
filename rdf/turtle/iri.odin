@@ -116,7 +116,9 @@ import "core:strings"
 	}
 }
 
-@(private) resolve_iri_reference :: proc(base, reference: string) -> (string, bool) {
+// resolve_iri_reference resolves a reference against an absolute base according
+// to RFC 3986. Syntax packages use it for document-relative RDF identifiers.
+resolve_iri_reference :: proc(base, reference: string) -> (string, bool) {
 	b := split_reference(base)
 	if len(b.scheme) == 0 do return "", false
 	r := split_reference(reference)

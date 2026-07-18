@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.9.1. The
+This reference describes the supported public surface on the current development branch. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -128,13 +128,34 @@ statement order. It rejects two blank nodes with the same label from different
 non-identical source scopes, because Turtle would otherwise serialize them as
 one node.
 
+## JSON-LD `rdf/jsonld`
+
+```odin
+parse(input: string, sink: Sink, options: Options = {},
+      user_data: rawptr = nil) -> Parse_Error
+parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
+             user_data: rawptr = nil) -> Reader_Result
+```
+
+JSON-LD emits `rdf.Quad` values and retains a complete document. `Options`
+provides `base_iri`, `max_document_bytes` (16 MiB), `max_nesting_depth` (256),
+`max_contexts` (1,024), `max_remote_contexts` (16), `max_quads` (unlimited),
+and an opt-in `Document_Loader`. The loader receives a resolved context URL and
+must return its document synchronously; no network transport is built in.
+
+`Reader_Options` embeds `parse`, adds `chunk_size` (64 KiB), and supplies a
+document bound through `max_document_bytes`. `Reader_Result` reports `quads`,
+`bytes_read`, and any underlying `reader_error`. See the [JSON-LD design
+boundary](jsonld-design.md) for the supported to-RDF profile and deliberately
+deferred JSON-LD API features.
+
 ## Conversion `rdf/convert`
 
 ```odin
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, or `Turtle`. `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`. `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
 `turtle_prefixes: []turtle.Prefix` for explicit Turtle output declarations.
 `Result` reports `statements` written, `bytes_read`, and an `Error`.
@@ -145,6 +166,7 @@ input and output formats, `reader_limits: Reader_Limits`, and
 | `max_records` | All source readers | Unlimited. |
 | `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
 | `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
+| `max_document_bytes` | JSON-LD | JSON-LD default (16 MiB). |
 
 All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
@@ -167,13 +189,14 @@ adapter does not flush or close either stream.
 ```sh
 odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] \
   [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] \
-  [--max-statement-bytes N]
+  [--max-statement-bytes N] [--max-document-bytes N]
 odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
   [--max-triples N] [--no-infer-prefixes]
 ```
 
-The command accepts `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
-It infers formats from file paths ending in `.nt`, `.nq`, or `.ttl`; explicit
+The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, and
+input-only `jsonld`/`json-ld`/`json`. It infers formats from file paths ending
+in `.nt`, `.nq`, `.ttl`, `.jsonld`, or `.json`; explicit
 `--from` and `--to` options override that inference. `INPUT` and `--output`
 use `-` for standard input and output, which requires the matching explicit
 format option; unrecognized extensions do too. Output files use
@@ -184,7 +207,7 @@ and can contain earlier records if a later parse error occurs.
 
 `convert` accepts `--max-records N` for all input syntaxes,
 `--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
-Turtle. Each `N` is a positive decimal integer; the CLI maps the values to
+Turtle, plus `--max-document-bytes N` for JSON-LD. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
 
 `format` accepts Turtle input, retains its complete graph, and writes grouped,

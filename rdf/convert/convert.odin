@@ -4,6 +4,7 @@ package convert
 import "core:io"
 import "core:strings"
 import rdf ".."
+import jsonld "../jsonld"
 import nquads "../nquads"
 import ntriples "../ntriples"
 import turtle "../turtle"
@@ -13,6 +14,7 @@ Format :: enum {
 	N_Triples,
 	N_Quads,
 	Turtle,
+	JSON_LD,
 }
 
 // format_name returns the stable command-line spelling for a format.
@@ -21,6 +23,7 @@ format_name :: proc(format: Format) -> string {
 	case .N_Triples: return "ntriples"
 	case .N_Quads:   return "nquads"
 	case .Turtle:    return "turtle"
+	case .JSON_LD:   return "jsonld"
 	}
 	return "unknown"
 }
@@ -34,6 +37,7 @@ Reader_Limits :: struct {
 	max_records:         int,
 	max_line_bytes:      int,
 	max_statement_bytes: int,
+	max_document_bytes:  int,
 }
 
 // Options selects the source and destination syntax. Turtle output uses only
@@ -77,7 +81,7 @@ error_message :: proc(code: Error_Code) -> string {
 }
 
 @(private) valid_reader_limits :: proc(limits: Reader_Limits) -> bool {
-	return limits.chunk_size >= 0 && limits.max_records >= 0 && limits.max_line_bytes >= 0 && limits.max_statement_bytes >= 0
+	return limits.chunk_size >= 0 && limits.max_records >= 0 && limits.max_line_bytes >= 0 && limits.max_statement_bytes >= 0 && limits.max_document_bytes >= 0
 }
 
 // Error reports the conversion outcome. line and column are one-based for a
@@ -145,6 +149,9 @@ Result :: struct {
 			set_serialization_error(state, turtle.write_error_message(err))
 			return false
 		}
+	case .JSON_LD:
+		state.error = Error{code = .Unsupported_Output_Format}
+		return false
 	case:
 		state.error = Error{code = .Unsupported_Output_Format}
 		return false
@@ -200,7 +207,7 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		result.error.code = .Unsupported_Output_Format
 		return result
 	}
-	if options.input != .N_Triples && options.input != .N_Quads && options.input != .Turtle {
+	if options.input != .N_Triples && options.input != .N_Quads && options.input != .Turtle && options.input != .JSON_LD {
 		result.error.code = .Unsupported_Input_Format
 		return result
 	}
@@ -259,6 +266,16 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {
 			set_parse_error(&state, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
+		}
+	case .JSON_LD:
+		parsed := jsonld.parse_reader(reader, write_destination_quad, jsonld.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None {
+			set_parse_error(&state, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
 		}
 	}
 	result.error = state.error

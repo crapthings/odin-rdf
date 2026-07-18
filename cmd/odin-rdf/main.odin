@@ -8,6 +8,8 @@ import "core:strconv"
 import "core:strings"
 import rdf "../../rdf"
 import convert "../../rdf/convert"
+import dataset "../../rdf/dataset"
+import trig "../../rdf/trig"
 import turtle "../../rdf/turtle"
 
 Command_Error_Code :: enum {
@@ -25,6 +27,8 @@ Command_Error_Code :: enum {
 	Invalid_Max_Statement_Bytes,
 	Invalid_Max_Document_Bytes,
 	Invalid_Max_Triples,
+	Invalid_Max_Quads,
+	Incompatible_Format_Limit,
 	Cannot_Infer_Input_Format,
 	Cannot_Infer_Output_Format,
 	Same_Input_Output,
@@ -46,6 +50,8 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Invalid_Max_Statement_Bytes: return "--max-statement-bytes must be a positive decimal integer"
 	case .Invalid_Max_Document_Bytes: return "--max-document-bytes must be a positive decimal integer"
 	case .Invalid_Max_Triples:  return "--max-triples must be a positive decimal integer"
+	case .Invalid_Max_Quads:    return "--max-quads must be a positive decimal integer"
+	case .Incompatible_Format_Limit: return "format limit is not valid for selected RDF syntax"
 	case .Cannot_Infer_Input_Format: return "cannot infer input RDF syntax; use --from"
 	case .Cannot_Infer_Output_Format: return "cannot infer output RDF syntax; use --to"
 	case .Same_Input_Output:    return "input and output paths must differ"
@@ -71,9 +77,11 @@ Command_Options :: struct {
 Format_Command_Options :: struct {
 	input_path: string,
 	output_path: string,
+	input_format: convert.Format,
 	prefixes: [dynamic]turtle.Prefix,
 	infer_prefixes: bool,
 	max_triples: int,
+	max_quads: int,
 	help: bool,
 }
 
@@ -231,9 +239,9 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 	return options, {}
 }
 
-// parse_format_command_args parses the graph formatter's Turtle-only command.
+// parse_format_command_args parses the Turtle and TriG batch formatter command.
 // Formatting is necessarily batch-oriented, so its output is produced only
-// after the entire input graph has parsed successfully.
+// after the complete input graph or dataset has parsed successfully.
 parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Command_Error) {
 	options := Format_Command_Options{output_path = "-", infer_prefixes = true}
 	if len(args) == 0 do return options, Command_Error{code = .Missing_Command}
@@ -243,7 +251,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 	}
 	if args[0] != "format" do return options, Command_Error{code = .Unknown_Command, value = args[0]}
 
-	has_input := false
+	has_from, has_input := false, false
 	positional_only := false
 	for i := 1; i < len(args); i += 1 {
 		arg := args[i]
@@ -262,11 +270,19 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-triples") {
+		if !positional_only && (arg == "--from" || arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-triples" || arg == "--max-quads") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
 			needs_value = true
+		}
+		if !positional_only && (arg == "--from" || strings.has_prefix(arg, "--from=")) {
+			if !needs_value do value = arg[len("--from="):]
+			format, ok := parse_format(value)
+			if !ok || (format != .Turtle && format != .TriG) do return options, Command_Error{code = .Invalid_Format, value = value}
+			options.input_format = format
+			has_from = true
+			continue
 		}
 		if !positional_only && (arg == "--output" || arg == "-o" || strings.has_prefix(arg, "--output=")) {
 			if !needs_value do value = arg[len("--output="):]
@@ -286,12 +302,27 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 			options.max_triples = max_triples
 			continue
 		}
+		if !positional_only && (arg == "--max-quads" || strings.has_prefix(arg, "--max-quads=")) {
+			if !needs_value do value = arg[len("--max-quads="):]
+			max_quads, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Quads, value = value}
+			options.max_quads = max_quads
+			continue
+		}
 		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
 		if has_input do return options, Command_Error{code = .Extra_Input, value = arg}
 		options.input_path = arg
 		has_input = true
 	}
 	if !has_input do return options, Command_Error{code = .Missing_Input}
+	if !has_from {
+		format, ok := infer_format_from_path(options.input_path)
+		if !ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.input_path}
+		if format != .Turtle && format != .TriG do return options, Command_Error{code = .Invalid_Format, value = options.input_path}
+		options.input_format = format
+	}
+	if options.input_format == .Turtle && options.max_quads > 0 do return options, Command_Error{code = .Incompatible_Format_Limit, value = "--max-quads is only valid for TriG formatting"}
+	if options.input_format == .TriG && options.max_triples > 0 do return options, Command_Error{code = .Incompatible_Format_Limit, value = "--max-triples is only valid for Turtle formatting"}
 	if options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path {
 		return options, Command_Error{code = .Same_Input_Output}
 	}
@@ -301,7 +332,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 print_help :: proc() {
 	fmt.println(`Usage:
 	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
-  odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
+	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only)
 
@@ -325,11 +356,12 @@ all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,
 to JSON-LD, RDF/XML, and TriG. Every N must be a positive decimal
 integer.
 
-format accepts Turtle input and produces stable, grouped Turtle. It retains the
-complete graph in memory, removes exact duplicate triples, and infers safe
-prefixes by default. Use --no-infer-prefixes to emit IRIREFs except for the
-prefixes supplied explicitly. Use --max-triples N to reject an input before
-the collector retains more than N triples.
+format accepts Turtle or TriG input and produces stable, grouped output in the
+same syntax. File inputs infer .ttl or .trig; standard input requires --from.
+It retains the complete graph or dataset, removes exact duplicate statements,
+and infers safe prefixes by default. Use --no-infer-prefixes to emit IRIREFs
+except for explicitly supplied prefixes. Use --max-triples N for Turtle or
+--max-quads N for TriG to reject input before retained output exceeds the cap.
 
 Examples:
   odin-rdf convert input.ttl --output output.nt
@@ -337,6 +369,7 @@ Examples:
   odin-rdf convert input.jsonld --output output.nq --max-document-bytes 16777216
   odin-rdf convert - --from ntriples --to turtle --prefix ex=https://example.com/
   odin-rdf format input.ttl --output formatted.ttl
+  odin-rdf format input.trig --output formatted.trig --max-quads 100000
 `)
 }
 
@@ -518,31 +551,63 @@ run_format :: proc(options: Format_Command_Options) -> int {
 	}
 	defer if close_input do _ = os.close(input_file)
 
-	graph := Format_Graph{triples = make([dynamic]rdf.Triple), owned = make([dynamic]string)}
-	defer destroy_format_graph(&graph)
-	parsed := turtle.parse_reader(os.to_reader(input_file), collect_format_triple, turtle.Reader_Options{
-		parse = turtle.Parse_Options{max_triples = options.max_triples},
-	}, &graph)
-	if parsed.error.code != .None {
-		label := options.input_path
-		if label == "-" do label = "<stdin>"
-		if parsed.reader_error != .None {
-			fmt.eprintfln("odin-rdf: %s: Turtle input at line %d, column %d: %s (%v)", label, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
-		} else {
-			fmt.eprintfln("odin-rdf: %s: Turtle input at line %d, column %d: %s", label, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code))
-		}
-		return 1
-	}
-
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	prefix_policy := turtle.Prefix_Policy.Explicit_Only
 	if options.infer_prefixes do prefix_policy = .Infer
-	if err := turtle.format_triples(&builder, graph.triples[:], turtle.Format_Options{
-		prefixes = options.prefixes[:],
-		prefix_policy = prefix_policy,
-	}); err != .None {
-		fmt.eprintfln("odin-rdf: Turtle formatting error: %s", turtle.write_error_message(err))
+	label := options.input_path
+	if label == "-" do label = "<stdin>"
+	#partial switch options.input_format {
+	case .Turtle:
+		graph := Format_Graph{triples = make([dynamic]rdf.Triple), owned = make([dynamic]string)}
+		defer destroy_format_graph(&graph)
+		parsed := turtle.parse_reader(os.to_reader(input_file), collect_format_triple, turtle.Reader_Options{
+			parse = turtle.Parse_Options{max_triples = options.max_triples},
+		}, &graph)
+		if parsed.error.code != .None {
+			if parsed.reader_error != .None {
+				fmt.eprintfln("odin-rdf: %s: Turtle input at line %d, column %d: %s (%v)", label, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
+			} else {
+				fmt.eprintfln("odin-rdf: %s: Turtle input at line %d, column %d: %s", label, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code))
+			}
+			return 1
+		}
+		if err := turtle.format_triples(&builder, graph.triples[:], turtle.Format_Options{
+			prefixes = options.prefixes[:],
+			prefix_policy = prefix_policy,
+		}); err != .None {
+			fmt.eprintfln("odin-rdf: Turtle formatting error: %s", turtle.write_error_message(err))
+			return 1
+		}
+	case .TriG:
+		collector: dataset.Collector
+		if init_err := dataset.init(&collector, dataset.Options{max_quads = options.max_quads}); init_err != .None {
+			fmt.eprintfln("odin-rdf: TriG collection error: %s", dataset.error_message(init_err))
+			return 1
+		}
+		defer dataset.destroy(&collector)
+		parsed := trig.parse_reader(os.to_reader(input_file), dataset.sink, trig.Reader_Options{
+			parse = trig.Parse_Options{max_quads = options.max_quads},
+		}, &collector)
+		if parsed.error.code != .None {
+			if parsed.error.code == .Stopped && collector.last_error != .None {
+				fmt.eprintfln("odin-rdf: %s: TriG collection error: %s", label, dataset.error_message(collector.last_error))
+			} else if parsed.reader_error != .None {
+				fmt.eprintfln("odin-rdf: %s: TriG input at line %d, column %d: %s (%v)", label, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
+			} else {
+				fmt.eprintfln("odin-rdf: %s: TriG input at line %d, column %d: %s", label, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code))
+			}
+			return 1
+		}
+		if err := trig.format_quads(&builder, collector.quads[:], trig.Format_Options{
+			prefixes = options.prefixes[:],
+			prefix_policy = prefix_policy,
+		}); err != .None {
+			fmt.eprintfln("odin-rdf: TriG formatting error: %s", trig.write_error_message(err))
+			return 1
+		}
+	case:
+		fmt.eprintfln("odin-rdf: unsupported RDF syntax for formatting")
 		return 1
 	}
 	if options.output_path == "-" {

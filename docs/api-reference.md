@@ -201,6 +201,8 @@ parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
 write_prefixes(builder: ^strings.Builder, prefixes: []turtle.Prefix) -> Write_Error
 write_quad(builder: ^strings.Builder, quad: rdf.Quad,
            options: Writer_Options = {}) -> Write_Error
+format_quads(builder: ^strings.Builder, quads: []rdf.Quad,
+             options: Format_Options = {}) -> Write_Error
 ```
 
 TriG emits `rdf.Quad` values for default and named graph statements. It supports
@@ -220,6 +222,15 @@ longest-safe-namespace compaction policy as the Turtle writer. Call
 Turtle-compatible triple, and each named quad becomes an independent TriG
 graph block. It does not group graph blocks, reorder records, infer prefixes,
 or retain document state.
+
+`format_quads` is the separate, batch-oriented path. It atomically appends a
+complete TriG document, orders default graph statements before named graphs,
+groups triples by graph/subject/predicate, and removes exact duplicate quads.
+`Format_Options.prefix_policy` uses Turtle's `Infer` or `Explicit_Only` policy;
+inference covers graph names as well as triple terms. Formatting rejects an
+identical blank-node label from different non-identical source scopes, because
+TriG would otherwise serialize them as one node. It deliberately needs a
+complete caller-owned dataset and does not preserve statement order or layout.
 
 ## Conversion `rdf/convert`
 
@@ -264,8 +275,9 @@ data. The adapter does not flush or close either stream.
 odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] \
   [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] \
   [--max-statement-bytes N] [--max-document-bytes N]
-odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
-  [--max-triples N] [--no-infer-prefixes]
+odin-rdf format INPUT [--from turtle|trig] [--output PATH] \
+  [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] \
+  [--no-infer-prefixes]
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, `trig`,
@@ -285,13 +297,15 @@ and can contain earlier records if a later parse error occurs.
 Turtle, plus `--max-document-bytes N` for JSON-LD, RDF/XML, and TriG. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
 
-`format` accepts Turtle input, retains its complete graph, and writes grouped,
-deterministic Turtle. It does not emit partial output after a parse or
-formatting failure. Prefix inference is enabled by default; use
-`--no-infer-prefixes` to use only repeated explicit `--prefix` declarations.
-Because it retains triples, `--max-triples N` applies Turtle's emitted-triple
-limit before the collector can retain more than `N` triples. `N` is a required,
-positive decimal integer when the option is present.
+`format` accepts Turtle or TriG input, inferring `.ttl` or `.trig` file paths;
+standard input requires `--from turtle` or `--from trig`. It retains the
+complete graph or dataset and writes grouped, deterministic output in the same
+syntax. It does not emit partial output after a parse or formatting failure.
+Prefix inference is enabled by default; use `--no-infer-prefixes` to use only
+repeated explicit `--prefix` declarations. `--max-triples N` bounds retained
+Turtle triples, while `--max-quads N` bounds retained TriG quads. Each is
+required to be a positive decimal integer when present and is only valid for
+its corresponding input syntax.
 
 ## Memory and reader entry points
 

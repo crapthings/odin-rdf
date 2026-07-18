@@ -59,6 +59,7 @@ test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 	testing.expect_value(t, err.code, Command_Error_Code.None)
 	testing.expect_value(t, options.input_path, "input.ttl")
 	testing.expect_value(t, options.output_path, "output.ttl")
+	testing.expect_value(t, options.input_format, convert.Format.Turtle)
 	testing.expect(t, !options.infer_prefixes)
 	testing.expect_value(t, options.max_triples, 20)
 	testing.expect_value(t, len(options.prefixes), 1)
@@ -75,6 +76,25 @@ test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 	signed_limit_options, signed_limit := parse_format_command_args([]string{"format", "input.ttl", "--max-triples=+1"})
 	defer delete(signed_limit_options.prefixes)
 	testing.expect_value(t, signed_limit.code, Command_Error_Code.Invalid_Max_Triples)
+
+	trig_options, trig_err := parse_format_command_args([]string{"format", "input.trig", "--max-quads", "20"})
+	defer delete(trig_options.prefixes)
+	testing.expect_value(t, trig_err.code, Command_Error_Code.None)
+	testing.expect_value(t, trig_options.input_format, convert.Format.TriG)
+	testing.expect_value(t, trig_options.max_quads, 20)
+
+	stdin_options, stdin_err := parse_format_command_args([]string{"format", "-", "--from", "trig"})
+	defer delete(stdin_options.prefixes)
+	testing.expect_value(t, stdin_err.code, Command_Error_Code.None)
+	testing.expect_value(t, stdin_options.input_format, convert.Format.TriG)
+
+	invalid_quad_options, invalid_quad := parse_format_command_args([]string{"format", "input.trig", "--max-quads=0"})
+	defer delete(invalid_quad_options.prefixes)
+	testing.expect_value(t, invalid_quad.code, Command_Error_Code.Invalid_Max_Quads)
+
+	wrong_limit_options, wrong_limit := parse_format_command_args([]string{"format", "input.trig", "--max-triples", "1"})
+	defer delete(wrong_limit_options.prefixes)
+	testing.expect_value(t, wrong_limit.code, Command_Error_Code.Incompatible_Format_Limit)
 }
 
 @(test)
@@ -257,6 +277,7 @@ test_format_file_output_is_grouped_and_replaces_after_success :: proc(t: ^testin
 	options := Format_Command_Options{
 		input_path = input_path,
 		output_path = target,
+		input_format = .Turtle,
 		prefixes = make([dynamic]turtle.Prefix),
 		infer_prefixes = true,
 	}
@@ -289,6 +310,7 @@ test_format_file_output_preserves_existing_target_after_parse_failure :: proc(t:
 	options := Format_Command_Options{
 		input_path = input_path,
 		output_path = target,
+		input_format = .Turtle,
 		prefixes = make([dynamic]turtle.Prefix),
 		infer_prefixes = true,
 	}
@@ -319,6 +341,7 @@ test_format_file_output_preserves_existing_target_after_triple_limit :: proc(t: 
 	options := Format_Command_Options{
 		input_path = input_path,
 		output_path = target,
+		input_format = .Turtle,
 		prefixes = make([dynamic]turtle.Prefix),
 		infer_prefixes = true,
 		max_triples = 1,
@@ -327,6 +350,48 @@ test_format_file_output_preserves_existing_target_after_triple_limit :: proc(t: 
 	testing.expect_value(t, run_format(options), 1)
 	buffer: [256]byte
 	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
+test_format_trig_file_groups_named_graph_and_respects_quad_limit :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-format-input.trig"
+	target :: "odin-rdf-cli-format-output.trig"
+	temporary :: "odin-rdf-cli-format-output.trig.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	input := `<urn:g> { <urn:s> <urn:p> <urn:o2>, <urn:o1> . }
+`
+	testing.expect(t, write_test_file(input_path, input) == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options, parse_err := parse_format_command_args([]string{"format", input_path, "--output", target, "--max-quads", "10"})
+	defer delete(options.prefixes)
+	testing.expect_value(t, parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_format(options), 0)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	expected := `@prefix ns1: <urn:> .
+
+ns1:g {
+  ns1:s ns1:p ns1:o1 ,
+          ns1:o2 .
+}
+`
+	testing.expect_value(t, contents, expected)
+	testing.expect(t, !os.exists(temporary))
+
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	limited, limited_parse_err := parse_format_command_args([]string{"format", input_path, "--output", target, "--max-quads", "1"})
+	defer delete(limited.prefixes)
+	testing.expect_value(t, limited_parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_format(limited), 1)
+	contents, read_err = read_test_file(target, &buffer)
 	testing.expect(t, read_err == nil)
 	testing.expect_value(t, contents, "previous\n")
 	testing.expect(t, !os.exists(temporary))
@@ -349,6 +414,8 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Invalid_Max_Statement_Bytes = "--max-statement-bytes must be a positive decimal integer",
 		.Invalid_Max_Document_Bytes = "--max-document-bytes must be a positive decimal integer",
 		.Invalid_Max_Triples  = "--max-triples must be a positive decimal integer",
+		.Invalid_Max_Quads    = "--max-quads must be a positive decimal integer",
+		.Incompatible_Format_Limit = "format limit is not valid for selected RDF syntax",
 		.Cannot_Infer_Input_Format = "cannot infer input RDF syntax; use --from",
 		.Cannot_Infer_Output_Format = "cannot infer output RDF syntax; use --to",
 		.Same_Input_Output    = "input and output paths must differ",

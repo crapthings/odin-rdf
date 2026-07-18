@@ -8,6 +8,7 @@ import jsonld "../jsonld"
 import nquads "../nquads"
 import ntriples "../ntriples"
 import rdfxml "../rdfxml"
+import trig "../trig"
 import turtle "../turtle"
 
 // Format identifies one RDF syntax supported by the converter.
@@ -17,6 +18,7 @@ Format :: enum {
 	Turtle,
 	JSON_LD,
 	RDF_XML,
+	TriG,
 }
 
 // format_name returns the stable command-line spelling for a format.
@@ -27,6 +29,7 @@ format_name :: proc(format: Format) -> string {
 	case .Turtle:    return "turtle"
 	case .JSON_LD:   return "jsonld"
 	case .RDF_XML:   return "rdfxml"
+	case .TriG:      return "trig"
 	}
 	return "unknown"
 }
@@ -158,6 +161,9 @@ Result :: struct {
 	case .RDF_XML:
 		state.error = Error{code = .Unsupported_Output_Format}
 		return false
+	case .TriG:
+		state.error = Error{code = .Unsupported_Output_Format}
+		return false
 	case:
 		state.error = Error{code = .Unsupported_Output_Format}
 		return false
@@ -213,7 +219,7 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		result.error.code = .Unsupported_Output_Format
 		return result
 	}
-	if options.input != .N_Triples && options.input != .N_Quads && options.input != .Turtle && options.input != .JSON_LD && options.input != .RDF_XML {
+	if options.input != .N_Triples && options.input != .N_Quads && options.input != .Turtle && options.input != .JSON_LD && options.input != .RDF_XML && options.input != .TriG {
 		result.error.code = .Unsupported_Input_Format
 		return result
 	}
@@ -292,6 +298,16 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {
 			set_parse_error(&state, parsed.error.line, parsed.error.column, rdfxml.parse_error_message(parsed.error.code), parsed.reader_error)
+		}
+	case .TriG:
+		parsed := trig.parse_reader(reader, write_destination_quad, trig.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = trig.Parse_Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None {
+			set_parse_error(&state, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
 		}
 	}
 	result.error = state.error

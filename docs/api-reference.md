@@ -32,6 +32,25 @@ description. Writers follow the same pattern with `write_error_message`.
   a concrete serialization's lexical grammar.
 - `new_blank_node_scope` creates document identity for advanced integrations.
 
+## Owned collection `rdf/dataset`
+
+```odin
+init(collector: ^Collector, options: Options = {}) -> Error_Code
+add(collector: ^Collector, quad: rdf.Quad) -> Error_Code
+sink(quad: rdf.Quad, user_data: rawptr) -> bool
+triple_sink(triple: rdf.Triple, user_data: rawptr) -> bool
+destroy(collector: ^Collector)
+```
+
+`Collector` copies a quad and every referenced term string into collector-owned
+storage. `quads` preserves source order and duplicates until `destroy`; it is
+not an RDF graph or dataset-set API. `Options.max_quads` is an optional positive
+admission limit (zero disables it). `sink` lets any quad parser write directly
+to the collector; `triple_sink` maps graph-syntax output to default-graph quads.
+If either returns false, inspect `collector.last_error` to
+distinguish `Quad_Limit`, an invalid caller-supplied quad, or allocation failure
+from a parser-originated stop.
+
 ## N-Triples `rdf/ntriples`
 
 ```odin
@@ -172,14 +191,33 @@ Literal limitation, and the W3C core selection. XML parser diagnostics do not
 currently carry source positions; semantic RDF/XML failures therefore use a
 zero line and column.
 
+## TriG `rdf/trig`
+
+```odin
+parse(input: string, sink: Sink, options: Parse_Options = {},
+      user_data: rawptr = nil) -> Parse_Error
+parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
+             user_data: rawptr = nil) -> Reader_Result
+```
+
+TriG emits `rdf.Quad` values for default and named graph statements. It supports
+RDF 1.1 directives, graph blocks with or without `GRAPH`, compact
+predicate/object lists, property lists, collections, and optional dots directly
+before a graph's closing brace. `Parse_Options` provides `base_iri`, token,
+prefix-count/bytes, nesting, pending-quad, and emitted-quad limits. The reader
+retains one bounded document (16 MiB by default) because TriG graph blocks do
+not have a line-safe or dot-only framing rule. `Reader_Options` adds a 64 KiB
+chunk size and `max_document_bytes`. See the [TriG design](trig-design.md) for
+ownership and conformance details.
+
 ## Conversion `rdf/convert`
 
 ```odin
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`
-and `RDF_XML`. `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`,
+`RDF_XML`, and `TriG`. `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
 `turtle_prefixes: []turtle.Prefix` for explicit Turtle output declarations.
 `Result` reports `statements` written, `bytes_read`, and an `Error`.
@@ -190,7 +228,7 @@ input and output formats, `reader_limits: Reader_Limits`, and
 | `max_records` | All source readers | Unlimited. |
 | `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
 | `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
-| `max_document_bytes` | JSON-LD, RDF/XML | Syntax default (16 MiB). |
+| `max_document_bytes` | JSON-LD, RDF/XML, TriG | Syntax default (16 MiB). |
 
 All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
@@ -219,9 +257,9 @@ odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, input-only
-`jsonld`/`json-ld`/`json`, and input-only
-`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. It infers formats from file paths ending
-in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, or `.xml`; explicit
+`jsonld`/`json-ld`/`json`, input-only `rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`,
+and input-only `trig`. It infers formats from file paths ending
+in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, `.xml`, or `.trig`; explicit
 `--from` and `--to` options override that inference. `INPUT` and `--output`
 use `-` for standard input and output, which requires the matching explicit
 format option; unrecognized extensions do too. Output files use
@@ -232,7 +270,7 @@ and can contain earlier records if a later parse error occurs.
 
 `convert` accepts `--max-records N` for all input syntaxes,
 `--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
-Turtle, plus `--max-document-bytes N` for JSON-LD and RDF/XML. Each `N` is a positive decimal integer; the CLI maps the values to
+Turtle, plus `--max-document-bytes N` for JSON-LD, RDF/XML, and TriG. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
 
 `format` accepts Turtle input, retains its complete graph, and writes grouped,
@@ -252,7 +290,7 @@ grammar and are tested for equivalent output, error codes, and source locations.
 
 Line-oriented N-Triples and N-Quads readers bound one physical line. Turtle's
 reader bounds one top-level production because valid strings and collections
-may span lines. JSON-LD and RDF/XML retain one bounded document. A reader that
+may span lines. JSON-LD, RDF/XML, and TriG retain one bounded document. A reader that
 repeatedly returns no bytes and no error is eventually rejected with
 `No_Progress`.
 

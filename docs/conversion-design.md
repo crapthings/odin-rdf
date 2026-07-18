@@ -26,6 +26,7 @@ The conversion matrix is therefore intentionally asymmetric:
 | N-Quads default graph | N-Triples, Turtle, N-Quads | Preserve the triple or default-graph quad. |
 | N-Quads named graph | N-Quads | Preserve the quad. |
 | N-Quads named graph | N-Triples, Turtle | Reject with `Named_Graph_Not_Supported`. |
+| JSON-LD, RDF/XML, TriG | N-Triples, Turtle, N-Quads | Parse bounded input; preserve named graphs only for N-Quads. |
 
 The last row is a data-integrity boundary. The adapter never silently removes a
 graph name to make a conversion appear successful.
@@ -53,6 +54,7 @@ exposing three unrelated syntax-option structs at every call site. It maps
 `max_records` to triples, quads, or Turtle triples as appropriate; maps
 `max_line_bytes` only to the two line-oriented syntaxes; and maps
 `max_statement_bytes` only to Turtle's top-level production framing.
+`max_document_bytes` applies to the bounded JSON-LD, RDF/XML, and TriG readers.
 
 The zero value keeps existing reader defaults and disables the record cap.
 Negative fields are rejected before the converter writes a Turtle prefix or
@@ -70,8 +72,8 @@ unchanged. A pre-existing temporary file is treated as a safety error rather
 than overwritten.
 
 The command rejects an input and output path with the same literal spelling.
-For non-stdio paths it infers syntax only from the canonical `.nt`, `.nq`, and
-`.ttl` extensions. Explicit `--from` and `--to` values override the inferred
+For non-stdio paths it infers syntax from the canonical `.nt`, `.nq`, `.ttl`,
+`.jsonld`, `.json`, `.rdfxml`, `.rdf`, `.xml`, and `.trig` extensions. Explicit `--from` and `--to` values override the inferred
 formats. The command never inspects bytes to guess a syntax: `-` and an
 unrecognized extension require the corresponding explicit option. This keeps
 pipe behavior and future syntax additions unambiguous while removing redundant

@@ -174,3 +174,139 @@ graph_isomorphic :: proc(left, right: []rdf.Triple) -> bool {
 	defer delete(used)
 	return find_mapping(0, left_unique[:], right_unique[:], left_nodes[:], right_nodes[:], mapping, used)
 }
+
+quad_identity_equal :: proc(a, b: rdf.Quad) -> bool {
+	if a.has_graph != b.has_graph do return false
+	if !triple_identity_equal(rdf.triple(a), rdf.triple(b)) do return false
+	return !a.has_graph || term_identity_equal(a.graph, b.graph)
+}
+
+append_quad_blank_nodes :: proc(nodes: ^[dynamic]rdf.Term, quad: rdf.Quad) {
+	append_blank_node(nodes, quad.subject)
+	append_blank_node(nodes, quad.object)
+	if quad.has_graph do append_blank_node(nodes, quad.graph)
+}
+
+collect_quad_blank_nodes :: proc(dataset: []rdf.Quad) -> [dynamic]rdf.Term {
+	nodes := make([dynamic]rdf.Term)
+	for quad in dataset do append_quad_blank_nodes(&nodes, quad)
+	return nodes
+}
+
+unique_dataset :: proc(dataset: []rdf.Quad) -> [dynamic]rdf.Quad {
+	unique := make([dynamic]rdf.Quad)
+	for quad in dataset {
+		seen := false
+		for existing in unique {
+			if quad_identity_equal(quad, existing) {
+				seen = true
+				break
+			}
+		}
+		if !seen do append(&unique, quad)
+	}
+	return unique
+}
+
+mapped_quad_equal :: proc(
+	left, right: rdf.Quad,
+	left_nodes, right_nodes: []rdf.Term,
+	mapping: []int,
+) -> (equal, resolved: bool) {
+	if left.has_graph != right.has_graph do return false, true
+	triple_equal, triple_resolved := mapped_triple_equal(rdf.triple(left), rdf.triple(right), left_nodes, right_nodes, mapping)
+	if !triple_resolved || !triple_equal do return triple_equal, triple_resolved
+	if !left.has_graph do return true, true
+	return mapped_term_equal(left.graph, right.graph, left_nodes, right_nodes, mapping)
+}
+
+quad_is_resolved :: proc(quad: rdf.Quad, nodes: []rdf.Term, mapping: []int) -> bool {
+	terms := [4]rdf.Term{quad.subject, quad.predicate, quad.object, quad.graph}
+	limit := quad.has_graph ? 4 : 3
+	for term in terms[:limit] {
+		if term.kind == .Blank_Node {
+			index := blank_index(term, nodes)
+			if index < 0 || mapping[index] < 0 do return false
+		}
+	}
+	return true
+}
+
+resolved_quads_fit :: proc(
+	left, right: []rdf.Quad,
+	left_nodes, right_nodes: []rdf.Term,
+	mapping: []int,
+) -> bool {
+	used := make([]bool, len(right))
+	defer delete(used)
+	for left_quad in left {
+		if !quad_is_resolved(left_quad, left_nodes, mapping) do continue
+		found := false
+		for right_quad, index in right {
+			if used[index] do continue
+			equal, fully_resolved := mapped_quad_equal(left_quad, right_quad, left_nodes, right_nodes, mapping)
+			if fully_resolved && equal {
+				used[index] = true
+				found = true
+				break
+			}
+		}
+		if !found do return false
+	}
+	return true
+}
+
+quad_node_position_counts :: proc(node: rdf.Term, dataset: []rdf.Quad) -> (subjects, objects, graphs: int) {
+	for quad in dataset {
+		if term_identity_equal(node, quad.subject) do subjects += 1
+		if term_identity_equal(node, quad.object) do objects += 1
+		if quad.has_graph && term_identity_equal(node, quad.graph) do graphs += 1
+	}
+	return
+}
+
+find_quad_mapping :: proc(
+	depth: int,
+	left, right: []rdf.Quad,
+	left_nodes, right_nodes: []rdf.Term,
+	mapping: []int,
+	used: []bool,
+) -> bool {
+	if depth == len(left_nodes) do return resolved_quads_fit(left, right, left_nodes, right_nodes, mapping)
+	left_subjects, left_objects, left_graphs := quad_node_position_counts(left_nodes[depth], left)
+	for right_node, right_index in right_nodes {
+		if used[right_index] do continue
+		right_subjects, right_objects, right_graphs := quad_node_position_counts(right_node, right)
+		if left_subjects != right_subjects || left_objects != right_objects || left_graphs != right_graphs do continue
+		mapping[depth] = right_index
+		used[right_index] = true
+		if resolved_quads_fit(left, right, left_nodes, right_nodes, mapping) &&
+		   find_quad_mapping(depth + 1, left, right, left_nodes, right_nodes, mapping, used) {
+			return true
+		}
+		mapping[depth] = -1
+		used[right_index] = false
+	}
+	return false
+}
+
+// dataset_isomorphic compares RDF datasets while allowing a bijective renaming
+// of blank nodes in subject, object, and graph-name positions.
+dataset_isomorphic :: proc(left, right: []rdf.Quad) -> bool {
+	left_unique := unique_dataset(left)
+	defer delete(left_unique)
+	right_unique := unique_dataset(right)
+	defer delete(right_unique)
+	if len(left_unique) != len(right_unique) do return false
+	left_nodes := collect_quad_blank_nodes(left_unique[:])
+	defer delete(left_nodes)
+	right_nodes := collect_quad_blank_nodes(right_unique[:])
+	defer delete(right_nodes)
+	if len(left_nodes) != len(right_nodes) do return false
+	mapping := make([]int, len(left_nodes))
+	defer delete(mapping)
+	for &entry in mapping do entry = -1
+	used := make([]bool, len(right_nodes))
+	defer delete(used)
+	return find_quad_mapping(0, left_unique[:], right_unique[:], left_nodes[:], right_nodes[:], mapping, used)
+}

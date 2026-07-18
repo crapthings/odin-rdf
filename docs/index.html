@@ -46,7 +46,7 @@
     <section class="mx-auto grid max-w-7xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:pb-32 lg:pt-28">
       <div class="flex flex-col justify-center">
         <div class="mb-7 flex flex-wrap gap-2">
-          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 472/472</span>
+          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 827/827</span>
           <span class="rounded-full border border-lime-700/20 bg-lime-100 px-3 py-1 font-mono text-xs text-lime-800">RDF 1.1</span>
           <span class="rounded-full border border-stone-400/25 bg-white/70 px-3 py-1 font-mono text-xs text-stone-700">MIT</span>
         </div>
@@ -55,7 +55,7 @@
           <span class="text-olive-700">built the Odin way.</span>
         </h1>
         <p class="mt-7 max-w-2xl text-lg leading-8 text-olive-800/75 sm:text-xl">
-          A small, streaming-first RDF toolkit with conformant Turtle parsing, explicit serialization, deterministic graph formatting, bounded readers, and a loss-aware conversion CLI. Explicit lifetimes. Predictable limits. No graph store attached.
+          A small, streaming-first RDF toolkit with conformant Turtle and TriG parsing, explicit serialization, deterministic graph formatting, bounded readers, and a loss-aware conversion CLI. Explicit lifetimes. Predictable limits. No graph store attached.
         </p>
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
           <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Start parsing</a>
@@ -63,7 +63,7 @@
         </div>
         <dl class="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-olive-950/10 pt-7">
           <div>
-            <dt class="font-mono text-2xl font-semibold text-olive-950">472/472</dt>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">827/827</dt>
             <dd class="mt-1 text-xs leading-5 text-olive-700/65">Pinned W3C cases</dd>
           </div>
           <div>
@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current release includes bounded JSON-LD-to-RDF and RDF/XML-to-RDF input alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, deterministic Turtle formatting, and loss-aware conversion. Both document processors have explicit limits and no hidden network client or graph store.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF, RDF/XML-to-RDF, and TriG-to-RDF input alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic Turtle formatting, and loss-aware conversion. These document processors have explicit limits and no hidden network client or graph store.</p>
           <a href="https://www.w3.org/TR/rdf-syntax-grammar/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDF/XML syntax specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -181,6 +181,8 @@ err := ttl.parse(input, consume)
               <li>Conformant Turtle parser, writer, and formatter</li>
               <li>Bounded JSON-LD-to-RDF dataset conversion</li>
               <li>Bounded RDF/XML-to-RDF input</li>
+              <li>Conformant TriG-to-RDF dataset input</li>
+              <li>Owned, capacity-bounded quad collection</li>
               <li>Streaming syntax conversion CLI</li>
               <li>UTF-8 and escape handling</li>
               <li>W3C syntax conformance suite</li>
@@ -235,7 +237,7 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">./scripts/run-w3c-rdfxml-tests.sh</span>
 
 <span class="text-lime-300">Pinned core gates:</span>
-<span class="text-lime-300">696 core cases, 0 failures</span></code></pre>
+<span class="text-lime-300">1,051 core cases, 0 failures</span></code></pre>
         </div>
       </div>
     </section>
@@ -243,9 +245,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.11.0</p>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">RDF/XML input, with boundaries you can inspect.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">The RDF/XML core runs 169 pinned W3C cases through memory and bounded-reader paths. Markup-bearing XML Literals stay explicitly unsupported until canonical XML handling is available.</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.12.0</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">TriG datasets, with the same explicit boundaries.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">TriG runs all 355 pinned W3C cases through memory and bounded-reader paths, including blank-node-aware named graph comparisons.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

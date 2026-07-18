@@ -8,16 +8,17 @@
 ![W3C Turtle tests](https://img.shields.io/badge/W3C_Turtle-313%2F313-4d7c0f)
 ![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-169%2F169-b45309)
+![W3C TriG tests](https://img.shields.io/badge/W3C_TriG-355%2F355-15803d)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
 A small, streaming-first RDF toolkit for Odin, built around standards compliance and explicit memory ownership.
 
-> The API may still evolve. The RDF 1.1 N-Triples, N-Quads, and Turtle parsers pass the pinned W3C suites used by this repository; JSON-LD and RDF/XML support documented to-RDF core profiles.
+> The API may still evolve. The RDF 1.1 N-Triples, N-Quads, Turtle, and TriG parsers pass the pinned W3C suites used by this repository; JSON-LD and RDF/XML support documented to-RDF core profiles.
 
 ## Status and scope
 
-Version `0.11.0` adds bounded RDF/XML-to-RDF input with `.rdf`, `.rdfxml`, and `.xml` conversion inference. The release line includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.12.0` adds bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API; RDF/XML deliberately rejects markup-bearing XML Literals until canonical XML support is added. Both boundaries are documented rather than silently approximated.
 
@@ -25,9 +26,9 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, and 313 Turtle cases through memory and streaming entry points. JSON-LD and RDF/XML each have documented, reproducible core selections; RDF/XML runs 169 cases. Graph evaluations use RDF graph isomorphism.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD and RDF/XML each have documented, reproducible core selections; RDF/XML runs 169 cases. Graph and dataset evaluations use blank-node-aware isomorphism.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
-- **Bounded documents.** JSON-LD and RDF/XML retain one explicitly limited document; neither performs implicit network I/O.
+- **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.
 - **Explicit lifetimes.** Public APIs document exactly how long input-backed and decoded strings remain valid.
 - **Release gates that match library risk.** CI covers three operating systems, compiler vetting, memory tracking, and AddressSanitizer.
@@ -36,7 +37,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ```mermaid
 flowchart LR
-    Memory[UTF-8 string] --> Parser[N-Triples / N-Quads / Turtle / JSON-LD / RDF/XML parser]
+    Memory[UTF-8 string] --> Parser[N-Triples / N-Quads / Turtle / TriG / JSON-LD / RDF/XML parser]
     Reader[io.Reader] -->|bounded chunks| Parser
     Parser -->|sink callback| Converter[Format converter]
     Parser -->|sink callback| Database[Database importer]
@@ -62,6 +63,8 @@ rdf/nquads/          N-Quads parser, writer, and unit tests
 rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bounded reader
 rdf/jsonld/          Bounded JSON-LD-to-RDF dataset processor
 rdf/rdfxml/          Bounded RDF/XML-to-RDF dataset processor
+rdf/trig/            Bounded RDF 1.1 TriG-to-RDF dataset parser
+rdf/dataset/         Owned, capacity-bounded dataset collector
 rdf/convert/         Streaming syntax-to-syntax conversion adapter
 cmd/odin-rdf/        Command-line converter built on the adapter
 examples/minimal/    Tiny educational example with no library dependency
@@ -90,15 +93,34 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
 - `jsonld.parse(input, sink, options)` and `jsonld.parse_reader(reader, sink, options)` transform a bounded JSON-LD document into RDF quads. Remote contexts require an explicit loader callback.
 - `rdfxml.parse(input, sink, options)` and `rdfxml.parse_reader(reader, sink, options)` transform a bounded RDF/XML document into default-graph RDF quads. They do not fetch external resources; markup-bearing XML Literals are explicitly unsupported.
+- `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists; TriG serialization is not yet provided.
+- `dataset.Collector` copies transient quads and term strings into caller-owned storage with an optional quad admission limit. `dataset.triple_sink` adapts N-Triples and Turtle output to default-graph quads. It preserves order and duplicates; it is not a graph store.
 - `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
 - `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
 - `convert.convert(reader, output, options)` connects the bounded readers and writers without retaining a graph; it rejects a named N-Quads graph when the selected output cannot represent it.
-- `convert.Reader_Limits` provides one explicit source-resource policy across all conversions: record count for every syntax, physical-line bytes for N-Triples/N-Quads, top-level statement bytes for Turtle, and retained document bytes for JSON-LD/RDF/XML.
+- `convert.Reader_Limits` provides one explicit source-resource policy across all conversions: record count for every syntax, physical-line bytes for N-Triples/N-Quads, top-level statement bytes for Turtle, and retained document bytes for JSON-LD/RDF/XML/TriG.
 - `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
 - `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
 - Every public error enum has a matching stable, allocation-free message function across `rdf` and all syntax packages.
 
 Strings passed to a sink may point into the caller's input or a temporary parser buffer. They are valid only for the duration of that callback. Copy values or encode them into application-owned IDs before returning if they need to outlive the callback.
+
+Use `dataset.Collector` when retaining parser output is appropriate. It owns all
+stored strings until `dataset.destroy` and makes the retention bound explicit:
+
+```odin
+import dataset "path/to/odin-rdf/rdf/dataset"
+import trig "path/to/odin-rdf/rdf/trig"
+
+collector: dataset.Collector
+if dataset.init(&collector, {max_quads = 10_000}) != .None do return
+defer dataset.destroy(&collector)
+
+parse_error := trig.parse(input, dataset.sink, {}, &collector)
+if parse_error.code == .Stopped && collector.last_error == .Quad_Limit {
+    // The dataset admission limit was reached; no extra quad was retained.
+}
+```
 
 RDF term constructors establish datatype invariants but intentionally leave lexical validation to format parsers and writers. Parsed blank nodes carry a non-zero document scope: repeated labels within one parse identify the same node, while equal labels from independent parser invocations do not. Manually constructed blank nodes use scope zero unless a scope is supplied.
 
@@ -207,9 +229,9 @@ cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`,
 input-only `jsonld`/`json-ld`/`json`, and input-only
-`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. For file paths, `convert` infers the
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`, plus input-only `trig`. For file paths, `convert` infers the
 corresponding syntax from `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`,
-`.rdf`, or `.xml`; explicit `--from` and `--to` override that inference. `-` denotes
+`.rdf`, `.xml`, or `.trig`; explicit `--from` and `--to` override that inference. `-` denotes
 standard input or output and always requires the corresponding explicit format,
 as do unrecognized extensions. File targets are streamed into a
 same-directory temporary file and replace the destination only after the
@@ -224,8 +246,8 @@ the graph name.
 
 `convert` can bound untrusted input with `--max-records N` for all source
 syntaxes, `--max-line-bytes N` for N-Triples/N-Quads,
-`--max-statement-bytes N` for Turtle, and `--max-document-bytes N` for JSON-LD
-and RDF/XML. These are positive decimal values. A
+`--max-statement-bytes N` for Turtle, and `--max-document-bytes N` for JSON-LD,
+RDF/XML, and TriG. These are positive decimal values. A
 file target is still replaced only after the whole conversion succeeds.
 
 `format` accepts Turtle input only. It parses the complete graph before writing,
@@ -260,6 +282,8 @@ odin test rdf/nquads
 odin test rdf/turtle
 odin test rdf/jsonld
 odin test rdf/rdfxml
+odin test rdf/trig
+odin test rdf/dataset
 odin test rdf/convert
 odin test cmd/odin-rdf
 odin test tests/property
@@ -276,6 +300,7 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-turtle-tests.sh
 ./scripts/run-w3c-jsonld-tests.sh
 ./scripts/run-w3c-rdfxml-tests.sh
+./scripts/run-w3c-trig-tests.sh
 ./scripts/run-benchmarks.sh
 ```
 
@@ -285,7 +310,7 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Complete canonical XML Literal support for RDF/XML before committing to graph storage and SPARQL APIs.
+1. Complete canonical XML Literal support for RDF/XML, then reassess RDF/XML serialization and SPARQL APIs.
 
 ## License
 

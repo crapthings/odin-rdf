@@ -84,6 +84,7 @@ parse_format :: proc(value: string) -> (convert.Format, bool) {
 	case "turtle", "ttl":                 return .Turtle, true
 	case "jsonld", "json-ld", "json":      return .JSON_LD, true
 	case "rdfxml", "rdf-xml", "rdf/xml", "rdf", "xml": return .RDF_XML, true
+	case "trig": return .TriG, true
 	}
 	return {}, false
 }
@@ -100,6 +101,7 @@ infer_format_from_path :: proc(path: string) -> (convert.Format, bool) {
 	if len(path) >= len(".rdfxml") && path[len(path) - len(".rdfxml"):] == ".rdfxml" do return .RDF_XML, true
 	if len(path) >= len(".rdf") && path[len(path) - len(".rdf"):] == ".rdf" do return .RDF_XML, true
 	if len(path) >= len(".xml") && path[len(path) - len(".xml"):] == ".xml" do return .RDF_XML, true
+	if len(path) >= len(".trig") && path[len(path) - len(".trig"):] == ".trig" do return .TriG, true
 	return {}, false
 }
 
@@ -301,7 +303,7 @@ print_help :: proc() {
 	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
   odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
-Formats: ntriples (nt), nquads (nq), turtle (ttl), jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only)
+Formats: ntriples (nt), nquads (nq), turtle (ttl), jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; input only), trig (input only)
 
 INPUT and --output accept - for stdin and stdout. File output is written to a
 same-directory temporary file and replaces the destination only after a
@@ -309,7 +311,7 @@ successful conversion and temporary-file close. Prefixes are used only for
 Turtle output and may be repeated; use --prefix =https://example.com/ for the
 default prefix.
 
-convert infers a file syntax from the canonical .nt, .nq, .ttl, .jsonld, .json, .rdfxml, .rdf, and .xml extensions.
+convert infers a file syntax from the canonical .nt, .nq, .ttl, .jsonld, .json, .rdfxml, .rdf, .xml, and .trig extensions.
 Explicit --from and --to values override that inference. Standard input and
 output, as well as unrecognized file extensions, require the corresponding
 explicit format option.

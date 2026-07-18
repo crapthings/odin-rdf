@@ -102,6 +102,12 @@ test_infers_formats_from_canonical_file_extensions :: proc(t: ^testing.T) {
 	testing.expect_value(t, rdfxml_err.code, Command_Error_Code.None)
 	testing.expect_value(t, rdfxml_options.input_format, convert.Format.RDF_XML)
 	testing.expect_value(t, rdfxml_options.output_format, convert.Format.N_Triples)
+
+	trig_options, trig_err := parse_convert_args([]string{"convert", "input.trig", "--output", "output.nq"})
+	defer delete(trig_options.prefixes)
+	testing.expect_value(t, trig_err.code, Command_Error_Code.None)
+	testing.expect_value(t, trig_options.input_format, convert.Format.TriG)
+	testing.expect_value(t, trig_options.output_format, convert.Format.N_Quads)
 }
 
 @(test)

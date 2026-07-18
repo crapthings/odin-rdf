@@ -4,12 +4,12 @@
 
 The `rdf` package contains only syntax-independent data types. Syntax packages such as `rdf/ntriples` and `rdf/nquads` produce `Triple` and `Quad` values without depending on a filesystem, database, or in-memory graph implementation. A quad represents the default graph explicitly with `has_graph = false`; the default graph is never encoded as a sentinel RDF term.
 
-Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and a small utility can collect them into a dynamic array when retaining the graph is appropriate.
+Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and `rdf/dataset.Collector` can safely retain copied quads with an explicit admission limit when materialization is appropriate. The collector preserves order and duplicates; it is not graph storage.
 
-`rdf/jsonld` and `rdf/rdfxml` are intentional exceptions to record streaming:
+`rdf/jsonld`, `rdf/rdfxml`, and `rdf/trig` are intentional exceptions to record streaming:
 each retains one bounded document before emitting quads. JSON-LD's optional
-loader is supplied by the caller; RDF/XML has no external-resource or network
-behavior. Both packages expose document, nesting, and output limits rather
+loader is supplied by the caller; RDF/XML and TriG have no external-resource or network
+behavior. These packages expose document, nesting, and output limits rather
 than silently materializing an unbounded graph.
 
 ## Conversion boundary
@@ -33,7 +33,7 @@ The parser avoids copying whenever possible. Values may reference the original i
 Blank-node labels are scoped to one parsed document. Parsers store that identity in `Term.scope`; one `parse` or `parse_reader` call shares a non-zero scope across triple positions and N-Quads graph names, while independent calls and syntax packages draw from one process-wide scope generator. Manually constructed blank nodes default to scope zero, so applications can provide an explicit scope or dictionary-encode them when merging sources.
 
 The streaming reader requests 64 KiB chunks by default. Line-oriented parsers
-enforce a 16 MiB maximum physical line length; JSON-LD and RDF/XML instead
+enforce a 16 MiB maximum physical line length; JSON-LD, RDF/XML, and TriG instead
 enforce a 16 MiB retained-document bound. Callers may also cap emitted triples
 or quads according to the syntax.
 
@@ -64,6 +64,9 @@ each statement once instead of constructing and reparsing synthetic N-Triples.
 The implemented [Turtle parser and writer design](turtle-design.md) defines
 Turtle grammar, streaming, ownership, transient parse-state, conformance
 boundaries, and explicit-prefix serialization policy.
+
+The [TriG parser design](trig-design.md) defines dataset graph assignment,
+bounded-document reader behavior, and its full pinned W3C gate.
 
 The [streaming conversion design](conversion-design.md) records the conversion
 matrix, named-graph loss boundary, error propagation, and command file policy.

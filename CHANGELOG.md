@@ -2,6 +2,17 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.12.0 - 2026-07-18
+
+- Add bounded RDF 1.1 TriG-to-RDF input with default and named graph support,
+  `.trig` conversion inference, explicit token/prefix/nesting/quad limits, and
+  loss-aware conversion to N-Quads.
+- Add a pinned 355-case W3C TriG gate that verifies memory and bounded-reader
+  paths with blank-node-aware dataset isomorphism.
+- Add a bounded, owned dataset collector that copies callback-scoped RDF terms,
+  preserves source order and duplicates, and exposes explicit quad admission
+  limits without becoming a graph-store API.
+
 ## 0.11.1 - 2026-07-18
 
 - Correct public status text after the `0.11.0` RDF/XML release.

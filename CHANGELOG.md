@@ -2,6 +2,19 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.23.0 - 2026-07-18
+
+- Add bounded, deterministic RDF dataset to expanded JSON-LD serialization with
+  named-graph preservation, safe RDF list collapse, `rdf:JSON`, and optional
+  native JSON scalars.
+- Add atomic explicit-context JSON-LD compaction with language maps, list and
+  `@set` containers, typed values, named graphs, and a `convert --to jsonld
+  --context PATH` CLI path. JSON-LD output requires an explicit positive
+  `max_records` dataset bound.
+- Add pinned W3C RDF-to-JSON-LD (28 cases) and compaction (66 cases) core
+  gates. The document-level Expansion, Flattening, and Framing APIs remain
+  deliberately out of scope for this release.
+
 ## 0.22.0 - 2026-07-18
 
 - Add bounded `odin-rdf diff BEFORE AFTER` for deterministic canonical dataset

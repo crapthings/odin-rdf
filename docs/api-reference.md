@@ -247,8 +247,8 @@ complete caller-owned dataset and does not preserve statement order or layout.
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, `TriG`, or input-only
-`JSON_LD` and `RDF_XML`. `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, `TriG`, input-only
+`JSON_LD`, or `RDF_XML` (a bounded batch output target). `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
 `turtle_prefixes: []turtle.Prefix` for explicit Turtle and TriG output
 declarations.
@@ -257,14 +257,15 @@ declarations.
 | `Reader_Limits` field | Applies to | Zero value |
 | --- | --- | --- |
 | `chunk_size` | All source readers | Syntax default (64 KiB). |
-| `max_records` | All source readers | Unlimited. |
+| `max_records` | All source readers; required for RDF/XML output | Unlimited for streaming targets. |
 | `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
 | `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
 | `max_document_bytes` | JSON-LD, RDF/XML, TriG | Syntax default (16 MiB). |
 
 All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
-the destination writer.
+the destination writer. RDF/XML output requires it to be positive and uses it
+as the owned graph admission bound.
 
 `Error.code` distinguishes invalid formats, invalid Turtle/TriG prefix configuration,
 source parse errors, a named graph that the selected target cannot represent,
@@ -272,11 +273,14 @@ serialization failures, and output-write failures. Source parse errors retain
 their one-based `line`, `column`, parser diagnostic in `detail`, and reader
 I/O error when available. Other failures have zero line and column.
 
-The adapter streams each validated statement directly to the selected writer.
-N-Triples and Turtle map to the N-Quads or TriG default graph when those are
-targets. N-Quads default-graph statements can map to triples, while a named
-graph is rejected only for N-Triples and Turtle rather than silently losing
-data. The adapter does not flush or close either stream.
+The adapter streams each validated statement directly to the selected writer,
+except for RDF/XML. RDF/XML retains a complete bounded default graph, then
+writes one document only after parsing and serialization succeed; standard
+output remains untouched on a parse or writer failure. N-Triples and Turtle
+map to the N-Quads, TriG, or RDF/XML default graph when those are targets.
+N-Quads default-graph statements can map to triples, while a named graph is
+rejected for N-Triples, Turtle, and RDF/XML rather than silently losing data.
+The adapter does not flush or close either stream.
 
 ## Command `cmd/odin-rdf`
 
@@ -290,20 +294,23 @@ odin-rdf format INPUT [--from turtle|trig] [--output PATH] \
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, `trig`,
-input-only `jsonld`/`json-ld`/`json`, and input-only
-`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. It infers formats from file paths ending
+input-only `jsonld`/`json-ld`/`json`, and
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. RDF/XML output requires
+`--max-records N` and is batch-atomic. It infers formats from file paths ending
 in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, `.xml`, or `.trig`; explicit
 `--from` and `--to` options override that inference. `INPUT` and `--output`
 use `-` for standard input and output, which requires the matching explicit
 format option; unrecognized extensions do too. Output files use
 a same-directory exclusive temporary path named `<target>.odin-rdf.tmp`; the
 target is replaced only after conversion and close succeed. Existing temporary
-files are never overwritten. Standard output deliberately remains streaming
-and can contain earlier records if a later parse error occurs.
+files are never overwritten. Standard output remains streaming for ordinary
+record targets and can contain earlier records if a later parse error occurs;
+RDF/XML output is the complete-graph exception and remains empty until success.
 
 `convert` accepts `--max-records N` for all input syntaxes,
 `--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
-Turtle, plus `--max-document-bytes N` for JSON-LD, RDF/XML, and TriG. Each `N` is a positive decimal integer; the CLI maps the values to
+Turtle, plus `--max-document-bytes N` for JSON-LD, RDF/XML, and TriG. RDF/XML
+output requires `--max-records N`. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
 
 `format` accepts Turtle or TriG input, inferring `.ttl` or `.trig` file paths;

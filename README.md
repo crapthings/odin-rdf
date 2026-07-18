@@ -18,9 +18,9 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.16.0` adds a deterministic batch RDF/XML writer for complete default graphs. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.16.0` adds a deterministic batch RDF/XML writer for complete default graphs. The development branch additionally makes it a bounded, atomic conversion target. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
-Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API. RDF/XML has bounded document input and a separate complete-graph writer, not a streaming conversion target. Both boundaries are documented rather than silently approximated.
+Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API. RDF/XML has bounded document input and a separate complete-graph writer; the development branch adds a bounded batch conversion target, not a streaming one. Both boundaries are documented rather than silently approximated.
 
 The project is tested with Odin `dev-2026-07` and CI tracks the current Odin toolchain on Linux, macOS, and Windows.
 
@@ -232,26 +232,30 @@ cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 ```
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`,
-input-only `jsonld`/`json-ld`/`json`, and input-only
-`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`, plus `trig`. For file paths, `convert` infers the
+input-only `jsonld`/`json-ld`/`json`, and
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`, plus `trig`. RDF/XML output is a
+bounded batch target and requires `--max-records N`. For file paths, `convert` infers the
 corresponding syntax from `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`,
 `.rdf`, `.xml`, or `.trig`; explicit `--from` and `--to` override that inference. `-` denotes
 standard input or output and always requires the corresponding explicit format,
 as do unrecognized extensions. File targets are streamed into a
 same-directory temporary file and replace the destination only after the
 conversion succeeds and the temporary file closes successfully. Standard output
-is intentionally streaming, so a later input error can leave earlier valid
-records on the pipe. Turtle and TriG prefixes are always explicit and repeatable;
+is intentionally streaming for N-Triples, N-Quads, Turtle, and TriG, so a later
+input error can leave earlier valid records on the pipe. RDF/XML is the explicit
+batch exception: standard output remains empty until its bounded graph parses
+and serializes successfully. Turtle and TriG prefixes are always explicit and repeatable;
 use `--prefix =https://example.com/` for the default prefix.
 
-N-Quads default-graph records convert to all four syntax targets. A named graph
-can target N-Quads or TriG; the command rejects every lossy target rather than
+N-Quads default-graph records convert to every available target, including
+bounded RDF/XML. A named graph can target N-Quads or TriG; the command rejects every lossy target rather than
 dropping the graph name.
 
 `convert` can bound untrusted input with `--max-records N` for all source
 syntaxes, `--max-line-bytes N` for N-Triples/N-Quads,
 `--max-statement-bytes N` for Turtle, and `--max-document-bytes N` for JSON-LD,
-RDF/XML, and TriG. These are positive decimal values. A
+RDF/XML, and TriG. RDF/XML output requires a positive `--max-records` value as
+its retained-graph admission bound. These are positive decimal values. A
 file target is still replaced only after the whole conversion succeeds.
 
 `format` accepts Turtle and TriG input. It infers `.ttl` or `.trig` for file
@@ -315,7 +319,7 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Consider a stateful RDF/XML document writer and an explicit batch conversion target, then reassess storage and SPARQL APIs.
+1. Consider a stateful RDF/XML document writer, then reassess storage and SPARQL APIs.
 
 ## License
 

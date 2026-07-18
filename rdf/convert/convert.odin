@@ -4,6 +4,7 @@ package convert
 import "core:io"
 import "core:strings"
 import rdf ".."
+import dataset "../dataset"
 import jsonld "../jsonld"
 import nquads "../nquads"
 import ntriples "../ntriples"
@@ -48,7 +49,8 @@ Reader_Limits :: struct {
 
 // Options selects the source and destination syntax. Turtle and TriG output
 // use only explicitly supplied prefixes; they never infer namespaces from
-// input terms.
+// input terms. RDF/XML output retains a complete default graph and therefore
+// requires a positive reader_limits.max_records admission bound.
 Options :: struct {
 	input:           Format,
 	output:          Format,
@@ -64,9 +66,11 @@ Error_Code :: enum {
 	Unsupported_Input_Format,
 	Unsupported_Output_Format,
 	Invalid_Reader_Limits,
+	RDF_XML_Record_Limit_Required,
 	Invalid_Turtle_Prefixes,
 	Source_Parse_Error,
 	Named_Graph_Not_Supported,
+	Graph_Collection_Error,
 	Serialization_Error,
 	Output_Write_Error,
 }
@@ -78,9 +82,11 @@ error_message :: proc(code: Error_Code) -> string {
 	case .Unsupported_Input_Format:  return "unsupported input format"
 	case .Unsupported_Output_Format: return "unsupported output format"
 	case .Invalid_Reader_Limits:     return "reader limits must not be negative"
+	case .RDF_XML_Record_Limit_Required: return "RDF/XML output requires a positive max-records limit"
 	case .Invalid_Turtle_Prefixes:   return "invalid Turtle prefix configuration"
 	case .Source_Parse_Error:        return "source parse error"
 	case .Named_Graph_Not_Supported: return "named graphs cannot be represented by the output format"
+	case .Graph_Collection_Error:    return "graph collection error"
 	case .Serialization_Error:       return "output serialization error"
 	case .Output_Write_Error:        return "output write error"
 	}
@@ -118,6 +124,11 @@ Result :: struct {
 	builder:         strings.Builder,
 	error:           Error,
 	statements:      u64,
+}
+
+@(private) Batch_State :: struct {
+	collector: dataset.Collector,
+	error:     Error,
 }
 
 @(private) write_all :: proc(output: io.Writer, text: string) -> io.Error {
@@ -218,14 +229,123 @@ Result :: struct {
 	}
 }
 
-// convert parses reader with the selected source syntax and writes each valid
-// RDF statement to output immediately. It does not retain a graph. Named
-// graphs can target N-Quads or TriG; other requested conversions fail before
-// the named statement is written. Reader ownership remains with the caller, as
-// does output flushing and closing.
+@(private) set_batch_parse_error :: proc(state: ^Batch_State, line, column: int, detail: string, io_error: io.Error = .None) {
+	state.error = Error{
+		code = .Source_Parse_Error,
+		line = line,
+		column = column,
+		detail = detail,
+		io_error = io_error,
+	}
+}
+
+@(private) collect_rdfxml_quad :: proc(quad: rdf.Quad, data: rawptr) -> bool {
+	state := cast(^Batch_State)data
+	if quad.has_graph {
+		state.error = Error{code = .Named_Graph_Not_Supported}
+		return false
+	}
+	if collect_err := dataset.add(&state.collector, quad); collect_err != .None {
+		state.error = Error{code = .Graph_Collection_Error, detail = dataset.error_message(collect_err)}
+		return false
+	}
+	return true
+}
+
+@(private) collect_rdfxml_triple :: proc(triple: rdf.Triple, data: rawptr) -> bool {
+	return collect_rdfxml_quad(rdf.default_graph_quad(triple), data)
+}
+
+@(private) convert_to_rdfxml :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
+	result: Result
+	state := Batch_State{}
+	if init_err := dataset.init(&state.collector, dataset.Options{max_quads = options.reader_limits.max_records}); init_err != .None {
+		result.error = Error{code = .Graph_Collection_Error, detail = dataset.error_message(init_err)}
+		return result
+	}
+	defer dataset.destroy(&state.collector)
+
+	switch options.input {
+	case .N_Triples:
+		parsed := ntriples.parse_reader(reader, collect_rdfxml_triple, ntriples.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_triples = u64(options.reader_limits.max_records),
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, ntriples.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .N_Quads:
+		parsed := nquads.parse_reader(reader, collect_rdfxml_quad, nquads.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_quads = u64(options.reader_limits.max_records),
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, nquads.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .Turtle:
+		parsed := turtle.parse_reader(reader, collect_rdfxml_triple, turtle.Reader_Options{
+			parse = turtle.Parse_Options{max_triples = options.reader_limits.max_records},
+			chunk_size = options.reader_limits.chunk_size,
+			max_statement_bytes = options.reader_limits.max_statement_bytes,
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .JSON_LD:
+		parsed := jsonld.parse_reader(reader, collect_rdfxml_quad, jsonld.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .RDF_XML:
+		parsed := rdfxml.parse_reader(reader, collect_rdfxml_quad, rdfxml.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = rdfxml.Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, rdfxml.parse_error_message(parsed.error.code), parsed.reader_error)
+	case .TriG:
+		parsed := trig.parse_reader(reader, collect_rdfxml_quad, trig.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_document_bytes = options.reader_limits.max_document_bytes,
+			parse = trig.Parse_Options{max_quads = options.reader_limits.max_records},
+		}, &state)
+		result.bytes_read = parsed.bytes_read
+		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
+	}
+	if state.error.code != .None {
+		result.error = state.error
+		return result
+	}
+
+	triples := make([dynamic]rdf.Triple)
+	defer delete(triples)
+	for quad in state.collector.quads do append(&triples, rdf.triple(quad))
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	if write_err := rdfxml.write_triples(&builder, triples[:]); write_err != .None {
+		result.error = Error{code = .Serialization_Error, detail = rdfxml.write_error_message(write_err)}
+		return result
+	}
+	if output_err := write_all(output, strings.to_string(builder)); output_err != .None {
+		result.error = Error{code = .Output_Write_Error, io_error = output_err}
+		return result
+	}
+	result.statements = u64(len(triples))
+	return result
+}
+
+// convert parses reader with the selected source syntax. Most targets write
+// each valid RDF statement immediately. RDF/XML is the intentional exception:
+// it retains one max_records-bounded default graph, then writes one complete
+// document only after parsing succeeds. Named graphs can target N-Quads or
+// TriG; other requested conversions fail before a named statement is written.
+// Reader ownership remains with the caller, as does output flushing and closing.
 convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Result {
 	result: Result
-	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle && options.output != .TriG {
+	if options.output != .N_Triples && options.output != .N_Quads && options.output != .Turtle && options.output != .RDF_XML && options.output != .TriG {
 		result.error.code = .Unsupported_Output_Format
 		return result
 	}
@@ -236,6 +356,13 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 	if !valid_reader_limits(options.reader_limits) {
 		result.error.code = .Invalid_Reader_Limits
 		return result
+	}
+	if options.output == .RDF_XML {
+		if options.reader_limits.max_records == 0 {
+			result.error.code = .RDF_XML_Record_Limit_Required
+			return result
+		}
+		return convert_to_rdfxml(reader, output, options)
 	}
 
 	state := State{

@@ -1,8 +1,7 @@
 # RDF/XML to RDF design
 
-`rdf/rdfxml` transforms a bounded RDF/XML document into default-graph RDF
-quads. It is an input package: N-Triples, N-Quads, and Turtle remain the
-supported serialization targets.
+`rdf/rdfxml` transforms bounded RDF/XML documents into default-graph RDF
+quads and writes complete default graphs as RDF/XML documents.
 
 ## Processing boundary
 
@@ -39,10 +38,17 @@ RDF/XML requires property QNames, so a predicate must split at `#`, `/`, or
 The writer also rejects XML 1.0-unrepresentable characters and malformed XML
 Literal fragments rather than emitting invalid XML.
 
+`convert.convert` exposes this writer as an explicit batch target. RDF/XML
+output requires a positive `Reader_Limits.max_records`, collects owned default
+graph statements up to that limit, then serializes only after parsing succeeds.
+Named graphs are rejected before any XML is written. This applies equally to
+standard output and file targets; it is intentionally distinct from the other
+streaming conversion destinations.
+
 ## Explicitly deferred
 
-Full XML Name grammar coverage, a stateful streaming document writer, and a
-batch conversion target are separate milestones.
+Full XML Name grammar coverage and a stateful streaming document writer are
+separate milestones.
 
 ## Conformance gate
 

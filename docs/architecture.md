@@ -24,7 +24,9 @@ into a graph by silently dropping the graph name.
 
 The `cmd/odin-rdf` wrapper owns file policy rather than the library. It writes
 file targets to an exclusive same-directory temporary path and renames only on
-success, while standard output remains intentionally streaming for pipelines.
+success. Standard output remains intentionally streaming for record targets;
+the bounded RDF/XML target is the explicit complete-graph exception, so it
+writes only after parsing and serialization have both succeeded.
 
 ## Memory ownership
 

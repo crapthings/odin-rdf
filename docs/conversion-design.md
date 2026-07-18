@@ -1,16 +1,19 @@
 # Streaming conversion design
 
 `rdf/convert` connects the existing RDF 1.1 readers and writers without adding
-graph storage or an AST. Its unit of work is one callback-scoped RDF statement:
+a persistent graph store or AST. Its normal unit of work is one callback-scoped
+RDF statement:
 
 ```text
 io.Reader → syntax reader → Triple or Quad callback → syntax writer → io.Writer
 ```
 
-The adapter owns one reusable `strings.Builder` for the current output record.
-It writes each completed record before asking the source reader for the next
-one, so memory is independent of document size apart from the selected reader's
-existing bounds and the largest serialized record.
+The adapter normally owns one reusable `strings.Builder` for the current output
+record. It writes each completed record before asking the source reader for the
+next one, so memory is independent of document size apart from the selected
+reader's existing bounds and the largest serialized record. RDF/XML output is
+the explicit exception: it retains one owned, capacity-bounded default graph,
+then emits one document atomically after successful parsing.
 
 ## Supported conversions
 
@@ -23,10 +26,12 @@ The conversion matrix is therefore intentionally asymmetric:
 | N-Triples | N-Quads, TriG | Emit each triple in the default graph. |
 | Turtle | N-Triples, Turtle | Stream triples directly. |
 | Turtle | N-Quads, TriG | Emit each triple in the default graph. |
+| Graph syntax default graph | RDF/XML | Collect up to a required `max_records` bound, then write one RDF/XML document. |
 | Dataset default graph | N-Triples, Turtle, N-Quads, TriG | Preserve the triple or default-graph quad. |
+| Dataset default graph | RDF/XML | Collect up to a required `max_records` bound, then write one RDF/XML document. |
 | Dataset named graph | N-Quads, TriG | Preserve the quad. |
-| Dataset named graph | N-Triples, Turtle | Reject with `Named_Graph_Not_Supported`. |
-| JSON-LD, RDF/XML, TriG | N-Triples, Turtle, N-Quads, TriG | Parse bounded input; preserve named graphs for N-Quads and TriG. |
+| Dataset named graph | N-Triples, Turtle, RDF/XML | Reject with `Named_Graph_Not_Supported`. |
+| JSON-LD, RDF/XML, TriG | N-Triples, Turtle, N-Quads, TriG, RDF/XML | Parse bounded input; preserve named graphs for N-Quads and TriG, reject them for RDF/XML. |
 
 The last row is a data-integrity boundary. The adapter never silently removes a
 graph name to make a conversion appear successful.
@@ -37,10 +42,12 @@ Source parse errors preserve their syntax-specific stable message and one-based
 line and column. Serialization and writer failures preserve the corresponding
 stable writer message. Reader and writer I/O errors are retained in `Error`.
 
-Records written before a later source error remain in the destination stream.
-This is inherent in streaming output and useful for pipes. Consumers that need
-all-or-nothing file output should use the command or implement the same
-temporary-file policy around `convert.convert`.
+Records written before a later source error remain in the streaming destination
+formats. This is inherent in streaming output and useful for pipes. RDF/XML is
+all-or-nothing even on standard output: it leaves the destination untouched
+until the complete bounded graph has parsed and serialized. Consumers that need
+the same all-or-nothing behavior for streaming formats should use the command
+or implement its temporary-file policy around `convert.convert`.
 
 Turtle and TriG output require caller-supplied prefixes. Prefixes are validated and
 written before source bytes are consumed; the writer otherwise falls back to a
@@ -57,11 +64,15 @@ exposing three unrelated syntax-option structs at every call site. It maps
 `max_statement_bytes` only to Turtle's top-level production framing.
 `max_document_bytes` applies to the bounded JSON-LD, RDF/XML, and TriG readers.
 
-The zero value keeps existing reader defaults and disables the record cap.
+The zero value keeps existing reader defaults and disables the record cap for
+streaming destinations. RDF/XML output requires a positive `max_records` value
+before the source reader is touched; the value bounds both parser admission and
+the owned collector.
 Negative fields are rejected before the converter writes a Turtle prefix or
 reads the input. A streaming destination may already contain complete earlier
-records if a later source limit is reached; `odin-rdf convert --output PATH`
-uses its temporary-file policy to avoid replacing the target in that case.
+records if a later source limit is reached; RDF/XML output stays empty. In all
+cases, `odin-rdf convert --output PATH` uses its temporary-file policy to avoid
+replacing the target on failure.
 
 ## Command file policy
 

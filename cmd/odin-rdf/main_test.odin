@@ -176,6 +176,31 @@ test_convert_command_infers_file_formats_end_to_end :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_convert_command_writes_bounded_rdfxml_atomically :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-rdfxml-input.nt"
+	target :: "odin-rdf-cli-rdfxml-output.rdf"
+	temporary :: "odin-rdf-cli-rdfxml-output.rdf.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	testing.expect(t, write_test_file(input_path, "<https://example.test/s> <https://example.test/p> \"value\" .\n") == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options, err := parse_convert_args([]string{"convert", input_path, "--output", target, "--max-records", "1"})
+	defer delete(options.prefixes)
+	testing.expect_value(t, err.code, Command_Error_Code.None)
+	testing.expect_value(t, options.output_format, convert.Format.RDF_XML)
+	testing.expect_value(t, run_convert(options), 0)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect(t, strings.contains(contents, `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">`))
+	testing.expect(t, strings.contains(contents, `<ns:p xmlns:ns="https://example.test/">value</ns:p>`))
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
 test_rejects_invalid_arguments_without_guessing :: proc(t: ^testing.T) {
 	options, invalid_format := parse_convert_args([]string{"convert", "-", "--from", "rdfxmlx", "--to", "turtle"})
 	defer delete(options.prefixes)

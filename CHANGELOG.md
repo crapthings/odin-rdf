@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add RDF/XML as an explicit bounded batch `convert` target. It requires a
+  positive `max_records` admission limit, retains owned default-graph terms,
+  rejects named graphs before output, and writes the XML document only after
+  parsing and serialization both succeed.
+
 ## 0.16.0 - 2026-07-18
 
 - Add `rdfxml.write_triples`, an atomic deterministic RDF/XML writer for

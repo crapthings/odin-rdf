@@ -55,6 +55,70 @@ test_converts_rdfxml_to_nquads_with_document_bound :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_converts_complete_default_graph_to_bounded_rdfxml :: proc(t: ^testing.T) {
+	input := "<https://example.test/s> <https://example.test/name> \"Alice\"@en .\n<https://example.test/s> <https://example.test/knows> <https://example.test/o> .\n"
+	result, output := convert_text(input, Options{
+		input = .N_Triples,
+		output = .RDF_XML,
+		reader_limits = {max_records = 2},
+	})
+	testing.expect_value(t, result.error.code, Error_Code.None)
+	testing.expect_value(t, result.statements, u64(2))
+	testing.expect_value(t, result.bytes_read, u64(len(input)))
+	testing.expect(t, strings.contains(output, `<?xml version="1.0" encoding="UTF-8"?>`))
+	testing.expect(t, strings.contains(output, `<ns:name xmlns:ns="https://example.test/" xml:lang="en">Alice</ns:name>`))
+	testing.expect(t, strings.contains(output, `<ns:knows xmlns:ns="https://example.test/" rdf:resource="https://example.test/o"/>`))
+}
+
+@(test)
+test_rdfxml_output_requires_bound_and_never_writes_partial_graph :: proc(t: ^testing.T) {
+	input := "<urn:s> <urn:p> <urn:o> .\n<urn:broken> <urn:p>"
+	unbounded, unbounded_output := convert_text(input, Options{input = .N_Triples, output = .RDF_XML})
+	testing.expect_value(t, unbounded.error.code, Error_Code.RDF_XML_Record_Limit_Required)
+	testing.expect_value(t, unbounded_output, "")
+	failed, failed_output := convert_text(input, Options{
+		input = .N_Triples,
+		output = .RDF_XML,
+		reader_limits = {max_records = 2},
+	})
+	testing.expect_value(t, failed.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, failed.error.detail, "unexpected end of input")
+	testing.expect_value(t, failed.statements, u64(0))
+	testing.expect_value(t, failed_output, "")
+
+	limited, limited_output := convert_text("<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n", Options{
+		input = .N_Triples,
+		output = .RDF_XML,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, limited.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, limited.error.detail, "triple limit reached")
+	testing.expect_value(t, limited.statements, u64(0))
+	testing.expect_value(t, limited_output, "")
+}
+
+@(test)
+test_rdfxml_output_rejects_named_graphs_and_unrepresentable_predicates_atomically :: proc(t: ^testing.T) {
+	named, named_output := convert_text("<urn:s> <urn:p> <urn:o> <urn:g> .\n", Options{
+		input = .N_Quads,
+		output = .RDF_XML,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, named.error.code, Error_Code.Named_Graph_Not_Supported)
+	testing.expect_value(t, named.statements, u64(0))
+	testing.expect_value(t, named_output, "")
+	invalid, invalid_output := convert_text("<urn:s> <urn:123> \"value\" .\n", Options{
+		input = .N_Triples,
+		output = .RDF_XML,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, invalid.error.code, Error_Code.Serialization_Error)
+	testing.expect_value(t, invalid.error.detail, "predicate IRI cannot be represented as an RDF/XML QName")
+	testing.expect_value(t, invalid.statements, u64(0))
+	testing.expect_value(t, invalid_output, "")
+}
+
+@(test)
 test_converts_trig_to_nquads_with_document_bound :: proc(t: ^testing.T) {
 	input := `<urn:g> { <urn:s> <urn:p> <urn:o> . }`
 	result, output := convert_text(input, Options{input = .TriG, output = .N_Quads, reader_limits = {max_document_bytes = 1024}})
@@ -253,9 +317,11 @@ test_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Unsupported_Input_Format  = "unsupported input format",
 		.Unsupported_Output_Format = "unsupported output format",
 		.Invalid_Reader_Limits     = "reader limits must not be negative",
+		.RDF_XML_Record_Limit_Required = "RDF/XML output requires a positive max-records limit",
 		.Invalid_Turtle_Prefixes   = "invalid Turtle prefix configuration",
 		.Source_Parse_Error        = "source parse error",
 		.Named_Graph_Not_Supported = "named graphs cannot be represented by the output format",
+		.Graph_Collection_Error    = "graph collection error",
 		.Serialization_Error       = "output serialization error",
 		.Output_Write_Error        = "output write error",
 	}

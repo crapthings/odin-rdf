@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.13.0 - 2026-07-18
 
 - Add a streaming-safe TriG writer with explicit Turtle-compatible prefix
   declarations, atomic quad serialization, canonical IRIREF fallback, and one

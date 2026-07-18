@@ -39,6 +39,8 @@ Command_Error_Code :: enum {
 	Same_Input_Output,
 	Missing_Compare_Input,
 	Compare_Standard_Input,
+	Missing_Diff_Input,
+	Diff_Standard_Input,
 	Invalid_Hash_Algorithm,
 }
 
@@ -65,6 +67,8 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Same_Input_Output:    return "input and output paths must differ"
 	case .Missing_Compare_Input: return "compare requires two input paths"
 	case .Compare_Standard_Input: return "compare does not accept standard input"
+	case .Missing_Diff_Input: return "diff requires two input paths"
+	case .Diff_Standard_Input: return "diff does not accept standard input"
 	case .Invalid_Hash_Algorithm: return "--algorithm must be sha256 or sha384"
 	}
 	return "unknown error"
@@ -100,6 +104,7 @@ Integrity_Command :: enum {
 	Canon,
 	Hash,
 	Compare,
+	Diff,
 }
 
 // Integrity_Command_Options configures commands that retain one complete,
@@ -369,10 +374,11 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 	return options, {}
 }
 
-// parse_integrity_command_args parses the bounded canon, hash, and compare
-// workflows. --from applies to both inputs of compare; otherwise each file
-// infers its own format from its extension. The command-level max_quads bound
-// applies both to owned collection and RDFC-1.0 canonicalization.
+// parse_integrity_command_args parses the bounded canon, hash, compare, and
+// diff workflows. --from applies to both inputs of compare and diff; otherwise
+// each file infers its own format from its extension. The command-level
+// max_quads bound applies both to owned collection and RDFC-1.0
+// canonicalization.
 parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Options, Command_Error) {
 	options := Integrity_Command_Options{output_path = "-", max_quads = canon.DEFAULT_MAX_QUADS}
 	if len(args) == 0 do return options, Command_Error{code = .Missing_Command}
@@ -384,6 +390,7 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 	case "canon": options.command = .Canon
 	case "hash": options.command = .Hash
 	case "compare": options.command = .Compare
+	case "diff": options.command = .Diff
 	case: return options, Command_Error{code = .Unknown_Command, value = args[0]}
 	}
 
@@ -468,33 +475,41 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
 		if input_count == 0 {
 			options.input_path = arg
-		} else if input_count == 1 && options.command == .Compare {
+		} else if input_count == 1 && (options.command == .Compare || options.command == .Diff) {
 			options.other_path = arg
 		} else {
 			return options, Command_Error{code = .Extra_Input, value = arg}
 		}
 		input_count += 1
 	}
-	if options.command == .Compare {
-		if input_count != 2 do return options, Command_Error{code = .Missing_Compare_Input}
-		if options.input_path == "-" || options.other_path == "-" do return options, Command_Error{code = .Compare_Standard_Input}
+	if options.command == .Compare || options.command == .Diff {
+		if input_count != 2 {
+			if options.command == .Compare do return options, Command_Error{code = .Missing_Compare_Input}
+			return options, Command_Error{code = .Missing_Diff_Input}
+		}
+		if options.input_path == "-" || options.other_path == "-" {
+			if options.command == .Compare do return options, Command_Error{code = .Compare_Standard_Input}
+			return options, Command_Error{code = .Diff_Standard_Input}
+		}
 	} else if input_count == 0 {
 		return options, Command_Error{code = .Missing_Input}
 	}
 	if has_from {
-		if options.command == .Compare do options.other_format = options.input_format
+		if options.command == .Compare || options.command == .Diff do options.other_format = options.input_format
 		if options.command != .Compare && options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
+		if options.command == .Diff && options.other_path != "-" && options.output_path != "-" && options.other_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
 		return options, {}
 	}
 	format, ok := infer_format_from_path(options.input_path)
 	if !ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.input_path}
 	options.input_format = format
-	if options.command == .Compare {
+	if options.command == .Compare || options.command == .Diff {
 		other_format, other_ok := infer_format_from_path(options.other_path)
 		if !other_ok do return options, Command_Error{code = .Cannot_Infer_Input_Format, value = options.other_path}
 		options.other_format = other_format
 	}
 	if options.command != .Compare && options.input_path != "-" && options.output_path != "-" && options.input_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
+	if options.command == .Diff && options.other_path != "-" && options.output_path != "-" && options.other_path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
 	return options, {}
 }
 
@@ -505,6 +520,7 @@ print_help :: proc() {
 	  odin-rdf canon INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf hash INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf diff BEFORE AFTER [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; input only), rdfxml (rdf-xml, rdf, xml; bounded batch output)
 
@@ -539,12 +555,16 @@ and infers safe prefixes by default. Use --no-infer-prefixes to emit IRIREFs
 except for explicitly supplied prefixes. Use --max-triples N for Turtle or
 --max-quads N for TriG to reject input before retained output exceeds the cap.
 
-canon, hash, and compare retain a complete owned RDF dataset before processing.
+canon, hash, compare, and diff retain a complete owned RDF dataset before processing.
 They accept every supported input syntax, infer each file input independently,
 and default --max-quads to 100000. Set --max-quads N to choose the shared
 collection and canonicalization admission bound. Use the source reader limits
 for untrusted input; compare accepts two file paths (not standard input),
 prints equal or different, and exits 0 or 1 respectively (2 on an error).
+diff accepts two file paths (not standard input), writes a deterministic
+canonical N-Quads line diff with - for removed and + for added lines, and exits
+0 when equal, 1 when changed, or 2 on an error. It is not a minimum blank-node
+edit script: structural changes can change canonical blank-node identifiers.
 hash writes a lowercase hexadecimal SHA-256 digest by default; --algorithm
 sha384 selects SHA-384. These commands prepare integrity and signing-protocol
 inputs; they do not sign data or add storage/query behavior.
@@ -559,6 +579,7 @@ Examples:
   odin-rdf canon input.trig --output canonical.nq --max-quads 100000
   odin-rdf hash input.ttl --algorithm sha384
   odin-rdf compare left.trig right.trig
+  odin-rdf diff before.trig after.trig --output changes.nqdiff
 `)
 }
 
@@ -928,17 +949,65 @@ write_integrity_result :: proc(text, output_path: string) -> int {
 	return 0
 }
 
+// next_canonical_line returns the next newline-delimited canonical N-Quads
+// line. RDFC output is sorted, so diffing its complete lines produces stable
+// machine-readable text without reparsing or attempting blank-node matching.
+next_canonical_line :: proc(text: string, offset: ^int) -> string {
+	start := offset^
+	for offset^ < len(text) && text[offset^] != '\n' do offset^ += 1
+	if offset^ < len(text) do offset^ += 1
+	return text[start:offset^]
+}
+
+// write_canonical_diff emits the left-only lines before the right-only lines
+// they sort against. A changed blank-node structure can alter canonical labels,
+// so this is intentionally a deterministic canonical text diff rather than a
+// minimum edit script.
+write_canonical_diff :: proc(builder: ^strings.Builder, before, after: string) -> bool {
+	before_offset, after_offset := 0, 0
+	has_changes := false
+	for before_offset < len(before) || after_offset < len(after) {
+		if before_offset == len(before) {
+			strings.write_string(builder, "+ ")
+			strings.write_string(builder, next_canonical_line(after, &after_offset))
+			has_changes = true
+			continue
+		}
+		if after_offset == len(after) {
+			strings.write_string(builder, "- ")
+			strings.write_string(builder, next_canonical_line(before, &before_offset))
+			has_changes = true
+			continue
+		}
+		before_line := next_canonical_line(before, &before_offset)
+		after_line := next_canonical_line(after, &after_offset)
+		comparison := strings.compare(before_line, after_line)
+		if comparison < 0 {
+			strings.write_string(builder, "- ")
+			strings.write_string(builder, before_line)
+			has_changes = true
+			after_offset -= len(after_line)
+		} else if comparison > 0 {
+			strings.write_string(builder, "+ ")
+			strings.write_string(builder, after_line)
+			has_changes = true
+			before_offset -= len(before_line)
+		}
+	}
+	return has_changes
+}
+
 run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 	left: dataset.Collector
 	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left)
 	defer dataset.destroy(&left)
 	if left_error.code != .None {
 		report_integrity_error(options.input_format, options.input_path, left_error)
-		if options.command == .Compare do return 2
+		if options.command == .Compare || options.command == .Diff do return 2
 		return 1
 	}
 
-	if options.command == .Compare {
+	if options.command == .Compare || options.command == .Diff {
 		right: dataset.Collector
 		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right)
 		defer dataset.destroy(&right)
@@ -946,20 +1015,39 @@ run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 			report_integrity_error(options.other_format, options.other_path, right_error)
 			return 2
 		}
-		equal, canon_error := canon.isomorphic(left.quads[:], right.quads[:], canon.Options{
-			hash_algorithm = options.hash_algorithm,
-			max_quads = options.max_quads,
-		})
-		if canon_error != .None {
-			fmt.eprintfln("odin-rdf: dataset comparison error: %s", canon.error_message(canon_error))
+		canon_options := canon.Options{hash_algorithm = options.hash_algorithm, max_quads = options.max_quads}
+		if options.command == .Compare {
+			equal, canon_error := canon.isomorphic(left.quads[:], right.quads[:], canon_options)
+			if canon_error != .None {
+				fmt.eprintfln("odin-rdf: dataset comparison error: %s", canon.error_message(canon_error))
+				return 2
+			}
+			if equal {
+				fmt.println("equal")
+				return 0
+			}
+			fmt.println("different")
+			return 1
+		}
+
+		before_builder := strings.builder_make()
+		defer strings.builder_destroy(&before_builder)
+		after_builder := strings.builder_make()
+		defer strings.builder_destroy(&after_builder)
+		if canon_error := canon.canonicalize(&before_builder, left.quads[:], canon_options); canon_error != .None {
+			fmt.eprintfln("odin-rdf: dataset diff error: %s", canon.error_message(canon_error))
 			return 2
 		}
-		if equal {
-			fmt.println("equal")
-			return 0
+		if canon_error := canon.canonicalize(&after_builder, right.quads[:], canon_options); canon_error != .None {
+			fmt.eprintfln("odin-rdf: dataset diff error: %s", canon.error_message(canon_error))
+			return 2
 		}
-		fmt.println("different")
-		return 1
+		diff_builder := strings.builder_make()
+		defer strings.builder_destroy(&diff_builder)
+		has_changes := write_canonical_diff(&diff_builder, strings.to_string(before_builder), strings.to_string(after_builder))
+		if write_integrity_result(strings.to_string(diff_builder), options.output_path) != 0 do return 2
+		if has_changes do return 1
+		return 0
 	}
 
 	builder := strings.builder_make()
@@ -994,7 +1082,7 @@ main :: proc() {
 		delete(options.prefixes)
 		os.exit(exit_code)
 	}
-	if len(os.args) > 1 && (os.args[1] == "canon" || os.args[1] == "hash" || os.args[1] == "compare") {
+	if len(os.args) > 1 && (os.args[1] == "canon" || os.args[1] == "hash" || os.args[1] == "compare" || os.args[1] == "diff") {
 		options, parse_err := parse_integrity_command_args(os.args[1:])
 		exit_code := 0
 		if options.help {

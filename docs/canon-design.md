@@ -49,13 +49,19 @@ their workload. A limit failure leaves the destination builder unchanged.
 
 ## Command-line workflow
 
-`odin-rdf canon`, `hash`, and `compare` expose canonicalization without
+`odin-rdf canon`, `hash`, `compare`, and `diff` expose canonicalization without
 weakening that complete-dataset boundary. Each command first parses a supported
 syntax into `dataset.Collector` under a shared `--max-quads` admission limit
 (100,000 by default), then invokes the matching `rdf/canon` operation. `canon`
 and `hash` build their entire result before writing standard output or atomically
 replacing a file target. `compare` takes two file paths, prints `equal` or
 `different`, and returns 0, 1, or 2 for equality, difference, or an error.
+`diff` likewise takes two file paths, canonicalizes both before writing, and
+emits their sorted canonical N-Quads line difference: `- ` marks a line present
+only before and `+ ` one present only after. It exits 0 when there is no output,
+1 when there are changes, and 2 on any error. This is deliberately a canonical
+text diff, not a minimum blank-node edit script: changing a blank-node structure
+can reassign canonical identifiers and affect more lines than the local edit.
 Source reader limits remain available for malformed or oversized input.
 
 ## Verification

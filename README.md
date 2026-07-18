@@ -18,7 +18,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.12.0` adds bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.12.0` adds bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. The development branch additionally includes a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API; RDF/XML deliberately rejects markup-bearing XML Literals until canonical XML support is added. Both boundaries are documented rather than silently approximated.
 
@@ -63,7 +63,7 @@ rdf/nquads/          N-Quads parser, writer, and unit tests
 rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bounded reader
 rdf/jsonld/          Bounded JSON-LD-to-RDF dataset processor
 rdf/rdfxml/          Bounded RDF/XML-to-RDF dataset processor
-rdf/trig/            Bounded RDF 1.1 TriG-to-RDF dataset parser
+rdf/trig/            Bounded RDF 1.1 TriG parser and streaming-safe writer
 rdf/dataset/         Owned, capacity-bounded dataset collector
 rdf/convert/         Streaming syntax-to-syntax conversion adapter
 cmd/odin-rdf/        Command-line converter built on the adapter
@@ -93,7 +93,8 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
 - `jsonld.parse(input, sink, options)` and `jsonld.parse_reader(reader, sink, options)` transform a bounded JSON-LD document into RDF quads. Remote contexts require an explicit loader callback.
 - `rdfxml.parse(input, sink, options)` and `rdfxml.parse_reader(reader, sink, options)` transform a bounded RDF/XML document into default-graph RDF quads. They do not fetch external resources; markup-bearing XML Literals are explicitly unsupported.
-- `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists; TriG serialization is not yet provided.
+- `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists.
+- `trig.write_prefixes` and `trig.write_quad` atomically serialize explicit prefixes and individual dataset quads. Each named graph quad is emitted as an independent graph block, so output preserves order and stays streaming-safe without retaining a dataset.
 - `dataset.Collector` copies transient quads and term strings into caller-owned storage with an optional quad admission limit. `dataset.triple_sink` adapts N-Triples and Turtle output to default-graph quads. It preserves order and duplicates; it is not a graph store.
 - `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
 - `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
@@ -229,7 +230,7 @@ cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 
 Supported spellings are `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`,
 input-only `jsonld`/`json-ld`/`json`, and input-only
-`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`, plus input-only `trig`. For file paths, `convert` infers the
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`, plus `trig`. For file paths, `convert` infers the
 corresponding syntax from `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`,
 `.rdf`, `.xml`, or `.trig`; explicit `--from` and `--to` override that inference. `-` denotes
 standard input or output and always requires the corresponding explicit format,
@@ -237,12 +238,12 @@ as do unrecognized extensions. File targets are streamed into a
 same-directory temporary file and replace the destination only after the
 conversion succeeds and the temporary file closes successfully. Standard output
 is intentionally streaming, so a later input error can leave earlier valid
-records on the pipe. Turtle prefixes are always explicit and repeatable; use
-`--prefix =https://example.com/` for the default prefix.
+records on the pipe. Turtle and TriG prefixes are always explicit and repeatable;
+use `--prefix =https://example.com/` for the default prefix.
 
-N-Quads default-graph records convert to all three syntaxes. A named graph can
-only target N-Quads; the command rejects every lossy target rather than dropping
-the graph name.
+N-Quads default-graph records convert to all four syntax targets. A named graph
+can target N-Quads or TriG; the command rejects every lossy target rather than
+dropping the graph name.
 
 `convert` can bound untrusted input with `--max-records N` for all source
 syntaxes, `--max-line-bytes N` for N-Triples/N-Quads,

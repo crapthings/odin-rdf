@@ -1,8 +1,8 @@
-# TriG to RDF design
+# TriG parser and writer design
 
-`rdf/trig` parses RDF 1.1 TriG into callback-scoped `rdf.Quad` values. It is an
-input package: N-Quads remains the dataset serialization target, while a TriG
-writer is deliberately deferred.
+`rdf/trig` parses RDF 1.1 TriG into callback-scoped `rdf.Quad` values and
+serializes individual quads back to TriG. Both surfaces preserve explicit
+ownership and bounded-streaming boundaries.
 
 ## Grammar and dataset boundary
 
@@ -36,6 +36,19 @@ errors and rejects stalled readers.
 Term strings are valid only during the sink callback. Graph labels are kept
 alive internally for the duration of their graph block, but callers still must
 copy or encode all values they need after the callback returns.
+
+## Streaming writer boundary
+
+`write_prefixes` accepts the same explicit `turtle.Prefix` declarations as the
+Turtle writer. `write_quad` atomically serializes one quad using the same safe
+prefix compaction and IRIREF fallback policy. Default-graph quads become
+Turtle-compatible triple statements. Named-graph quads become individual graph
+blocks, for example `<urn:g> { <urn:s> <urn:p> <urn:o> . }`.
+
+This is intentionally a record writer rather than a document formatter: it
+does not retain quads, group graph blocks, reorder input, infer prefixes, or
+deduplicate. A future batch formatter can provide grouped graph documents as a
+separate, explicitly retained API.
 
 ## Conformance gate
 

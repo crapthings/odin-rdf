@@ -2,6 +2,15 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add a streaming-safe TriG writer with explicit Turtle-compatible prefix
+  declarations, atomic quad serialization, canonical IRIREF fallback, and one
+  independent named-graph block per input quad.
+- Allow TriG conversion targets and `.trig` output inference without retaining
+  or regrouping a dataset. Named graphs now preserve losslessly to TriG as well
+  as N-Quads.
+
 ## 0.12.0 - 2026-07-18
 
 - Add bounded RDF 1.1 TriG-to-RDF input with default and named graph support,

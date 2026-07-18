@@ -14,19 +14,19 @@ existing bounds and the largest serialized record.
 
 ## Supported conversions
 
-N-Triples and Turtle are RDF graph syntaxes. N-Quads is an RDF dataset syntax.
+N-Triples and Turtle are RDF graph syntaxes. N-Quads and TriG are RDF dataset syntaxes.
 The conversion matrix is therefore intentionally asymmetric:
 
 | Source | Target | Behavior |
 | --- | --- | --- |
 | N-Triples | N-Triples, Turtle | Stream triples directly. |
-| N-Triples | N-Quads | Emit each triple in the default graph. |
+| N-Triples | N-Quads, TriG | Emit each triple in the default graph. |
 | Turtle | N-Triples, Turtle | Stream triples directly. |
-| Turtle | N-Quads | Emit each triple in the default graph. |
-| N-Quads default graph | N-Triples, Turtle, N-Quads | Preserve the triple or default-graph quad. |
-| N-Quads named graph | N-Quads | Preserve the quad. |
-| N-Quads named graph | N-Triples, Turtle | Reject with `Named_Graph_Not_Supported`. |
-| JSON-LD, RDF/XML, TriG | N-Triples, Turtle, N-Quads | Parse bounded input; preserve named graphs only for N-Quads. |
+| Turtle | N-Quads, TriG | Emit each triple in the default graph. |
+| Dataset default graph | N-Triples, Turtle, N-Quads, TriG | Preserve the triple or default-graph quad. |
+| Dataset named graph | N-Quads, TriG | Preserve the quad. |
+| Dataset named graph | N-Triples, Turtle | Reject with `Named_Graph_Not_Supported`. |
+| JSON-LD, RDF/XML, TriG | N-Triples, Turtle, N-Quads, TriG | Parse bounded input; preserve named graphs for N-Quads and TriG. |
 
 The last row is a data-integrity boundary. The adapter never silently removes a
 graph name to make a conversion appear successful.
@@ -42,10 +42,11 @@ This is inherent in streaming output and useful for pipes. Consumers that need
 all-or-nothing file output should use the command or implement the same
 temporary-file policy around `convert.convert`.
 
-Turtle output requires caller-supplied prefixes. Prefixes are validated and
+Turtle and TriG output require caller-supplied prefixes. Prefixes are validated and
 written before source bytes are consumed; the writer otherwise falls back to a
 canonical IRIREF. No prefix inference or document grouping is hidden inside the
-converter.
+converter. TriG emits one self-contained named graph block per named quad, which
+keeps its memory bounded and preserves record order.
 
 ## Reader limits
 

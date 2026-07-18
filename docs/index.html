@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF, RDF/XML-to-RDF, and TriG-to-RDF input alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic Turtle formatting, and loss-aware conversion. These document processors have explicit limits and no hidden network client or graph store.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF and RDF/XML-to-RDF input, plus conformant TriG parsing and streaming-safe TriG serialization alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic Turtle formatting, and loss-aware conversion. These document processors have explicit limits and no hidden network client or graph store.</p>
           <a href="https://www.w3.org/TR/rdf-syntax-grammar/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDF/XML syntax specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -181,7 +181,7 @@ err := ttl.parse(input, consume)
               <li>Conformant Turtle parser, writer, and formatter</li>
               <li>Bounded JSON-LD-to-RDF dataset conversion</li>
               <li>Bounded RDF/XML-to-RDF input</li>
-              <li>Conformant TriG-to-RDF dataset input</li>
+              <li>Conformant TriG dataset parser and streaming writer</li>
               <li>Owned, capacity-bounded quad collection</li>
               <li>Streaming syntax conversion CLI</li>
               <li>UTF-8 and escape handling</li>

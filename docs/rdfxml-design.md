@@ -30,9 +30,19 @@ instructions, XML namespace context, and explicit end tags while sorting
 ordinary attributes into a stable canonical order. This retained fragment is
 still bounded by the document limit and remains valid only for the sink call.
 
+`write_triples` is the corresponding explicit output path for a complete
+default graph. It creates an XML document atomically, preserves source triple
+order, and maps blank nodes to deterministic XML-safe `rdf:nodeID` values.
+It supports IRI, blank-node, language, datatype, and XML Literal objects.
+RDF/XML requires property QNames, so a predicate must split at `#`, `/`, or
+`:` into an XML Name local part; RDF/XML-reserved property IRIs are rejected.
+The writer also rejects XML 1.0-unrepresentable characters and malformed XML
+Literal fragments rather than emitting invalid XML.
+
 ## Explicitly deferred
 
-Full XML Name grammar coverage and an RDF/XML writer are separate milestones.
+Full XML Name grammar coverage, a stateful streaming document writer, and a
+batch conversion target are separate milestones.
 
 ## Conformance gate
 

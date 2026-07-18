@@ -137,3 +137,94 @@ test_reader_preserves_io_failures_and_no_progress :: proc(t: ^testing.T) {
 	testing.expect_value(t, stalled.error.code, Error_Code.No_Progress)
 	testing.expect_value(t, stalled.reader_error, io.Error.No_Progress)
 }
+
+@(test)
+test_write_triples_round_trips_terms_and_blank_node_scopes :: proc(t: ^testing.T) {
+	shared := rdf.blank_node("source-label", rdf.Blank_Node_Scope(7))
+	other := rdf.blank_node("source-label", rdf.Blank_Node_Scope(8))
+	triples := [4]rdf.Triple{
+		{subject = rdf.iri("https://example.test/s"), predicate = rdf.iri("https://example.test/knows"), object = shared},
+		{subject = shared, predicate = rdf.iri("https://example.test/label"), object = rdf.language_literal("B & C", "en")},
+		{subject = other, predicate = rdf.iri("https://example.test/count"), object = rdf.typed_literal("42", "https://www.w3.org/2001/XMLSchema#integer")},
+		{subject = rdf.iri("https://example.test/s"), predicate = rdf.iri(RDF_TYPE), object = rdf.iri("https://example.test/Person")},
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, write_triples(&builder, triples[:]), Write_Error.None)
+	written := strings.to_string(builder)
+	testing.expect(t, strings.contains(written, `<rdf:Description rdf:about="https://example.test/s">`))
+	testing.expect(t, strings.contains(written, `<ns:knows xmlns:ns="https://example.test/" rdf:nodeID="b0"/>`))
+	testing.expect(t, strings.contains(written, `<rdf:Description rdf:nodeID="b1">`))
+	testing.expect(t, strings.contains(written, `B &amp; C`))
+	actual, parse_err := parse_to_nquads(written)
+	defer delete(actual)
+	testing.expect_value(t, parse_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <https://example.test/knows> _:b0 .`))
+	testing.expect(t, strings.contains(actual, `_:b0 <https://example.test/label> "B & C"@en .`))
+	testing.expect(t, strings.contains(actual, `_:b1 <https://example.test/count> "42"^^<https://www.w3.org/2001/XMLSchema#integer> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://example.test/Person> .`))
+}
+
+@(test)
+test_write_triples_preserves_xml_literal :: proc(t: ^testing.T) {
+	triples := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.typed_literal(`<x:em xmlns:x="https://markup.test/">x</x:em>`, RDF_XML_LITERAL),
+	}}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, write_triples(&builder, triples[:]), Write_Error.None)
+	written := strings.to_string(builder)
+	testing.expect(t, strings.contains(written, `rdf:parseType="Literal"><x:em xmlns:x="https://markup.test/">x</x:em>`))
+	actual, parse_err := parse_to_nquads(written)
+	defer delete(actual)
+	testing.expect_value(t, parse_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<x:em xmlns:x=\"https://markup.test/\">x</x:em>`))
+}
+
+@(test)
+test_write_triples_fails_atomically_for_unrepresentable_data :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "prefix")
+	invalid_predicate := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/123"),
+		object = rdf.literal("value"),
+	}}
+	testing.expect_value(t, write_triples(&builder, invalid_predicate[:]), Write_Error.Invalid_Property_Name)
+	testing.expect_value(t, strings.to_string(builder), "prefix")
+	invalid_xml := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.typed_literal("<unclosed>", RDF_XML_LITERAL),
+	}}
+	testing.expect_value(t, write_triples(&builder, invalid_xml[:]), Write_Error.Invalid_XML_Literal)
+	testing.expect_value(t, strings.to_string(builder), "prefix")
+	invalid_character := [1]rdf.Triple{{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.literal("\x01"),
+	}}
+	testing.expect_value(t, write_triples(&builder, invalid_character[:]), Write_Error.Invalid_XML_Character)
+	testing.expect_value(t, strings.to_string(builder), "prefix")
+}
+
+@(test)
+test_write_error_messages_are_stable :: proc(t: ^testing.T) {
+	codes := [15]Write_Error{
+		.None, .Invalid_Term_Kind, .Invalid_Subject, .Invalid_Predicate, .Invalid_IRI,
+		.Invalid_Blank_Node, .Invalid_Language_Tag, .Invalid_UTF8, .Unexpected_Language,
+		.Unexpected_Datatype, .Missing_Literal_Datatype, .Invalid_Language_Datatype,
+		.Invalid_Property_Name, .Reserved_Predicate, .Invalid_XML_Literal,
+	}
+	messages := [15]string{
+		"no error", "invalid RDF term kind", "subject must be an IRI or blank node", "predicate must be an IRI", "invalid absolute IRI",
+		"invalid blank-node label", "invalid language tag", "invalid UTF-8", "language tag is only valid on a literal",
+		"datatype is only valid on a literal", "literal datatype is required", "language-tagged literal must use rdf:langString",
+		"predicate IRI cannot be represented as an RDF/XML QName", "predicate is reserved by RDF/XML syntax", "rdf:XMLLiteral value is not a valid XML fragment",
+	}
+	for code, index in codes do testing.expect_value(t, write_error_message(code), messages[index])
+	testing.expect_value(t, write_error_message(.Invalid_XML_Character), "RDF term contains a character not representable in XML 1.0")
+}

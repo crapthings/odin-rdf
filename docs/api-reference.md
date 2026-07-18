@@ -191,6 +191,15 @@ Literal serialization behavior, and the W3C core selection. XML parser diagnosti
 currently carry source positions; semantic RDF/XML failures therefore use a
 zero line and column.
 
+`rdfxml.write_triples(builder, triples)` atomically appends one complete,
+default-graph RDF/XML document. It intentionally retains no document state:
+callers supply the complete graph, and it emits one `rdf:Description` per
+triple in source order. Blank nodes receive deterministic XML-safe `rdf:nodeID`
+values. IRI predicates must have an XML Name local part after a `#`, `/`, or
+`:` namespace boundary; names reserved by RDF/XML and XML 1.0-unrepresentable
+characters return a `Write_Error`. `rdf:XMLLiteral` values must be valid XML
+fragments. This batch writer is not a streaming conversion target.
+
 ## TriG `rdf/trig`
 
 ```odin

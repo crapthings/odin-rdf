@@ -9,6 +9,7 @@
 ![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
 ![W3C TriG tests](https://img.shields.io/badge/W3C_TriG-355%2F355-15803d)
+![W3C RDFC-1.0](https://img.shields.io/badge/W3C_RDFC--1.0-65%2F65-7c3aed)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
@@ -18,7 +19,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.18.0` adds a stateful RDF/XML document writer for large default-graph streams, with explicit namespaces and a bounded blank-node map. Version `0.17.0` made RDF/XML a bounded, atomic conversion target for complete default graphs. Version `0.16.0` added its deterministic batch writer. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
+Version `0.19.0` adds a complete, resource-bounded implementation of W3C RDF Dataset Canonicalization 1.0 (RDFC-1.0), including SHA-256 and SHA-384 and canonical N-Quads output. Version `0.18.0` adds a stateful RDF/XML document writer for large default-graph streams, with explicit namespaces and a bounded blank-node map. Version `0.17.0` made RDF/XML a bounded, atomic conversion target for complete default graphs. Version `0.16.0` added its deterministic batch writer. Version `0.15.0` completes markup-bearing RDF/XML Literal input. Version `0.14.0` added an atomic TriG dataset formatter and `odin-rdf format` support for `.trig`. Version `0.13.0` added a streaming-safe TriG writer and loss-aware TriG conversion targets. Version `0.12.0` added bounded TriG-to-RDF dataset input with `.trig` conversion inference and an owned, capacity-bounded dataset collector. Version `0.11.0` added bounded RDF/XML-to-RDF input; the release line also includes bounded JSON-LD-to-RDF dataset processing with local contexts and opt-in document loading, a reproducible Turtle formatter benchmark, ergonomic file-format inference, bounded conversion readers, batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 Graph storage and SPARQL are not part of the current release. JSON-LD deliberately has a narrower [to-RDF core profile](docs/jsonld-design.md) than the complete JSON-LD API. RDF/XML has bounded document input and a separate complete-graph writer plus a bounded batch conversion target, not a streaming one. Both boundaries are documented rather than silently approximated.
 
@@ -26,7 +27,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD and RDF/XML each have documented, reproducible core selections; RDF/XML runs 173 cases. Graph and dataset evaluations use blank-node-aware isomorphism.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD and RDF/XML each have documented, reproducible core selections; RDF/XML runs 173 cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.
@@ -64,6 +65,7 @@ rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bound
 rdf/jsonld/          Bounded JSON-LD-to-RDF dataset processor
 rdf/rdfxml/          Bounded RDF/XML processor with batch and stateful writers
 rdf/trig/            Bounded RDF 1.1 TriG parser and streaming-safe writer
+rdf/canon/           Resource-bounded W3C RDFC-1.0 dataset canonicalization
 rdf/dataset/         Owned, capacity-bounded dataset collector
 rdf/convert/         Streaming syntax-to-syntax conversion adapter
 cmd/odin-rdf/        Command-line converter built on the adapter
@@ -98,6 +100,7 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists.
 - `trig.write_prefixes` and `trig.write_quad` atomically serialize explicit prefixes and individual dataset quads. Each named graph quad is emitted as an independent graph block, so output preserves order and stays streaming-safe without retaining a dataset.
 - `trig.format_quads(builder, quads, options)` is the explicit batch path: it groups a complete dataset by graph, sorts and deduplicates quads, and can infer safe prefixes for terms and graph names.
+- `canon.canonicalize(builder, quads, options)` atomically writes the W3C RDFC-1.0 canonical N-Quads form of a complete dataset. It removes exact duplicate quads, defaults to SHA-256, supports SHA-384, and enforces resource limits on input size, recursive work, and permutations.
 - `dataset.Collector` copies transient quads and term strings into caller-owned storage with an optional quad admission limit. `dataset.triple_sink` adapts N-Triples and Turtle output to default-graph quads. It preserves order and duplicates; it is not a graph store.
 - `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
 - `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
@@ -127,6 +130,11 @@ if parse_error.code == .Stopped && collector.last_error == .Quad_Limit {
 ```
 
 RDF term constructors establish datatype invariants but intentionally leave lexical validation to format parsers and writers. Parsed blank nodes carry a non-zero document scope: repeated labels within one parse identify the same node, while equal labels from independent parser invocations do not. Manually constructed blank nodes use scope zero unless a scope is supplied.
+
+Canonicalization is intentionally a complete-dataset operation, not a streaming
+writer. It is useful for stable dataset comparison, signing pipelines, and test
+fixtures. Its built-in limits reject adversarially complex blank-node graphs;
+raise a specific limit only after setting an application-level admission policy.
 
 ## Getting started
 
@@ -293,6 +301,7 @@ odin test rdf/turtle
 odin test rdf/jsonld
 odin test rdf/rdfxml
 odin test rdf/trig
+odin test rdf/canon
 odin test rdf/dataset
 odin test rdf/convert
 odin test cmd/odin-rdf
@@ -311,6 +320,7 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-jsonld-tests.sh
 ./scripts/run-w3c-rdfxml-tests.sh
 ./scripts/run-w3c-trig-tests.sh
+./scripts/run-w3c-rdf-canon-tests.sh
 ./scripts/run-benchmarks.sh
 ```
 

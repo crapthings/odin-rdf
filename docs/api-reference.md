@@ -51,6 +51,33 @@ If either returns false, inspect `collector.last_error` to
 distinguish `Quad_Limit`, an invalid caller-supplied quad, or allocation failure
 from a parser-originated stop.
 
+## Dataset canonicalization `rdf/canon`
+
+```odin
+canonicalize(builder: ^strings.Builder, quads: []rdf.Quad,
+             options: Options = {}) -> Error_Code
+```
+
+`canonicalize` implements W3C RDF Dataset Canonicalization 1.0 (RDFC-1.0) for
+a complete dataset. It atomically appends canonical N-Quads: on any error the
+destination builder is unchanged. Input quads remain caller-owned and are not
+retained after the call. Exact duplicate quads are removed because an RDF
+dataset is a set.
+
+`Options.hash_algorithm` defaults to `SHA_256`; `SHA_384` is also supported.
+Zero-valued limits select safe defaults: 100,000 input quads, 100,000 blank
+nodes, 10,000,000 work steps, 1,000,000 permutations, and recursion depth 256.
+Set a positive value to override an individual bound. Negative integer limits
+return `Invalid_Option`. `Work_Limit`, `Permutation_Limit`, and
+`Recursion_Limit` are intentional dataset-poisoning protections, not parser
+errors; choose application-specific bounds before raising them for untrusted
+input.
+
+The output follows RDFC-1.0's canonical N-Quads escaping rules, which differ
+in a few control-character cases from ordinary N-Quads serialization. Use this
+API for stable equality, fixture, or signing inputs; it is deliberately batch
+oriented and does not introduce graph storage or query state.
+
 ## N-Triples `rdf/ntriples`
 
 ```odin

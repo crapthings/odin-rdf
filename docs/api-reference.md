@@ -187,7 +187,7 @@ external documents or resources.
 the document byte bound through `max_document_bytes`. `Reader_Result` reports
 `quads`, `bytes_read`, and any underlying `reader_error`. See the [RDF/XML
 design boundary](rdfxml-design.md) for supported constructs, the explicit XML
-Literal limitation, and the W3C core selection. XML parser diagnostics do not
+Literal serialization behavior, and the W3C core selection. XML parser diagnostics do not
 currently carry source positions; semantic RDF/XML failures therefore use a
 zero line and column.
 

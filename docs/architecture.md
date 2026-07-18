@@ -6,9 +6,11 @@ The `rdf` package contains only syntax-independent data types. Syntax packages s
 
 Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and a small utility can collect them into a dynamic array when retaining the graph is appropriate.
 
-`rdf/jsonld` is the intentional exception to record streaming: JSON-LD context
-and graph processing retain one bounded document before emitting quads. Its
-loader is supplied by the caller; the core package has no HTTP dependency.
+`rdf/jsonld` and `rdf/rdfxml` are intentional exceptions to record streaming:
+each retains one bounded document before emitting quads. JSON-LD's optional
+loader is supplied by the caller; RDF/XML has no external-resource or network
+behavior. Both packages expose document, nesting, and output limits rather
+than silently materializing an unbounded graph.
 
 ## Conversion boundary
 
@@ -30,7 +32,10 @@ The parser avoids copying whenever possible. Values may reference the original i
 
 Blank-node labels are scoped to one parsed document. Parsers store that identity in `Term.scope`; one `parse` or `parse_reader` call shares a non-zero scope across triple positions and N-Quads graph names, while independent calls and syntax packages draw from one process-wide scope generator. Manually constructed blank nodes default to scope zero, so applications can provide an explicit scope or dictionary-encode them when merging sources.
 
-The streaming reader requests 64 KiB chunks by default and enforces a 16 MiB maximum physical line length to bound memory growth on untrusted input. Both values are configurable, and callers may also cap the number of emitted triples.
+The streaming reader requests 64 KiB chunks by default. Line-oriented parsers
+enforce a 16 MiB maximum physical line length; JSON-LD and RDF/XML instead
+enforce a 16 MiB retained-document bound. Callers may also cap emitted triples
+or quads according to the syntax.
 
 ## Error handling
 

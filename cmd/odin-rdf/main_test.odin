@@ -96,6 +96,12 @@ test_infers_formats_from_canonical_file_extensions :: proc(t: ^testing.T) {
 	testing.expect_value(t, jsonld_err.code, Command_Error_Code.None)
 	testing.expect_value(t, jsonld_options.input_format, convert.Format.JSON_LD)
 	testing.expect_value(t, jsonld_options.output_format, convert.Format.N_Quads)
+
+	rdfxml_options, rdfxml_err := parse_convert_args([]string{"convert", "input.rdf", "--output", "output.nt"})
+	defer delete(rdfxml_options.prefixes)
+	testing.expect_value(t, rdfxml_err.code, Command_Error_Code.None)
+	testing.expect_value(t, rdfxml_options.input_format, convert.Format.RDF_XML)
+	testing.expect_value(t, rdfxml_options.output_format, convert.Format.N_Triples)
 }
 
 @(test)
@@ -112,11 +118,11 @@ test_requires_an_explicit_format_when_it_cannot_be_inferred :: proc(t: ^testing.
 	defer delete(missing_to_options.prefixes)
 	testing.expect_value(t, missing_to.code, Command_Error_Code.Cannot_Infer_Output_Format)
 
-	unknown_input_options, unknown_input := parse_convert_args([]string{"convert", "input.rdf", "--to", "ntriples"})
+	unknown_input_options, unknown_input := parse_convert_args([]string{"convert", "input.unknown", "--to", "ntriples"})
 	defer delete(unknown_input_options.prefixes)
 	testing.expect_value(t, unknown_input.code, Command_Error_Code.Cannot_Infer_Input_Format)
 
-	unknown_output_options, unknown_output := parse_convert_args([]string{"convert", "input.nt", "--output", "output.rdf"})
+	unknown_output_options, unknown_output := parse_convert_args([]string{"convert", "input.nt", "--output", "output.unknown"})
 	defer delete(unknown_output_options.prefixes)
 	testing.expect_value(t, unknown_output.code, Command_Error_Code.Cannot_Infer_Output_Format)
 }
@@ -145,7 +151,7 @@ test_convert_command_infers_file_formats_end_to_end :: proc(t: ^testing.T) {
 
 @(test)
 test_rejects_invalid_arguments_without_guessing :: proc(t: ^testing.T) {
-	options, invalid_format := parse_convert_args([]string{"convert", "-", "--from", "rdfxml", "--to", "turtle"})
+	options, invalid_format := parse_convert_args([]string{"convert", "-", "--from", "rdfxmlx", "--to", "turtle"})
 	defer delete(options.prefixes)
 	testing.expect_value(t, invalid_format.code, Command_Error_Code.Invalid_Format)
 

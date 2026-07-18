@@ -7,6 +7,7 @@ This directory integrates the official `w3c/rdf-tests` RDF 1.1 N-Triples and N-Q
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/check-w3c-turtle-manifest.sh
 ./scripts/run-w3c-turtle-tests.sh
+./scripts/run-w3c-rdfxml-tests.sh
 ```
 
 The N-Triples gate covers 72 manifest cases. The N-Quads gate covers 87
@@ -38,3 +39,15 @@ parse → write → parse round trip. Downloaded files are cached under `.cache/
 JSON-LD 1.1 API suite: scoped contexts, map containers, direction handling,
 generalized RDF, compaction, framing, and serialization have separate future
 conformance milestones.
+
+# RDF/XML core selection
+
+`../scripts/run-w3c-rdfxml-tests.sh` runs 128 RDF/XML evaluation cases and 41
+negative cases (169 total) from the same pinned corpus. Each case exercises the
+memory parser plus 1-byte, 7-byte, and default reader chunks; evaluations use
+RDF graph isomorphism against the expected N-Triples.
+
+The selection intentionally excludes four evaluation fixtures whose XML
+Literal value contains child markup and therefore requires XML canonicalization.
+The parser supports text-only `rdf:parseType="Literal"` values but rejects the
+markup-bearing form explicitly rather than emitting a non-canonical XML Literal.

@@ -167,8 +167,8 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The next release adds a bounded JSON-LD-to-RDF core alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, deterministic Turtle formatting, and loss-aware conversion. JSON-LD is an explicit document processor with caller-controlled context loading—not a hidden network client or a graph store.</p>
-          <a href="https://www.w3.org/TR/json-ld11-api/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C JSON-LD processing specification →</a>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current release includes a bounded JSON-LD-to-RDF core. The next release adds bounded RDF/XML-to-RDF input alongside RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, deterministic Turtle formatting, and loss-aware conversion. Both document processors have explicit limits and no hidden network client or graph store.</p>
+          <a href="https://www.w3.org/TR/rdf-syntax-grammar/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDF/XML syntax specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="rounded-2xl border border-olive-700/20 bg-white/70 p-6 shadow-sm">
@@ -180,6 +180,7 @@ err := ttl.parse(input, consume)
               <li>Quad model and N-Quads syntax</li>
               <li>Conformant Turtle parser, writer, and formatter</li>
               <li>Bounded JSON-LD-to-RDF dataset conversion</li>
+              <li>Bounded RDF/XML-to-RDF input</li>
               <li>Streaming syntax conversion CLI</li>
               <li>UTF-8 and escape handling</li>
               <li>W3C syntax conformance suite</li>
@@ -188,7 +189,7 @@ err := ttl.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>RDF/XML</li>
+              <li>RDF/XML writer and XML Literal canonicalization</li>
               <li>JSON-LD compaction, framing, and writer APIs</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
@@ -218,6 +219,7 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">odin test</span> rdf/ntriples
 <span class="text-amber-200">odin test</span> rdf/nquads
 <span class="text-amber-200">odin test</span> rdf/turtle
+<span class="text-amber-200">odin test</span> rdf/rdfxml
 
 <span class="text-olive-300/70"># group and normalize a complete Turtle graph</span>
 <span class="text-amber-200">odin-rdf format</span> input.ttl --output formatted.ttl
@@ -230,9 +232,10 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
 <span class="text-amber-200">./scripts/run-w3c-nquads-tests.sh</span>
 <span class="text-amber-200">./scripts/run-w3c-turtle-tests.sh</span>
+<span class="text-amber-200">./scripts/run-w3c-rdfxml-tests.sh</span>
 
-<span class="text-lime-300">W3C RDF 1.1 syntax:</span>
-<span class="text-lime-300">472 cases, 0 failures</span></code></pre>
+<span class="text-lime-300">Pinned core gates:</span>
+<span class="text-lime-300">696 core cases, 0 failures</span></code></pre>
         </div>
       </div>
     </section>
@@ -240,9 +243,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.9.1</p>
-          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Set formatter limits from evidence.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">A reproducible formatter workload makes throughput and peak-memory profiling part of the release discipline, so `--max-triples` can reflect the machine that will run it.</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Development branch</p>
+          <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">RDF/XML input, with boundaries you can inspect.</h2>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">The RDF/XML core runs 169 pinned W3C cases through memory and bounded-reader paths. Markup-bearing XML Literals stay explicitly unsupported until canonical XML handling is available.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

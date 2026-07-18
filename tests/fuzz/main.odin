@@ -6,13 +6,14 @@ import "core:strings"
 import rdf "../../rdf"
 import nquads "../../rdf/nquads"
 import ntriples "../../rdf/ntriples"
+import rdfxml "../../rdf/rdfxml"
 import turtle "../../rdf/turtle"
 
 CASES     :: #config(FUZZ_CASES, 50_000)
 MAX_BYTES :: #config(FUZZ_MAX_BYTES, 512)
 SEED      :: u64(#config(FUZZ_SEED, 0x4f64696e52444631))
 
-SEEDS := [11]string{
+SEEDS := [12]string{
 	`<urn:s> <urn:p> <urn:o> .`,
 	`_:s <urn:p> "literal"@en .`,
 	`<urn:s> <urn:p> "42"^^<http://www.w3.org/2001/XMLSchema#integer> .`,
@@ -25,6 +26,7 @@ SEEDS := [11]string{
 	`BASE <https://example.test/a/> PREFIX : <v/> :s :p <o> .`,
 	`<urn:s> <urn:p> '''long
 literal''' .`,
+	`<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="urn:s"/></rdf:RDF>`,
 }
 
 check_turtle :: proc(input: string, chunk_size: int, case_index: int) -> bool {
@@ -113,6 +115,21 @@ check_nquads :: proc(input: string, chunk_size: int, case_index: int) -> bool {
 	return true
 }
 
+check_rdfxml :: proc(input: string, chunk_size: int, case_index: int) -> bool {
+	memory_state: Parse_State
+	memory := rdfxml.parse(input, accept_quad, {}, &memory_state)
+	reader_state: Parse_State
+	input_state: strings.Reader
+	reader := strings.to_reader(&input_state, input)
+	stream := rdfxml.parse_reader(reader, accept_quad, rdfxml.Reader_Options{chunk_size = chunk_size}, &reader_state)
+	locations_differ := memory.code != .None && (memory.line != stream.error.line || memory.column != stream.error.column)
+	if memory.code != stream.error.code || locations_differ || memory_state.count != reader_state.count {
+		fmt.eprintf("RDF/XML mismatch at case %d chunk %d input=%q: memory=(%v %d:%d %d) reader=(%v %d:%d %d)\n", case_index, chunk_size, input, memory.code, memory.line, memory.column, memory_state.count, stream.error.code, stream.error.line, stream.error.column, reader_state.count)
+		return false
+	}
+	return true
+}
+
 main :: proc() {
 	if CASES <= 0 || MAX_BYTES <= 0 {
 		fmt.eprintln("FUZZ_CASES and FUZZ_MAX_BYTES must be positive")
@@ -124,7 +141,7 @@ main :: proc() {
 	for case_index in 0..<CASES {
 		input := generate_case(buffer, case_index, &random)
 		chunk_size := 1 + int(next_random(&random) % 64)
-		if !check_ntriples(input, chunk_size, case_index) || !check_nquads(input, chunk_size, case_index) || !check_turtle(input, chunk_size, case_index) do os.exit(1)
+		if !check_ntriples(input, chunk_size, case_index) || !check_nquads(input, chunk_size, case_index) || !check_turtle(input, chunk_size, case_index) || !check_rdfxml(input, chunk_size, case_index) do os.exit(1)
 	}
 	fmt.printf("fuzz differential: %d cases, seed=0x%x, max_bytes=%d, 0 mismatches\n", CASES, SEED, MAX_BYTES)
 }

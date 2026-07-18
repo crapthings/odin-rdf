@@ -149,13 +149,37 @@ document bound through `max_document_bytes`. `Reader_Result` reports `quads`,
 boundary](jsonld-design.md) for the supported to-RDF profile and deliberately
 deferred JSON-LD API features.
 
+## RDF/XML `rdf/rdfxml`
+
+```odin
+parse(input: string, sink: Sink, options: Options = {},
+      user_data: rawptr = nil) -> Parse_Error
+parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
+             user_data: rawptr = nil) -> Reader_Result
+```
+
+RDF/XML emits default-graph `rdf.Quad` values and retains one bounded XML
+document. `Options` provides `base_iri`, `max_document_bytes` (16 MiB),
+`max_elements` (100,000), `max_attributes` (100,000),
+`max_nesting_depth` (256), and `max_quads` (unlimited). It never fetches
+external documents or resources.
+
+`Reader_Options` embeds `parse`, adds `chunk_size` (64 KiB), and can override
+the document byte bound through `max_document_bytes`. `Reader_Result` reports
+`quads`, `bytes_read`, and any underlying `reader_error`. See the [RDF/XML
+design boundary](rdfxml-design.md) for supported constructs, the explicit XML
+Literal limitation, and the W3C core selection. XML parser diagnostics do not
+currently carry source positions; semantic RDF/XML failures therefore use a
+zero line and column.
+
 ## Conversion `rdf/convert`
 
 ```odin
 convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
-`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`. `Options` selects the
+`Format` is one of `N_Triples`, `N_Quads`, `Turtle`, or input-only `JSON_LD`
+and `RDF_XML`. `Options` selects the
 input and output formats, `reader_limits: Reader_Limits`, and
 `turtle_prefixes: []turtle.Prefix` for explicit Turtle output declarations.
 `Result` reports `statements` written, `bytes_read`, and an `Error`.
@@ -166,7 +190,7 @@ input and output formats, `reader_limits: Reader_Limits`, and
 | `max_records` | All source readers | Unlimited. |
 | `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
 | `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
-| `max_document_bytes` | JSON-LD | JSON-LD default (16 MiB). |
+| `max_document_bytes` | JSON-LD, RDF/XML | Syntax default (16 MiB). |
 
 All limit fields must be non-negative. `max_records` maps to triple or quad
 records according to the source syntax; it counts before a record is passed to
@@ -194,9 +218,10 @@ odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
   [--max-triples N] [--no-infer-prefixes]
 ```
 
-The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, and
-input-only `jsonld`/`json-ld`/`json`. It infers formats from file paths ending
-in `.nt`, `.nq`, `.ttl`, `.jsonld`, or `.json`; explicit
+The command accepts `ntriples`/`nt`, `nquads`/`nq`, `turtle`/`ttl`, input-only
+`jsonld`/`json-ld`/`json`, and input-only
+`rdfxml`/`rdf-xml`/`rdf/xml`/`rdf`/`xml`. It infers formats from file paths ending
+in `.nt`, `.nq`, `.ttl`, `.jsonld`, `.json`, `.rdfxml`, `.rdf`, or `.xml`; explicit
 `--from` and `--to` options override that inference. `INPUT` and `--output`
 use `-` for standard input and output, which requires the matching explicit
 format option; unrecognized extensions do too. Output files use
@@ -207,7 +232,7 @@ and can contain earlier records if a later parse error occurs.
 
 `convert` accepts `--max-records N` for all input syntaxes,
 `--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
-Turtle, plus `--max-document-bytes N` for JSON-LD. Each `N` is a positive decimal integer; the CLI maps the values to
+Turtle, plus `--max-document-bytes N` for JSON-LD and RDF/XML. Each `N` is a positive decimal integer; the CLI maps the values to
 `Reader_Limits` before opening the source parser.
 
 `format` accepts Turtle input, retains its complete graph, and writes grouped,
@@ -227,8 +252,9 @@ grammar and are tested for equivalent output, error codes, and source locations.
 
 Line-oriented N-Triples and N-Quads readers bound one physical line. Turtle's
 reader bounds one top-level production because valid strings and collections
-may span lines. A reader that repeatedly returns no bytes and no error is
-eventually rejected with `No_Progress`.
+may span lines. JSON-LD and RDF/XML retain one bounded document. A reader that
+repeatedly returns no bytes and no error is eventually rejected with
+`No_Progress`.
 
 ## Stability policy
 

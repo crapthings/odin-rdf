@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add bounded RDF/XML-to-RDF conversion with namespace, base-IRI, language,
+  node/property element, collection, reification, and default-graph support.
+- Add `.rdf`, `.rdfxml`, and `.xml` input inference plus a pinned 169-case
+  RDF/XML core gate. Markup-bearing XML Literals remain explicitly unsupported
+  until canonical XML handling is added.
+
 ## 0.10.0 - 2026-07-18
 
 - Add bounded JSON-LD-to-RDF dataset processing with local contexts, opt-in

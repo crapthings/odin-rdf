@@ -20,6 +20,7 @@ odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
 odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
 odin check rdf/turtle -no-entry-point -vet -warnings-as-errors
 odin check rdf/jsonld -no-entry-point -vet -warnings-as-errors
+odin check rdf/rdfxml -no-entry-point -vet -warnings-as-errors
 odin check rdf/convert -no-entry-point -vet -warnings-as-errors
 odin check cmd/odin-rdf -vet -warnings-as-errors
 odin test rdf -sanitize:address
@@ -28,6 +29,7 @@ odin test rdf/ntriples -sanitize:address
 odin test rdf/nquads -sanitize:address
 odin test rdf/turtle -sanitize:address
 odin test rdf/jsonld -sanitize:address
+odin test rdf/rdfxml -sanitize:address
 odin test rdf/convert -sanitize:address
 odin test cmd/odin-rdf -sanitize:address
 odin test tests/property -sanitize:address
@@ -45,6 +47,7 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/run-w3c-turtle-tests.sh
 ./scripts/run-w3c-jsonld-tests.sh
+./scripts/run-w3c-rdfxml-tests.sh
 ./scripts/run-benchmarks.sh
 ```
 

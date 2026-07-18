@@ -2,6 +2,10 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.11.1 - 2026-07-18
+
+- Correct public status text after the `0.11.0` RDF/XML release.
+
 ## 0.11.0 - 2026-07-18
 
 - Add bounded RDF/XML-to-RDF conversion with namespace, base-IRI, language,

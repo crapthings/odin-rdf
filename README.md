@@ -15,7 +15,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.7.1` adds `odin-rdf format --max-triples N`, an explicit bound for the command's retained graph. Version 0.7 introduced the batch Turtle formatter, which groups triples, infers safe prefixes, and chooses deterministic document layout. The release line also includes production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, and a streaming conversion adapter.
+Version `0.8.0` adds `convert.Reader_Limits` and matching `odin-rdf convert` flags, giving every streaming conversion an explicit record, line, or Turtle-statement bound. The release line also includes batch Turtle formatting, production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, and an RDF dataset model.
 
 RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release.
 
@@ -64,6 +64,7 @@ examples/basic/      Streaming parser API example
 examples/turtle/     Turtle directives and compact graph example
 examples/turtle_writer/ Streaming Turtle-to-Turtle conversion example
 examples/turtle_formatter/ Batch Turtle formatting example
+examples/conversion/  Conversion with explicit reader limits
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
@@ -85,6 +86,7 @@ reader behavior are collected in the [API reference](docs/api-reference.md).
 - `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
 - `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
 - `convert.convert(reader, output, options)` connects the bounded readers and writers without retaining a graph; it rejects a named N-Quads graph when the selected output cannot represent it.
+- `convert.Reader_Limits` provides one explicit source-resource policy across all conversions: record count for every syntax, physical-line bytes for N-Triples/N-Quads, and top-level statement bytes for Turtle.
 - `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
 - `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
 - Every public error enum has a matching stable, allocation-free message function across `rdf` and all syntax packages.
@@ -208,6 +210,11 @@ N-Quads default-graph records convert to all three syntaxes. A named graph can
 only target N-Quads; the command rejects every lossy target rather than dropping
 the graph name.
 
+`convert` can bound untrusted input with `--max-records N` for all source
+syntaxes, `--max-line-bytes N` for N-Triples/N-Quads, and
+`--max-statement-bytes N` for Turtle. These are positive decimal values. A
+file target is still replaced only after the whole conversion succeeds.
+
 `format` accepts Turtle input only. It parses the complete graph before writing,
 so neither standard output nor a target file receives partial formatted output
 on a parse or serialization error. It infers safe prefixes by default; repeat
@@ -242,6 +249,7 @@ odin run examples/basic
 odin run examples/turtle
 odin run examples/turtle_writer
 odin run examples/turtle_formatter
+odin run examples/conversion
 odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh

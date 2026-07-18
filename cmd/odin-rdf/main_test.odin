@@ -31,6 +31,7 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 	args := []string{
 		"convert", "input.ttl", "--from", "ttl", "--to=ntriples", "--output", "output.nt",
 		"--prefix", "ex=https://example.com/", "--prefix", "=urn:example:",
+		"--max-records", "10", "--max-line-bytes=1024", "--max-statement-bytes", "2048",
 	}
 	options, err := parse_convert_args(args)
 	defer delete(options.prefixes)
@@ -42,6 +43,9 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(options.prefixes), 2)
 	testing.expect_value(t, options.prefixes[0].label, "ex")
 	testing.expect_value(t, options.prefixes[1].label, "")
+	testing.expect_value(t, options.reader_limits.max_records, 10)
+	testing.expect_value(t, options.reader_limits.max_line_bytes, 1024)
+	testing.expect_value(t, options.reader_limits.max_statement_bytes, 2048)
 }
 
 @(test)
@@ -97,6 +101,10 @@ test_rejects_invalid_arguments_without_guessing :: proc(t: ^testing.T) {
 	defer delete(invalid_prefix_options.prefixes)
 	testing.expect_value(t, invalid_prefix.code, Command_Error_Code.Invalid_Prefix)
 
+	invalid_record_options, invalid_record := parse_convert_args([]string{"convert", "-", "--from", "ntriples", "--to", "nquads", "--max-records", "0"})
+	defer delete(invalid_record_options.prefixes)
+	testing.expect_value(t, invalid_record.code, Command_Error_Code.Invalid_Max_Records)
+
 	same_path_options, same_path := parse_convert_args([]string{"convert", "graph.nt", "--from", "ntriples", "--to", "turtle", "--output", "graph.nt"})
 	defer delete(same_path_options.prefixes)
 	testing.expect_value(t, same_path.code, Command_Error_Code.Same_Input_Output)
@@ -135,6 +143,31 @@ test_file_output_preserves_existing_target_after_conversion_failure :: proc(t: ^
 	input := strings.to_reader(&input_state, "<urn:s> <urn:p> <urn:o> <urn:g> .\n")
 	result := convert_to_file(input, target, convert.Options{input = .N_Quads, output = .N_Triples})
 	testing.expect_value(t, result.error.code, convert.Error_Code.Named_Graph_Not_Supported)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
+test_file_output_preserves_existing_target_after_conversion_record_limit :: proc(t: ^testing.T) {
+	target :: "odin-rdf-cli-limit-test.nt"
+	temporary :: "odin-rdf-cli-limit-test.nt.odin-rdf.tmp"
+	defer {
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	input_state: strings.Reader
+	input := strings.to_reader(&input_state, "<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n")
+	result := convert_to_file(input, target, convert.Options{
+		input = .N_Triples,
+		output = .N_Quads,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, result.error.code, convert.Error_Code.Source_Parse_Error)
+	testing.expect_value(t, result.error.detail, "triple limit reached")
 	buffer: [256]byte
 	contents, read_err := read_test_file(target, &buffer)
 	testing.expect(t, read_err == nil)
@@ -249,6 +282,9 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Missing_To           = "--to is required",
 		.Invalid_Format       = "unsupported RDF syntax",
 		.Invalid_Prefix       = "--prefix must use LABEL=NAMESPACE",
+		.Invalid_Max_Records  = "--max-records must be a positive decimal integer",
+		.Invalid_Max_Line_Bytes = "--max-line-bytes must be a positive decimal integer",
+		.Invalid_Max_Statement_Bytes = "--max-statement-bytes must be a positive decimal integer",
 		.Invalid_Max_Triples  = "--max-triples must be a positive decimal integer",
 		.Same_Input_Output    = "input and output paths must differ",
 	}

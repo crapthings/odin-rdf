@@ -46,6 +46,20 @@ written before source bytes are consumed; the writer otherwise falls back to a
 canonical IRIREF. No prefix inference or document grouping is hidden inside the
 converter.
 
+## Reader limits
+
+`convert.Reader_Limits` keeps conversion resource policy explicit without
+exposing three unrelated syntax-option structs at every call site. It maps
+`max_records` to triples, quads, or Turtle triples as appropriate; maps
+`max_line_bytes` only to the two line-oriented syntaxes; and maps
+`max_statement_bytes` only to Turtle's top-level production framing.
+
+The zero value keeps existing reader defaults and disables the record cap.
+Negative fields are rejected before the converter writes a Turtle prefix or
+reads the input. A streaming destination may already contain complete earlier
+records if a later source limit is reached; `odin-rdf convert --output PATH`
+uses its temporary-file policy to avoid replacing the target in that case.
+
 ## Command file policy
 
 `odin-rdf convert` treats `-` as standard input or output. For a file target it

@@ -25,11 +25,23 @@ format_name :: proc(format: Format) -> string {
 	return "unknown"
 }
 
+// Reader_Limits applies syntax-neutral resource bounds to the input reader.
+// Zero leaves a limit disabled or selects the syntax reader's documented
+// default. max_line_bytes applies to N-Triples and N-Quads; max_statement_bytes
+// applies to Turtle's top-level production framing.
+Reader_Limits :: struct {
+	chunk_size:          int,
+	max_records:         int,
+	max_line_bytes:      int,
+	max_statement_bytes: int,
+}
+
 // Options selects the source and destination syntax. Turtle output uses only
 // explicitly supplied prefixes; it never infers namespaces from input terms.
 Options :: struct {
 	input:           Format,
 	output:          Format,
+	reader_limits:   Reader_Limits,
 	turtle_prefixes: []turtle.Prefix,
 }
 
@@ -40,6 +52,7 @@ Error_Code :: enum {
 	None,
 	Unsupported_Input_Format,
 	Unsupported_Output_Format,
+	Invalid_Reader_Limits,
 	Invalid_Turtle_Prefixes,
 	Source_Parse_Error,
 	Named_Graph_Not_Supported,
@@ -53,6 +66,7 @@ error_message :: proc(code: Error_Code) -> string {
 	case .None:                      return "no error"
 	case .Unsupported_Input_Format:  return "unsupported input format"
 	case .Unsupported_Output_Format: return "unsupported output format"
+	case .Invalid_Reader_Limits:     return "reader limits must not be negative"
 	case .Invalid_Turtle_Prefixes:   return "invalid Turtle prefix configuration"
 	case .Source_Parse_Error:        return "source parse error"
 	case .Named_Graph_Not_Supported: return "named graphs cannot be represented by the output format"
@@ -60,6 +74,10 @@ error_message :: proc(code: Error_Code) -> string {
 	case .Output_Write_Error:        return "output write error"
 	}
 	return "unknown error"
+}
+
+@(private) valid_reader_limits :: proc(limits: Reader_Limits) -> bool {
+	return limits.chunk_size >= 0 && limits.max_records >= 0 && limits.max_line_bytes >= 0 && limits.max_statement_bytes >= 0
 }
 
 // Error reports the conversion outcome. line and column are one-based for a
@@ -186,6 +204,10 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		result.error.code = .Unsupported_Input_Format
 		return result
 	}
+	if !valid_reader_limits(options.reader_limits) {
+		result.error.code = .Invalid_Reader_Limits
+		return result
+	}
 
 	state := State{
 		output = output,
@@ -209,19 +231,31 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 
 	switch options.input {
 	case .N_Triples:
-		parsed := ntriples.parse_reader(reader, write_destination_triple, {}, &state)
+		parsed := ntriples.parse_reader(reader, write_destination_triple, ntriples.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_triples = u64(options.reader_limits.max_records),
+		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {
 			set_parse_error(&state, parsed.error.line, parsed.error.column, ntriples.parse_error_message(parsed.error.code), parsed.reader_error)
 		}
 	case .N_Quads:
-		parsed := nquads.parse_reader(reader, write_destination_quad, {}, &state)
+		parsed := nquads.parse_reader(reader, write_destination_quad, nquads.Reader_Options{
+			chunk_size = options.reader_limits.chunk_size,
+			max_line_bytes = options.reader_limits.max_line_bytes,
+			max_quads = u64(options.reader_limits.max_records),
+		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {
 			set_parse_error(&state, parsed.error.line, parsed.error.column, nquads.parse_error_message(parsed.error.code), parsed.reader_error)
 		}
 	case .Turtle:
-		parsed := turtle.parse_reader(reader, write_destination_triple, {}, &state)
+		parsed := turtle.parse_reader(reader, write_destination_triple, turtle.Reader_Options{
+			parse = turtle.Parse_Options{max_triples = options.reader_limits.max_records},
+			chunk_size = options.reader_limits.chunk_size,
+			max_statement_bytes = options.reader_limits.max_statement_bytes,
+		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {
 			set_parse_error(&state, parsed.error.line, parsed.error.column, turtle.parse_error_message(parsed.error.code), parsed.reader_error)

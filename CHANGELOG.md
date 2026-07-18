@@ -2,6 +2,12 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.8.0 - 2026-07-18
+
+- Add `convert.Reader_Limits` and `odin-rdf convert` limits for records,
+  N-Triples/N-Quads physical lines, and Turtle top-level statements.
+- Add a conversion example with an explicit resource policy.
+
 ## 0.7.1 - 2026-07-18
 
 - Add `odin-rdf format --max-triples N` to bound the command's retained Turtle

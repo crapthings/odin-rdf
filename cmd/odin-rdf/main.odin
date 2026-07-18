@@ -22,6 +22,9 @@ Command_Error_Code :: enum {
 	Missing_To,
 	Invalid_Format,
 	Invalid_Prefix,
+	Invalid_Max_Records,
+	Invalid_Max_Line_Bytes,
+	Invalid_Max_Statement_Bytes,
 	Invalid_Max_Triples,
 	Same_Input_Output,
 }
@@ -39,6 +42,9 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Missing_To:           return "--to is required"
 	case .Invalid_Format:       return "unsupported RDF syntax"
 	case .Invalid_Prefix:       return "--prefix must use LABEL=NAMESPACE"
+	case .Invalid_Max_Records:  return "--max-records must be a positive decimal integer"
+	case .Invalid_Max_Line_Bytes: return "--max-line-bytes must be a positive decimal integer"
+	case .Invalid_Max_Statement_Bytes: return "--max-statement-bytes must be a positive decimal integer"
 	case .Invalid_Max_Triples:  return "--max-triples must be a positive decimal integer"
 	case .Same_Input_Output:    return "input and output paths must differ"
 	}
@@ -56,6 +62,7 @@ Command_Options :: struct {
 	input_format: convert.Format,
 	output_format: convert.Format,
 	prefixes: [dynamic]turtle.Prefix,
+	reader_limits: convert.Reader_Limits,
 	help: bool,
 }
 
@@ -118,7 +125,7 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--prefix") {
+		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -150,6 +157,27 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 		if !positional_only && (arg == "--prefix" || strings.has_prefix(arg, "--prefix=")) {
 			if !needs_value do value = arg[len("--prefix="):]
 			if !append_prefix(&options.prefixes, value) do return options, Command_Error{code = .Invalid_Prefix, value = value}
+			continue
+		}
+		if !positional_only && (arg == "--max-records" || strings.has_prefix(arg, "--max-records=")) {
+			if !needs_value do value = arg[len("--max-records="):]
+			max_records, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Records, value = value}
+			options.reader_limits.max_records = max_records
+			continue
+		}
+		if !positional_only && (arg == "--max-line-bytes" || strings.has_prefix(arg, "--max-line-bytes=")) {
+			if !needs_value do value = arg[len("--max-line-bytes="):]
+			max_line_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Line_Bytes, value = value}
+			options.reader_limits.max_line_bytes = max_line_bytes
+			continue
+		}
+		if !positional_only && (arg == "--max-statement-bytes" || strings.has_prefix(arg, "--max-statement-bytes=")) {
+			if !needs_value do value = arg[len("--max-statement-bytes="):]
+			max_statement_bytes, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Statement_Bytes, value = value}
+			options.reader_limits.max_statement_bytes = max_statement_bytes
 			continue
 		}
 		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
@@ -236,7 +264,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 
 print_help :: proc() {
 	fmt.println(`Usage:
-  odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] [--prefix LABEL=NAMESPACE]
+  odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N]
   odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl)
@@ -249,6 +277,11 @@ default prefix.
 
 N-Quads named graphs can only be converted to N-Quads. The command rejects
 other targets rather than silently discarding graph names.
+
+convert accepts reader limits for untrusted input: --max-records N applies to
+all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads, and
+--max-statement-bytes N applies to Turtle. Every N must be a positive decimal
+integer.
 
 format accepts Turtle input and produces stable, grouped Turtle. It retains the
 complete graph in memory, removes exact duplicate triples, and infers safe
@@ -336,6 +369,7 @@ run_convert :: proc(options: Command_Options) -> int {
 	conversion_options := convert.Options{
 		input = options.input_format,
 		output = options.output_format,
+		reader_limits = options.reader_limits,
 		turtle_prefixes = options.prefixes[:],
 	}
 	input := os.to_reader(input_file)

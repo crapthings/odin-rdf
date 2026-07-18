@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.7.1. The
+This reference describes the supported public surface in version 0.8.0. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -135,9 +135,20 @@ convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
 ```
 
 `Format` is one of `N_Triples`, `N_Quads`, or `Turtle`. `Options` selects the
-input and output formats and accepts `turtle_prefixes: []turtle.Prefix` for
-explicit Turtle output declarations. `Result` reports `statements` written,
-`bytes_read`, and an `Error`.
+input and output formats, `reader_limits: Reader_Limits`, and
+`turtle_prefixes: []turtle.Prefix` for explicit Turtle output declarations.
+`Result` reports `statements` written, `bytes_read`, and an `Error`.
+
+| `Reader_Limits` field | Applies to | Zero value |
+| --- | --- | --- |
+| `chunk_size` | All source readers | Syntax default (64 KiB). |
+| `max_records` | All source readers | Unlimited. |
+| `max_line_bytes` | N-Triples, N-Quads | Syntax default (16 MiB). |
+| `max_statement_bytes` | Turtle | Turtle default (16 MiB). |
+
+All limit fields must be non-negative. `max_records` maps to triple or quad
+records according to the source syntax; it counts before a record is passed to
+the destination writer.
 
 `Error.code` distinguishes invalid formats, invalid Turtle prefix configuration,
 source parse errors, a named graph that the selected target cannot represent,
@@ -155,7 +166,8 @@ adapter does not flush or close either stream.
 
 ```sh
 odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] \
-  [--prefix LABEL=NAMESPACE]
+  [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] \
+  [--max-statement-bytes N]
 odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
   [--max-triples N] [--no-infer-prefixes]
 ```
@@ -166,6 +178,11 @@ a same-directory exclusive temporary path named `<target>.odin-rdf.tmp`; the
 target is replaced only after conversion and close succeed. Existing temporary
 files are never overwritten. Standard output deliberately remains streaming
 and can contain earlier records if a later parse error occurs.
+
+`convert` accepts `--max-records N` for all input syntaxes,
+`--max-line-bytes N` for N-Triples/N-Quads, and `--max-statement-bytes N` for
+Turtle. Each `N` is a positive decimal integer; the CLI maps the values to
+`Reader_Limits` before opening the source parser.
 
 `format` accepts Turtle input, retains its complete graph, and writes grouped,
 deterministic Turtle. It does not emit partial output after a parse or

@@ -89,6 +89,74 @@ test_reports_source_location_and_stable_detail :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_applies_max_records_to_every_source_syntax :: proc(t: ^testing.T) {
+	ntriples_input := "<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n"
+	ntriples_result, ntriples_output := convert_text(ntriples_input, Options{
+		input = .N_Triples,
+		output = .N_Quads,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, ntriples_result.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, ntriples_result.error.detail, "triple limit reached")
+	testing.expect_value(t, ntriples_result.statements, u64(1))
+	testing.expect_value(t, ntriples_output, "<urn:a> <urn:p> <urn:o> .\n")
+
+	nquads_input := "<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n"
+	nquads_result, nquads_output := convert_text(nquads_input, Options{
+		input = .N_Quads,
+		output = .N_Triples,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, nquads_result.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, nquads_result.error.detail, "quad limit reached")
+	testing.expect_value(t, nquads_result.statements, u64(1))
+	testing.expect_value(t, nquads_output, "<urn:a> <urn:p> <urn:o> .\n")
+
+	turtle_input := "<urn:a> <urn:p> <urn:o> .\n<urn:b> <urn:p> <urn:o> .\n"
+	turtle_result, turtle_output := convert_text(turtle_input, Options{
+		input = .Turtle,
+		output = .N_Triples,
+		reader_limits = {max_records = 1},
+	})
+	testing.expect_value(t, turtle_result.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, turtle_result.error.detail, "triple limit reached")
+	testing.expect_value(t, turtle_result.statements, u64(1))
+	testing.expect_value(t, turtle_output, "<urn:a> <urn:p> <urn:o> .\n")
+}
+
+@(test)
+test_applies_syntax_specific_input_bounds :: proc(t: ^testing.T) {
+	line_result, line_output := convert_text("<urn:s> <urn:p> <urn:o> .\n", Options{
+		input = .N_Triples,
+		output = .N_Quads,
+		reader_limits = {max_line_bytes = 8},
+	})
+	testing.expect_value(t, line_result.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, line_result.error.detail, "line exceeds configured limit")
+	testing.expect_value(t, line_output, "")
+
+	statement_result, statement_output := convert_text("<urn:s> <urn:p> <urn:o> .\n", Options{
+		input = .Turtle,
+		output = .N_Triples,
+		reader_limits = {max_statement_bytes = 8},
+	})
+	testing.expect_value(t, statement_result.error.code, Error_Code.Source_Parse_Error)
+	testing.expect_value(t, statement_result.error.detail, "statement exceeds configured limit")
+	testing.expect_value(t, statement_output, "")
+}
+
+@(test)
+test_rejects_negative_reader_limits_before_io :: proc(t: ^testing.T) {
+	result, output := convert_text("<urn:s> <urn:p> <urn:o> .\n", Options{
+		input = .N_Triples,
+		output = .N_Quads,
+		reader_limits = {max_records = -1},
+	})
+	testing.expect_value(t, result.error.code, Error_Code.Invalid_Reader_Limits)
+	testing.expect_value(t, output, "")
+}
+
+@(test)
 test_rejects_invalid_turtle_prefixes_before_reading_or_writing :: proc(t: ^testing.T) {
 	result, output := convert_text("<urn:s> <urn:p> <urn:o> .", Options{
 		input = .N_Triples,
@@ -123,6 +191,7 @@ test_error_messages_are_stable :: proc(t: ^testing.T) {
 		.None                      = "no error",
 		.Unsupported_Input_Format  = "unsupported input format",
 		.Unsupported_Output_Format = "unsupported output format",
+		.Invalid_Reader_Limits     = "reader limits must not be negative",
 		.Invalid_Turtle_Prefixes   = "invalid Turtle prefix configuration",
 		.Source_Parse_Error        = "source parse error",
 		.Named_Graph_Not_Supported = "named graphs cannot be represented by the output format",

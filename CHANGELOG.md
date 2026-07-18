@@ -2,6 +2,24 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.20.0 - 2026-07-18
+
+- Add `canon.canonical_hash` for atomic SHA-256 or SHA-384 digests of a
+  complete dataset's RDFC-1.0 canonical N-Quads form.
+- Add `canon.isomorphic` for collision-independent dataset comparison through
+  canonical text, permitting unrelated source blank-node labels and scopes.
+- Document the integrity-helper boundary: these APIs support cache, integrity,
+  and higher-level signing inputs but do not implement signatures, storage, or
+  SPARQL. No existing public APIs change.
+
+## 0.19.0 - 2026-07-18
+
+- Add `rdf/canon`, a resource-bounded implementation of W3C RDF Dataset
+  Canonicalization 1.0 (RDFC-1.0) with canonical N-Quads output and SHA-256 or
+  SHA-384 algorithm selection.
+- Add the pinned 65-case official RDFC-1.0 conformance and resource-limit
+  suite to local verification and CI. No existing public APIs change.
+
 ## 0.18.0 - 2026-07-18
 
 - Add an explicit-prefix stateful RDF/XML document writer with per-record

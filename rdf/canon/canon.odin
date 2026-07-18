@@ -780,3 +780,36 @@ canonicalize :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Opti
 	strings.write_string(builder, strings.to_string(temporary))
 	return .None
 }
+
+// canonical_hash atomically appends the lowercase hexadecimal digest of a
+// dataset's RDFC-1.0 canonical N-Quads form. It uses options.hash_algorithm
+// (SHA-256 by default) and otherwise has exactly the same validation,
+// duplicate-set, and resource-limit behavior as canonicalize. This is useful
+// for stable cache keys, integrity records, and inputs to higher-level signing
+// protocols; it does not itself create or verify a signature.
+canonical_hash :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Options = {}) -> Error_Code {
+	canonical := strings.builder_make()
+	defer strings.builder_destroy(&canonical)
+	if err := canonicalize(&canonical, quads, options); err != .None do return err
+	digest := hash_text(options.hash_algorithm, strings.to_string(canonical))
+	temporary := strings.builder_make()
+	defer strings.builder_destroy(&temporary)
+	write_digest(&temporary, digest)
+	strings.write_string(builder, strings.to_string(temporary))
+	return .None
+}
+
+// isomorphic reports whether two complete RDF datasets have identical RDFC-1.0
+// canonical N-Quads forms. Blank-node labels and scopes may differ between the
+// inputs. It compares canonical text rather than hashes, so the result does
+// not rely on collision resistance. Options apply independently to each input;
+// neither dataset is retained after the call returns.
+isomorphic :: proc(left, right: []rdf.Quad, options: Options = {}) -> (bool, Error_Code) {
+	left_canonical := strings.builder_make()
+	defer strings.builder_destroy(&left_canonical)
+	if err := canonicalize(&left_canonical, left, options); err != .None do return false, err
+	right_canonical := strings.builder_make()
+	defer strings.builder_destroy(&right_canonical)
+	if err := canonicalize(&right_canonical, right, options); err != .None do return false, err
+	return strings.to_string(left_canonical) == strings.to_string(right_canonical), .None
+}

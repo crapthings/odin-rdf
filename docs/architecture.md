@@ -6,6 +6,20 @@ The `rdf` package contains only syntax-independent data types. Syntax packages s
 
 Consumers receive triples through a sink callback. A converter can write each triple immediately, a database importer can dictionary-encode terms as they arrive, and a small utility can collect them into a dynamic array when retaining the graph is appropriate.
 
+## Conversion boundary
+
+`rdf/convert` is the narrow adapter between syntax readers and writers. It
+retains only one destination record builder, so N-Triples, N-Quads default
+graphs, and Turtle can move through the pipeline without graph materialization.
+The adapter makes the one semantic asymmetry explicit: a named N-Quads graph
+is valid only when N-Quads is the target. Conversion to N-Triples or Turtle
+stops with an error before that record is written; it never degrades a dataset
+into a graph by silently dropping the graph name.
+
+The `cmd/odin-rdf` wrapper owns file policy rather than the library. It writes
+file targets to an exclusive same-directory temporary path and renames only on
+success, while standard output remains intentionally streaming for pipelines.
+
 ## Memory ownership
 
 The parser avoids copying whenever possible. Values may reference the original input, the reusable line buffer owned by `parse_reader`, or temporary builders used for escape decoding. Consequently, every parsing API guarantees term strings only for the duration of the current sink callback. Consumers must copy strings or encode them into application-owned IDs before returning if they need longer lifetimes.
@@ -41,3 +55,6 @@ each statement once instead of constructing and reparsing synthetic N-Triples.
 The implemented [Turtle parser and writer design](turtle-design.md) defines
 Turtle grammar, streaming, ownership, transient parse-state, conformance
 boundaries, and explicit-prefix serialization policy.
+
+The [streaming conversion design](conversion-design.md) records the conversion
+matrix, named-graph loss boundary, error propagation, and command file policy.

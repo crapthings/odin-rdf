@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add `rdf/convert`, a streaming adapter for N-Triples, N-Quads, and Turtle
+  readers and writers. It rejects named-graph conversions that would lose RDF
+  dataset information.
+- Add the `odin-rdf convert` command with stdin/stdout, explicit Turtle prefix
+  declarations, source-location diagnostics, and atomic file replacement.
+
 ## 0.5.0 - 2026-07-18
 
 - Add a streaming-safe Turtle writer with explicit prefix declarations,

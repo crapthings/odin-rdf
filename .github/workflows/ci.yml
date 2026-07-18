@@ -26,6 +26,8 @@ jobs:
       - run: odin test rdf/ntriples
       - run: odin test rdf/nquads
       - run: odin test rdf/turtle
+      - run: odin test rdf/convert
+      - run: odin test cmd/odin-rdf
       - run: odin test tests/property
       - run: odin test tests/w3c/support
       - run: odin run examples/minimal
@@ -33,6 +35,7 @@ jobs:
       - run: odin run examples/nquads
       - run: odin run examples/turtle
       - run: odin run examples/turtle_writer
+      - run: odin run cmd/odin-rdf -- --help
 
   w3c:
     runs-on: ubuntu-latest
@@ -60,6 +63,8 @@ jobs:
       - run: odin check rdf/ntriples -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/nquads -no-entry-point -vet -warnings-as-errors
       - run: odin check rdf/turtle -no-entry-point -vet -warnings-as-errors
+      - run: odin check rdf/convert -no-entry-point -vet -warnings-as-errors
+      - run: odin check cmd/odin-rdf -vet -warnings-as-errors
       - run: odin check tests/w3c/support -no-entry-point -vet -warnings-as-errors
       - run: odin check tests/property -no-entry-point -vet -warnings-as-errors
       - run: odin check benchmarks/ntriples -vet -warnings-as-errors
@@ -74,5 +79,7 @@ jobs:
       - run: odin test rdf/ntriples -sanitize:address
       - run: odin test rdf/nquads -sanitize:address
       - run: odin test rdf/turtle -sanitize:address
+      - run: odin test rdf/convert -sanitize:address
+      - run: odin test cmd/odin-rdf -sanitize:address
       - run: odin test tests/property -sanitize:address
       - run: odin test tests/w3c/support -sanitize:address

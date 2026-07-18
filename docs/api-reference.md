@@ -1,7 +1,8 @@
 # API reference
 
-This reference describes the supported public surface in version 0.5.0. The
-source remains authoritative for exact Odin declarations.
+This reference describes the current development surface; the latest tagged
+release is version 0.5.0. The source remains authoritative for exact Odin
+declarations.
 
 ## Common callback contract
 
@@ -115,6 +116,43 @@ the longest matching safe namespace, preserving declaration order on ties.
 IRIREFs when a compact prefixed name would need escaping. The writer does not
 infer prefixes, group triples, use property-list/collection abbreviations, or
 format a complete document; those require a future batch formatter.
+
+## Conversion `rdf/convert`
+
+```odin
+convert(reader: io.Reader, output: io.Writer, options: Options) -> Result
+```
+
+`Format` is one of `N_Triples`, `N_Quads`, or `Turtle`. `Options` selects the
+input and output formats and accepts `turtle_prefixes: []turtle.Prefix` for
+explicit Turtle output declarations. `Result` reports `statements` written,
+`bytes_read`, and an `Error`.
+
+`Error.code` distinguishes invalid formats, invalid Turtle prefix configuration,
+source parse errors, a named graph that the selected target cannot represent,
+serialization failures, and output-write failures. Source parse errors retain
+their one-based `line`, `column`, parser diagnostic in `detail`, and reader
+I/O error when available. Other failures have zero line and column.
+
+The adapter streams each validated statement directly to the selected writer.
+N-Triples and Turtle map to the N-Quads default graph when N-Quads is the
+target. N-Quads default-graph statements can map to triples, but a named graph
+is rejected for N-Triples and Turtle rather than silently losing data. The
+adapter does not flush or close either stream.
+
+## Command `cmd/odin-rdf`
+
+```sh
+odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] \
+  [--prefix LABEL=NAMESPACE]
+```
+
+The command accepts `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
+`INPUT` and `--output` use `-` for standard input and output. Output files use
+a same-directory exclusive temporary path named `<target>.odin-rdf.tmp`; the
+target is replaced only after conversion and close succeed. Existing temporary
+files are never overwritten. Standard output deliberately remains streaming
+and can contain earlier records if a later parse error occurs.
 
 ## Memory and reader entry points
 

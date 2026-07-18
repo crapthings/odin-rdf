@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.18.0 - 2026-07-18
 
 - Add an explicit-prefix stateful RDF/XML document writer with per-record
   atomicity, copied and capacity-bounded blank-node identity, and a runnable

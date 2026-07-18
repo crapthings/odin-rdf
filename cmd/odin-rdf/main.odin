@@ -4,6 +4,7 @@ package main
 import "core:fmt"
 import "core:io"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 import rdf "../../rdf"
 import convert "../../rdf/convert"
@@ -21,6 +22,7 @@ Command_Error_Code :: enum {
 	Missing_To,
 	Invalid_Format,
 	Invalid_Prefix,
+	Invalid_Max_Triples,
 	Same_Input_Output,
 }
 
@@ -37,6 +39,7 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Missing_To:           return "--to is required"
 	case .Invalid_Format:       return "unsupported RDF syntax"
 	case .Invalid_Prefix:       return "--prefix must use LABEL=NAMESPACE"
+	case .Invalid_Max_Triples:  return "--max-triples must be a positive decimal integer"
 	case .Same_Input_Output:    return "input and output paths must differ"
 	}
 	return "unknown error"
@@ -61,6 +64,7 @@ Format_Command_Options :: struct {
 	output_path: string,
 	prefixes: [dynamic]turtle.Prefix,
 	infer_prefixes: bool,
+	max_triples: int,
 	help: bool,
 }
 
@@ -78,6 +82,13 @@ append_prefix :: proc(prefixes: ^[dynamic]turtle.Prefix, value: string) -> bool 
 	if equals < 0 do return false
 	append(prefixes, turtle.Prefix{label = value[:equals], namespace = value[equals + 1:]})
 	return true
+}
+
+parse_positive_decimal :: proc(value: string) -> (int, bool) {
+	if len(value) == 0 do return 0, false
+	for c in value do if c < '0' || c > '9' do return 0, false
+	parsed, ok := strconv.parse_int(value, 10)
+	return parsed, ok && parsed > 0
 }
 
 // parse_convert_args accepts conventional Unix-style options. Prefixes may be
@@ -187,7 +198,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--output" || arg == "-o" || arg == "--prefix") {
+		if !positional_only && (arg == "--output" || arg == "-o" || arg == "--prefix" || arg == "--max-triples") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -202,6 +213,13 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 		if !positional_only && (arg == "--prefix" || strings.has_prefix(arg, "--prefix=")) {
 			if !needs_value do value = arg[len("--prefix="):]
 			if !append_prefix(&options.prefixes, value) do return options, Command_Error{code = .Invalid_Prefix, value = value}
+			continue
+		}
+		if !positional_only && (arg == "--max-triples" || strings.has_prefix(arg, "--max-triples=")) {
+			if !needs_value do value = arg[len("--max-triples="):]
+			max_triples, ok := parse_positive_decimal(value)
+			if !ok do return options, Command_Error{code = .Invalid_Max_Triples, value = value}
+			options.max_triples = max_triples
 			continue
 		}
 		if !positional_only && len(arg) > 1 && arg[0] == '-' && arg != "-" do return options, Command_Error{code = .Unknown_Option, value = arg}
@@ -219,7 +237,7 @@ parse_format_command_args :: proc(args: []string) -> (Format_Command_Options, Co
 print_help :: proc() {
 	fmt.println(`Usage:
   odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] [--prefix LABEL=NAMESPACE]
-  odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--no-infer-prefixes]
+  odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--no-infer-prefixes]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl)
 
@@ -235,7 +253,8 @@ other targets rather than silently discarding graph names.
 format accepts Turtle input and produces stable, grouped Turtle. It retains the
 complete graph in memory, removes exact duplicate triples, and infers safe
 prefixes by default. Use --no-infer-prefixes to emit IRIREFs except for the
-prefixes supplied explicitly.
+prefixes supplied explicitly. Use --max-triples N to reject an input before
+the collector retains more than N triples.
 
 Examples:
   odin-rdf convert input.ttl --from turtle --to ntriples --output output.nt
@@ -423,7 +442,9 @@ run_format :: proc(options: Format_Command_Options) -> int {
 
 	graph := Format_Graph{triples = make([dynamic]rdf.Triple), owned = make([dynamic]string)}
 	defer destroy_format_graph(&graph)
-	parsed := turtle.parse_reader(os.to_reader(input_file), collect_format_triple, {}, &graph)
+	parsed := turtle.parse_reader(os.to_reader(input_file), collect_format_triple, turtle.Reader_Options{
+		parse = turtle.Parse_Options{max_triples = options.max_triples},
+	}, &graph)
 	if parsed.error.code != .None {
 		label := options.input_path
 		if label == "-" do label = "<stdin>"

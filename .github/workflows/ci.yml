@@ -35,6 +35,7 @@ jobs:
       - run: odin run examples/nquads
       - run: odin run examples/turtle
       - run: odin run examples/turtle_writer
+      - run: odin run examples/turtle_formatter
       - run: odin run cmd/odin-rdf -- --help
 
   w3c:

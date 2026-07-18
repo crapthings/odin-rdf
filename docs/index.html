@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.7.0 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, explicit-prefix Turtle writing, deterministic Turtle formatting, and loss-aware syntax conversion. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">Version 0.7.1 covers RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing, explicit-prefix Turtle writing, deterministic Turtle formatting with an explicit CLI graph bound, and loss-aware syntax conversion. It does not bundle a graph store, inference engine, or unrelated vocabulary APIs.</p>
           <a href="https://www.w3.org/TR/turtle/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C Turtle specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -219,6 +219,7 @@ err := ttl.parse(input, consume)
 
 <span class="text-olive-300/70"># group and normalize a complete Turtle graph</span>
 <span class="text-amber-200">odin-rdf format</span> input.ttl --output formatted.ttl
+<span class="text-amber-200">odin-rdf format</span> input.ttl --max-triples 100000
 
 <span class="text-olive-300/70"># run the official pinned conformance suite</span>
 <span class="text-amber-200">./scripts/run-w3c-tests.sh</span>
@@ -234,9 +235,9 @@ err := ttl.parse(input, consume)
     <section class="mx-auto max-w-7xl px-6 pb-24 lg:px-8 lg:pb-32">
       <div class="relative overflow-hidden rounded-3xl border border-olive-700/20 bg-gradient-to-br from-olive-200 via-white/60 to-lime-100 px-7 py-12 shadow-sm sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16">
         <div>
-          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.7.0</p>
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-olive-700">Version 0.7.1</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Format clean Turtle without growing a graph store.</h2>
-          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Keep streaming when you need pipelines; retain one complete graph only when you want readable, deterministic Turtle back.</p>
+          <p class="mt-4 max-w-2xl leading-7 text-olive-800/75">Keep streaming when you need pipelines; retain one complete graph only when you want readable, deterministic Turtle back—and set an explicit triple bound for untrusted input.</p>
         </div>
         <a href="https://github.com/crapthings/odin-rdf" class="mt-8 inline-flex shrink-0 rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive-700 lg:ml-10 lg:mt-0">Explore odin-rdf</a>
       </div>

@@ -15,7 +15,7 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-Version `0.7.0` adds a batch Turtle formatter and the `odin-rdf format` command. It intentionally retains the complete graph to group triples, infer safe prefixes, and choose deterministic document layout. The release also includes production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, and a streaming conversion adapter.
+Version `0.7.1` adds `odin-rdf format --max-triples N`, an explicit bound for the command's retained graph. Version 0.7 introduced the batch Turtle formatter, which groups triples, infers safe prefixes, and chooses deterministic document layout. The release line also includes production-oriented RDF 1.1 N-Triples and N-Quads parsers and writers, a conformant Turtle parser and streaming-safe Turtle writer, an RDF dataset model, and a streaming conversion adapter.
 
 RDF/XML, JSON-LD, graph storage, and SPARQL are not part of the current release.
 
@@ -63,6 +63,7 @@ examples/minimal/    Tiny educational example with no library dependency
 examples/basic/      Streaming parser API example
 examples/turtle/     Turtle directives and compact graph example
 examples/turtle_writer/ Streaming Turtle-to-Turtle conversion example
+examples/turtle_formatter/ Batch Turtle formatting example
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
@@ -177,6 +178,9 @@ options := turtle.Format_Options{
 err := turtle.format_triples(&builder, triples, options)
 ```
 
+See [`examples/turtle_formatter`](examples/turtle_formatter/main.odin) for a
+runnable batch-formatting example.
+
 ## Command-line conversion
 
 Build the repository command when you want a small, dependency-free conversion
@@ -208,7 +212,9 @@ the graph name.
 so neither standard output nor a target file receives partial formatted output
 on a parse or serialization error. It infers safe prefixes by default; repeat
 `--prefix LABEL=NAMESPACE` to provide declarations, and pass
-`--no-infer-prefixes` to use only those explicit declarations.
+`--no-infer-prefixes` to use only those explicit declarations. Because format
+retains the graph, use `--max-triples N` to enforce an explicit collector bound;
+`N` must be a positive decimal integer.
 
 The [conversion design](docs/conversion-design.md) records the conversion
 matrix, error behavior, and file-output safety policy.
@@ -235,6 +241,7 @@ odin run examples/minimal
 odin run examples/basic
 odin run examples/turtle
 odin run examples/turtle_writer
+odin run examples/turtle_formatter
 odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh

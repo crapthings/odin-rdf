@@ -47,7 +47,7 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 @(test)
 test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 	args := []string{
-		"format", "input.ttl", "--output=output.ttl", "--prefix", "ex=https://example.com/", "--no-infer-prefixes",
+		"format", "input.ttl", "--output=output.ttl", "--prefix", "ex=https://example.com/", "--max-triples", "20", "--no-infer-prefixes",
 	}
 	options, err := parse_format_command_args(args)
 	defer delete(options.prefixes)
@@ -55,12 +55,21 @@ test_parses_format_command_with_prefix_policy :: proc(t: ^testing.T) {
 	testing.expect_value(t, options.input_path, "input.ttl")
 	testing.expect_value(t, options.output_path, "output.ttl")
 	testing.expect(t, !options.infer_prefixes)
+	testing.expect_value(t, options.max_triples, 20)
 	testing.expect_value(t, len(options.prefixes), 1)
 	testing.expect_value(t, options.prefixes[0].label, "ex")
 
 	missing_input_options, missing_input := parse_format_command_args([]string{"format"})
 	defer delete(missing_input_options.prefixes)
 	testing.expect_value(t, missing_input.code, Command_Error_Code.Missing_Input)
+
+	invalid_limit_options, invalid_limit := parse_format_command_args([]string{"format", "input.ttl", "--max-triples=0"})
+	defer delete(invalid_limit_options.prefixes)
+	testing.expect_value(t, invalid_limit.code, Command_Error_Code.Invalid_Max_Triples)
+
+	signed_limit_options, signed_limit := parse_format_command_args([]string{"format", "input.ttl", "--max-triples=+1"})
+	defer delete(signed_limit_options.prefixes)
+	testing.expect_value(t, signed_limit.code, Command_Error_Code.Invalid_Max_Triples)
 }
 
 @(test)
@@ -196,6 +205,37 @@ test_format_file_output_preserves_existing_target_after_parse_failure :: proc(t:
 }
 
 @(test)
+test_format_file_output_preserves_existing_target_after_triple_limit :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-format-limit-input.ttl"
+	target :: "odin-rdf-cli-format-limit-output.ttl"
+	temporary :: "odin-rdf-cli-format-limit-output.ttl.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(target)
+		_ = os.remove(temporary)
+	}
+	input := `<https://example.com/a> <https://example.com/p> <https://example.com/o> .
+<https://example.com/b> <https://example.com/p> <https://example.com/o> .
+`
+	testing.expect(t, write_test_file(input_path, input) == nil)
+	testing.expect(t, write_test_file(target, "previous\n") == nil)
+	options := Format_Command_Options{
+		input_path = input_path,
+		output_path = target,
+		prefixes = make([dynamic]turtle.Prefix),
+		infer_prefixes = true,
+		max_triples = 1,
+	}
+	defer delete(options.prefixes)
+	testing.expect_value(t, run_format(options), 1)
+	buffer: [256]byte
+	contents, read_err := read_test_file(target, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, contents, "previous\n")
+	testing.expect(t, !os.exists(temporary))
+}
+
+@(test)
 test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 	messages := [Command_Error_Code]string{
 		.None                 = "no error",
@@ -209,6 +249,7 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Missing_To           = "--to is required",
 		.Invalid_Format       = "unsupported RDF syntax",
 		.Invalid_Prefix       = "--prefix must use LABEL=NAMESPACE",
+		.Invalid_Max_Triples  = "--max-triples must be a positive decimal integer",
 		.Same_Input_Output    = "input and output paths must differ",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])

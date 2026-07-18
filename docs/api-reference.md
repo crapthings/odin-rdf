@@ -1,6 +1,6 @@
 # API reference
 
-This reference describes the supported public surface in version 0.7.0. The
+This reference describes the supported public surface in version 0.7.1. The
 source remains authoritative for exact Odin declarations.
 
 ## Common callback contract
@@ -157,7 +157,7 @@ adapter does not flush or close either stream.
 odin-rdf convert INPUT --from FORMAT --to FORMAT [--output PATH] \
   [--prefix LABEL=NAMESPACE]
 odin-rdf format INPUT [--output PATH] [--prefix LABEL=NAMESPACE] \
-  [--no-infer-prefixes]
+  [--max-triples N] [--no-infer-prefixes]
 ```
 
 The command accepts `ntriples`/`nt`, `nquads`/`nq`, and `turtle`/`ttl`.
@@ -171,6 +171,9 @@ and can contain earlier records if a later parse error occurs.
 deterministic Turtle. It does not emit partial output after a parse or
 formatting failure. Prefix inference is enabled by default; use
 `--no-infer-prefixes` to use only repeated explicit `--prefix` declarations.
+Because it retains triples, `--max-triples N` applies Turtle's emitted-triple
+limit before the collector can retain more than `N` triples. `N` is a required,
+positive decimal integer when the option is present.
 
 ## Memory and reader entry points
 

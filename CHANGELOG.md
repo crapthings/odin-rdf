@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.7.1 - 2026-07-18
+
+- Add `odin-rdf format --max-triples N` to bound the command's retained Turtle
+  graph before formatting. The limit rejects input atomically and preserves an
+  existing target file.
+- Add a runnable batch Turtle formatter example.
+
 ## 0.7.0 - 2026-07-18
 
 - Add `turtle.format_triples`, an atomic batch formatter that groups triples,

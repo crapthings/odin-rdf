@@ -36,6 +36,7 @@ odin run examples/basic
 odin run examples/nquads
 odin run examples/turtle
 odin run examples/turtle_writer
+odin run examples/turtle_formatter
 odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh

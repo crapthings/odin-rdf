@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Compact aliases of `@none` in language maps and aliases of `@json` in value
+  objects; preserve value-object form for `@type: @none` terms and native
+  `xsd:double` values whose shortest JSON spelling looks like an integer.
+  Extend the semantic Compaction gate to 86 vectors.
 - Preserve referenced graph-node identifiers and treat `@none` (including its
   aliases) as an anonymous graph key in `@graph`/`@id` containers. Extend the
   semantic Compaction gate to 81 vectors covering the corresponding W3C graph

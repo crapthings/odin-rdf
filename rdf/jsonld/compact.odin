@@ -179,6 +179,9 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		_, has_id := object_value(object, "@id")
 		return has_id
 	}
+	// @type: @none deliberately disables value coercion. It matches each value
+	// so the selected term can retain its original expanded value-object form.
+	if definition.type == "@none" do return true
 	if len(definition.type) > 0 {
 		type_value, has_type := object_value(object, "@type")
 		type_name, type_valid := string_value(type_value)
@@ -266,7 +269,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	case json.Integer:
 		strings.write_i64(builder, i64(actual))
 	case json.Float:
-		strings.write_float(builder, f64(actual), 'g', -1, 64)
+		write_json_float(builder, f64(actual))
 	case json.Boolean:
 		strings.write_string(builder, bool(actual) ? "true" : "false")
 	case json.Null:
@@ -330,6 +333,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	// exception and may safely use a scalar.
 	can_scalar := !has_type && !has_language && (!ctx.has_language || (has_definition && definition.language_null))
 	if has_type && type_is_string && has_definition && definition.type == type_name do can_scalar = true
+	if has_definition && definition.type == "@none" do can_scalar = false
 	if has_language && language_is_string {
 		if has_definition && definition.has_language && definition.language == language do can_scalar = true
 		if !has_definition && ctx.has_language && ctx.language == language do can_scalar = true
@@ -376,7 +380,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		write_json_string(builder, compact_keyword(ctx, "@type"))
 		strings.write_string(builder, ": ")
 		if type_name == "@json" {
-			write_json_string(builder, "@json")
+			write_json_string(builder, compact_keyword(ctx, "@json"))
 		} else {
 			compacted, err := compact_iri(state, ctx, type_name, true)
 			if err != .None do return err
@@ -428,7 +432,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	strings.write_byte(builder, '{')
 	for key, key_index in keys {
 		if key_index > 0 do strings.write_string(builder, ", ")
-		write_json_string(builder, key)
+		compacted_key := key == "@none" ? compact_keyword(ctx, "@none") : key
+		write_json_string(builder, compacted_key)
 		strings.write_string(builder, ": ")
 		count := 0
 		for value in values {

@@ -285,7 +285,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		} else {
 			type_name, valid := string_value(type_value)
 			if !valid do return false, .Invalid_Value_Object
-			if type_name == "@json" {
+			if type_name == "@json" || keyword_for(ctx, type_name) == "@json" {
 				write_json_string(builder, "@json")
 			} else {
 				expanded, err := expand_iri(state, ctx, type_name, true, true)

@@ -158,6 +158,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	container_type:  bool,
 	nest:           string,
 	index:          string,
+	index_reference: string,
 	has_index:      bool,
 	reverse:        bool,
 	disabled:       bool,
@@ -531,6 +532,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		a.container_type == b.container_type &&
 		a.nest == b.nest &&
 		a.index == b.index &&
+		a.index_reference == b.index_reference &&
 		a.has_index == b.has_index &&
 		a.reverse == b.reverse &&
 		a.disabled == b.disabled &&
@@ -901,6 +903,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if index_name == "@index" {
 				definition.index = "@index"
 			} else {
+				definition.index_reference, make_error = own(state, index_name)
+				if make_error.code != .None do return {}, make_error
 				definition.index, make_error = expand_iri(state, &result, index_name, true, true)
 				if make_error.code != .None do return {}, make_error
 			}
@@ -923,6 +927,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			definition.protected = protected
 		}
 		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
+	}
+	// A custom @index may name a term that is defined later in the same
+	// unordered JSON object. Resolve it after every local term is available.
+	for term, &definition in result.terms {
+		if !definition.has_index || len(definition.index_reference) == 0 do continue
+		resolved_index, index_error := expand_iri(state, &result, definition.index_reference, true, true)
+		if index_error.code != .None do return {}, index_error
+		definition.index = resolved_index
+		result.terms[term] = definition
 	}
 	for term in protected_terms {
 		if _, locally_defined := object_value(object, term); locally_defined do continue

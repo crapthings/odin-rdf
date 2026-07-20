@@ -23,7 +23,7 @@ valid for the callback only. The reader retains at most `max_document_bytes`
 the JSON-LD Expansion form before an RDF conversion could discard ordinary
 `@index` annotations. It is atomic, deterministic, and independently bounds
 the expanded output at 32 MiB by default. Its first W3C-gated core includes
-aliases, value/type/language expansion, `@list`, `@set`, `@nest`, language and
+aliases, value/type/language expansion, `@list`, nested `@set`, `@nest`, language and
 index containers, reverse maps, default/named graph expansion, and document-level
 `@graph`, `@id`, and `@type` containers including `@graph` composites.
 
@@ -95,7 +95,7 @@ and network policy explicitly.
 
 The processor accepts strict JSON and handles local contexts, `@base`,
 `@vocab`, prefixes, term aliases, `@id`, `@type`, value objects, language and
-datatype coercion, arrays and `@list`, reverse properties, `@graph`,
+datatype coercion, arrays, nested `@set`, and `@list`, reverse properties, `@graph`,
 `@included`, `@nest`, and `@json` value objects. It emits default and named graph quads and keeps
 explicit blank-node identifiers document-local.
 

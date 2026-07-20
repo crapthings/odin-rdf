@@ -74,7 +74,7 @@ renamed or treated as a JSON-LD `expand` implementation.
 3. Default-graph Flatten node-map generation: implemented.
 4. A 35-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.
-5. Framing over the same representation: implemented with a 79-case W3C
+5. Framing over the same representation: implemented with an 81-case W3C
    regression gate. Its bounded initial profile is specified in the
    [JSON-LD Framing delivery design](jsonld-framing-design.md).
 

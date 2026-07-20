@@ -141,10 +141,11 @@ vectors from the same pinned corpus. It parses both generated and expected
 documents and compares their RDFC-1.0 canonical RDF datasets, so the gate
 checks compaction semantics without requiring meaningless object-key ordering.
 
-`scripts/run-w3c-jsonld-framing-tests.sh` runs 79 pinned Framing vectors for
+`scripts/run-w3c-jsonld-framing-tests.sh` runs 81 pinned Framing vectors for
 nested and deep-node embedding, type and `@id` selection, value/list patterns,
-all embed modes, defaults, `@requireAll`, JSON-LD 1.1 graph shape, and invalid
-frame paths. It structurally compares the context-directed result.
+all embed modes, defaults, `@requireAll`, `@set` containers, protected empty
+contexts, JSON-LD 1.1 graph shape, and invalid frame paths. It structurally
+compares the context-directed result.
 The selected vectors are the executable boundary for the current framing
 profile, not a claim of full JSON-LD Framing conformance.
 

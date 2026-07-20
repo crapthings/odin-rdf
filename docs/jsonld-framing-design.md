@@ -42,11 +42,11 @@ regression coverage.
 Framing has its own pinned W3C suite rather than living in `json-ld-api`.
 `scripts/fetch-w3c-jsonld-framing-tests.sh` pins
 `w3c/json-ld-framing` at `3bf782ba9a40dd1b143435abe386d38df64f2b47`.
-The gate selects 79 positive and negative vectors, including empty frames,
+The gate selects 81 positive and negative vectors, including empty frames,
 `@explicit`, all embed modes, defaults, `@requireAll`, deep node and value
-patterns, lists, JSON-LD 1.1 graph shape, named-graph node merging, and
-invalid blank-node/embed frames. It compares compacted JSON structurally and
-currently passes 79/79.
+patterns, lists, `@set` containers, protected empty contexts, JSON-LD 1.1 graph
+shape, named-graph node merging, and invalid blank-node/embed frames. It
+compares compacted JSON structurally and currently passes 81/81.
 
 ## Why compaction is part of framing
 

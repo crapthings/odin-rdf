@@ -22,6 +22,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   and validation of invalid direction/type combinations.
 - Extend the Expansion gate to 93 vectors with W3C directional-context
   coverage. RDF directional-literal encodings remain out of scope.
+- Extend the bounded Framing gate with W3C `0062` (`@set` container output)
+  and `0070` (protected empty context), for 81 passing vectors.
 
 ## 0.25.0 - 2026-07-20
 

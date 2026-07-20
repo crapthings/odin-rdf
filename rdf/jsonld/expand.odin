@@ -863,6 +863,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 }
 
 @(private) expand_write_single_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, nested: bool) -> (bool, Expand_Error) {
+	if definition.type == "@json" {
+		strings.write_string(builder, `{"@value": `)
+		if !compact_write_raw_json(builder, value) do return false, .Invalid_Value_Object
+		strings.write_string(builder, `, "@type": "@json"}`)
+		return true, .None
+	}
 	object, is_object := object_from_value(value)
 	if !is_object do return false, .Invalid_Value_Object
 	if list_value, has_list := has_keyword(object, ctx, "@list"); has_list {

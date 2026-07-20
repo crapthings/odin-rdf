@@ -1242,9 +1242,33 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) process_list :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
-	items, items_err := process_value_set_aware(state, ctx, definition, value, graph)
+	items := make([dynamic]rdf.Term)
 	defer delete(items)
-	if items_err.code != .None do return {}, items_err
+	if list_values, is_array := array_from_value(value); is_array {
+		for list_value in list_values {
+			if _, is_nested_list := array_from_value(list_value); is_nested_list {
+				nested, nested_err := process_list(state, ctx, definition, list_value, graph)
+				if nested_err.code != .None do return {}, nested_err
+				append(&items, nested)
+				continue
+			}
+			values, values_err := process_value_set_aware(state, ctx, definition, list_value, graph)
+			if values_err.code != .None {
+				delete(values)
+				return {}, values_err
+			}
+			for item in values do append(&items, item)
+			delete(values)
+		}
+	} else {
+		values, values_err := process_value_set_aware(state, ctx, definition, value, graph)
+		if values_err.code != .None {
+			delete(values)
+			return {}, values_err
+		}
+		for item in values do append(&items, item)
+		delete(values)
+	}
 	if len(items) == 0 do return rdf.iri(RDF_NIL), {}
 	first, err := blank_node(state)
 	if err.code != .None do return {}, err

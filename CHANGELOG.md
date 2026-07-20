@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Preserve nested RDF lists through both to-RDF and Compaction, writing list
+  members as JSON arrays rather than redundant nested `@list` wrappers.
+  Extend the W3C to-RDF and semantic Compaction gates to 162 and 104 vectors.
 - Preserve term-definition `@nest` mappings during Compaction, and route
   object and array `@nest` values through the normal to-RDF property path.
   Extend the W3C to-RDF and semantic Compaction gates to 157 and 99 vectors.

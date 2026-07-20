@@ -967,6 +967,32 @@ test_empty_prefix_compact_iris_use_the_vocabulary_mapping :: proc(t: ^testing.T)
 }
 
 @(test)
+test_keyword_form_terms_and_iris_are_ignored :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/vocab/","@":"https://example.test/vocab/at","@foo.bar":"https://example.test/vocab/foo.bar","ignored":{"@id":"@ignoreMe"}},
+  "@":"allowed",
+  "@foo.bar":"allowed",
+  "ignored":"uses the term name"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab/at> "allowed" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab/foo.bar> "allowed" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab/ignored> "uses the term name" .`))
+	testing.expect(t, !strings.contains(actual, "@ignoreMe"))
+}
+
+@(test)
+test_value_objects_reject_invalid_datatype_iris :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@id":"https://example.test/node",
+  "https://example.test/value":{"@value":"x","@type":"https://example.test/type invalid"}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Value_Object)
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

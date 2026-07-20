@@ -1896,12 +1896,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 
 @(private) process_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
 	active_context := ctx^
+	object, is_object := object_from_value(value)
+	// Property- and type-scoped contexts are non-propagating unless their local
+	// context opts in. A newly entered node object therefore resumes the saved
+	// context before any context belonging to its own property is applied.
+	if is_object && !definition.container_type && !definition.container_index && expand_rolls_back_context(&active_context, object) do active_context = previous_context(&active_context)
 	if definition.has_local_context {
-		updated, context_err := apply_term_scoped_context(state, ctx, definition)
+		updated, context_err := apply_term_scoped_context(state, &active_context, definition)
 		if context_err.code != .None do return {}, context_err
 		active_context = updated
 	}
-	if object, is_object := object_from_value(value); is_object {
+	if is_object {
 		if value_object, has_value := has_keyword(object, &active_context, "@value"); has_value {
 			_ = value_object
 			return value_object_term(state, &active_context, object, graph)

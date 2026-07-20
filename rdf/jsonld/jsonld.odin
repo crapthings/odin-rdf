@@ -366,7 +366,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if definition, ok := ctx.terms[value]; ok && len(definition.id) > 0 do return definition.id, {}
 	if colon := strings.index_byte(value, ':'); colon >= 0 {
 		prefix, suffix := value[:colon], value[colon + 1:]
-		if prefix != "_" && !strings.has_prefix(suffix, "//") {
+		if prefix == "_" do return own(state, value)
+		if !strings.has_prefix(suffix, "//") {
 			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
 				builder := strings.builder_make()
 				defer strings.builder_destroy(&builder)
@@ -399,7 +400,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if is_keyword(value) do return value, {}
 	if colon := strings.index_byte(value, ':'); colon >= 0 {
 		prefix, suffix := value[:colon], value[colon + 1:]
-		if prefix != "_" && !strings.has_prefix(suffix, "//") {
+		if prefix == "_" do return own(state, value)
+		if !strings.has_prefix(suffix, "//") {
 			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
 				builder := strings.builder_make()
 				defer strings.builder_destroy(&builder)
@@ -408,7 +410,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				return own(state, strings.to_string(builder))
 			}
 		}
-		return own(state, value)
+		if has_iri_scheme(value) do return own(state, value)
 	}
 	return resolve_iri(state, ctx.base_iri, value)
 }

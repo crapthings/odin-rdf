@@ -32,7 +32,7 @@ standard JSON-LD 1.1 RDF direction mappings: `i18n-datatype` and
 It also supports sourced-context `@import` and enforced `@protected` terms
 through the existing explicit document loader. JSON-LD direction mapping is
 opt-in; the default RDF conversion deliberately omits `@direction`. Its gates
-run 106 Expansion, 162 to-RDF, 46 RDF-to-JSON-LD, and 113 compaction vectors.
+run 106 Expansion, 162 to-RDF, 46 RDF-to-JSON-LD, and 114 compaction vectors.
 
 | Area | Available now | Important boundary |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 106 Expansion, 35 Flattening, 162 to-RDF, 46 RDF-to-JSON-LD, and 113 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 106 Expansion, 35 Flattening, 162 to-RDF, 46 RDF-to-JSON-LD, and 114 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.

@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Keep the context from before type-scoped processing available for `@type`
+  output, including scoped-context arrays that reset mappings with `null`.
+  Extend the semantic Compaction gate to 114 vectors.
 - Resolve Compaction type-scoped contexts from serialized expanded type IRIs,
   apply multiple scopes in JSON-LD order, and retain graph containers while
   compacting scoped `@id` values. Avoid vocabulary candidates that conflict

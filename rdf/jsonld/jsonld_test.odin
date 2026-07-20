@@ -250,6 +250,11 @@ test_expands_nested_set_values_and_ignores_nulls :: proc(t: ^testing.T) {
 	testing.expect_value(t, unmapped_err.code, Error_Code.None)
 	testing.expect(t, strings.contains(unmapped, `<https://example.test/s> <https://example.test/p> "yes" .`))
 	testing.expect(t, !strings.contains(unmapped, "ignored"))
+
+	language_only, language_only_err := parse_to_nquads(`{"@id":"https://example.test/s","https://example.test/p":{"@language":"en"}}`)
+	defer delete(language_only)
+	testing.expect_value(t, language_only_err.code, Error_Code.None)
+	testing.expect_value(t, language_only, "")
 }
 
 @(test)

@@ -1469,10 +1469,19 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		// RDF predicates must be IRIs.
 		if strings.has_prefix(predicate_iri, "_:") do continue
 		if definition.container_graph {
-			values, array := array_from_value(property_value)
-			count := array ? len(values) : 1
-			for index in 0..<count {
-				graph_value := array ? values[index] : property_value
+			graph_values := make([dynamic]json.Value)
+			defer delete(graph_values)
+			if definition.container_index && is_container_map(property_value) {
+				index_map, _ := object_from_value(property_value)
+				for _, mapped_value in index_map do append(&graph_values, mapped_value)
+			} else {
+				append(&graph_values, property_value)
+			}
+			for source_value in graph_values {
+				values, array := array_from_value(source_value)
+				count := array ? len(values) : 1
+				for index in 0..<count {
+					graph_value := array ? values[index] : source_value
 				node, valid := object_from_value(graph_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
 				graph_name, graph_name_err := blank_node(state)
@@ -1482,6 +1491,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				graph_quad.graph = graph_name
 				if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
 				if emit_err := emit(state, subject, rdf.iri(predicate_iri), graph_name, graph); emit_err.code != .None do return {}, emit_err
+				}
 			}
 			continue
 		}

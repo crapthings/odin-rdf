@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Add JSON-LD `@type` container handling to RDF conversion, including named
+  and blank-node type keys, `@none`, type-scoped contexts, and scalar
+  `@id`/`@vocab` mappings; raise the to-RDF gate to 144 vectors.
 - Expand the pinned JSON-LD to-RDF gate to 134 vectors with graph index maps,
   non-string `@id`/`@vocab` coercion, nested base resolution, relative
   vocabularies, and context terms such as `valueOf` and `toString`.

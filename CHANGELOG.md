@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Permit a property-scoped context to locally refine a protected outer term,
+  while retaining protected-term enforcement for ordinary and type-scoped
+  contexts. Extend the semantic Compaction gate to 116 vectors.
 - Copy every term-definition string into the JSON-LD processor state, so
   keyword aliases in temporary term-scoped contexts remain valid after their
   source JSON is released. Extend the semantic Compaction gate to 115 vectors.

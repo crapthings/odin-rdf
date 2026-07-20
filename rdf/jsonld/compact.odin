@@ -400,7 +400,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	result := current^
 	if expand_rolls_back_context(&result, object) do result = previous_context(&result)
 	if definition.has_local_context {
-		updated, context_error := apply_term_scoped_context(state, &result, definition)
+		updated, context_error := apply_term_scoped_context(state, &result, definition, true)
 		if context_error.code != .None do return {}, {}, compact_context_error(context_error)
 		result = updated
 	}

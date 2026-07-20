@@ -185,7 +185,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	result := current^
 	if !from_map && expand_rolls_back_context(&result, object) do result = previous_context(&result)
 	if definition.has_local_context {
-		updated, context_err := apply_term_scoped_context(state, &result, definition)
+		updated, context_err := apply_term_scoped_context(state, &result, definition, true)
 		if context_err.code != .None do return {}, expand_from_parse_error(context_err)
 		result = updated
 	}

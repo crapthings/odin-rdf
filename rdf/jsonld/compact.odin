@@ -26,9 +26,20 @@ Compact_Options :: struct {
 	values:     [dynamic]json.Value,
 }
 
+@(private) Compact_Nest_Output :: struct {
+	term:       string,
+	properties: strings.Builder,
+	count:      int,
+}
+
 @(private) destroy_compact_list_term_groups :: proc(groups: ^[dynamic]Compact_List_Term_Group) {
 	for &group in groups^ do delete(group.values)
 	delete(groups^)
+}
+
+@(private) destroy_compact_nest_outputs :: proc(outputs: ^[dynamic]Compact_Nest_Output) {
+	for &output in outputs^ do strings.builder_destroy(&output.properties)
+	delete(outputs^)
 }
 
 Compact_Error :: enum {
@@ -480,6 +491,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 @(private) compact_write_node_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
 	keys := compact_sorted_keys(object)
 	defer delete(keys)
+	nests := make([dynamic]Compact_Nest_Output)
+	defer destroy_compact_nest_outputs(&nests)
 	strings.write_byte(builder, '{')
 	first := true
 	for key in keys {
@@ -551,56 +564,79 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 				destroy_compact_list_term_groups(&groups)
 			}
 		}
-		if !first do strings.write_string(builder, ", ")
-		write_json_string(builder, compacted_key)
-		strings.write_string(builder, ": ")
+		output := builder
+		nest_index := -1
+		if has_definition && len(definition.nest) > 0 {
+			for nest, index in nests do if nest.term == definition.nest { nest_index = index; break }
+			if nest_index < 0 {
+				append(&nests, Compact_Nest_Output{term = definition.nest, properties = strings.builder_make()})
+				nest_index = len(nests) - 1
+			}
+			output = &nests[nest_index].properties
+			if nests[nest_index].count > 0 do strings.write_string(output, ", ")
+		} else if !first do strings.write_string(output, ", ")
+		write_json_string(output, compacted_key)
+		strings.write_string(output, ": ")
 		if key == "@id" {
-			if err := compact_write_identifier(builder, state, ctx, value, false); err != .None do return err
+			if err := compact_write_identifier(output, state, ctx, value, false); err != .None do return err
 		} else if key == "@type" {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
 			if policy == .Compact && len(array) == 1 {
-				if err := compact_write_identifier(builder, state, ctx, array[0], true); err != .None do return err
+				if err := compact_write_identifier(output, state, ctx, array[0], true); err != .None do return err
 			} else {
-				strings.write_byte(builder, '[')
+				strings.write_byte(output, '[')
 				for item, index in array {
-					if index > 0 do strings.write_string(builder, ", ")
-					if err := compact_write_identifier(builder, state, ctx, item, true); err != .None do return err
+					if index > 0 do strings.write_string(output, ", ")
+					if err := compact_write_identifier(output, state, ctx, item, true); err != .None do return err
 				}
-				strings.write_byte(builder, ']')
+				strings.write_byte(output, ']')
 			}
 		} else if key == "@graph" {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
-			strings.write_byte(builder, '[')
+			strings.write_byte(output, '[')
 			for item, index in array {
-				if index > 0 do strings.write_string(builder, ", ")
+				if index > 0 do strings.write_string(output, ", ")
 				node, node_valid := object_from_value(item)
 				if !node_valid do return .Invalid_Expanded_JSON
-				if err := compact_write_node(builder, state, ctx, node, policy); err != .None do return err
+				if err := compact_write_node(output, state, ctx, node, policy); err != .None do return err
 			}
-			strings.write_byte(builder, ']')
+			strings.write_byte(output, ']')
 		} else {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
 			if has_definition && definition.container_language {
-				if err := compact_write_language_map(builder, state, ctx, array, policy); err != .None do return err
+				if err := compact_write_language_map(output, state, ctx, array, policy); err != .None do return err
 			} else if has_definition && definition.container_list && len(array) == 1 {
 				item, item_valid := object_from_value(array[0])
 				list, has_list := object_value(item, "@list")
 				if !item_valid || !has_list do return .Invalid_Expanded_JSON
-				if err := compact_write_list(builder, state, ctx, list, definition, has_definition, policy); err != .None do return err
+				if err := compact_write_list(output, state, ctx, list, definition, has_definition, policy); err != .None do return err
 			} else if policy == .Compact && len(array) == 1 && (!has_definition || !definition.container_set) {
-				if err := compact_write_value(builder, state, ctx, array[0], definition, has_definition, policy); err != .None do return err
+				if err := compact_write_value(output, state, ctx, array[0], definition, has_definition, policy); err != .None do return err
 			} else {
-				strings.write_byte(builder, '[')
+				strings.write_byte(output, '[')
 				for item, index in array {
-					if index > 0 do strings.write_string(builder, ", ")
-					if err := compact_write_value(builder, state, ctx, item, definition, has_definition, policy); err != .None do return err
+					if index > 0 do strings.write_string(output, ", ")
+					if err := compact_write_value(output, state, ctx, item, definition, has_definition, policy); err != .None do return err
 				}
-				strings.write_byte(builder, ']')
+				strings.write_byte(output, ']')
 			}
 		}
+		if nest_index >= 0 {
+			nests[nest_index].count += 1
+		} else {
+			first = false
+		}
+	}
+	for nest in nests {
+		if nest.count == 0 do continue
+		if !first do strings.write_string(builder, ", ")
+		write_json_string(builder, nest.term)
+		strings.write_string(builder, ": {")
+		strings.write_string(builder, strings.to_string(nest.properties))
+		strings.write_byte(builder, '}')
 		first = false
 	}
 	strings.write_byte(builder, '}')

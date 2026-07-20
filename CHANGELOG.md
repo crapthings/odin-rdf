@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Compact graph-container references inline, retaining named graph IDs while
+  using direct contents for anonymous graphs and `@none` for graph/id maps.
+  Extend the semantic Compaction gate to 124 vectors.
 - Apply the coercion of a property-valued `@index` term in both JSON-LD-to-RDF
   conversion and Compaction, moving one index value into its map key while
   retaining any additional values on the node, or using `@none` when no value

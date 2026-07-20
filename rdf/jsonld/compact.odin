@@ -886,6 +886,63 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return true, .None
 }
 
+@(private) compact_write_graph_node :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, node: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+	if id_value, has_id := object_value(node, "@id"); has_id {
+		identifier, valid_identifier := string_value(id_value)
+		if !valid_identifier do return .Invalid_Expanded_JSON
+		if strings.has_prefix(identifier, "_:") {
+			temporary := make(json.Object)
+			defer delete(temporary)
+			for key, value in node do temporary[key] = value
+			delete_key(&temporary, "@id")
+			return compact_write_node(builder, state, ctx, temporary, policy)
+		}
+	}
+	return compact_write_node(builder, state, ctx, node, policy)
+}
+
+@(private) compact_write_graph_contents :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, graph_value: json.Value, policy: Compact_Array_Policy) -> Compact_Error {
+	items, valid_items := array_from_value(graph_value)
+	if !valid_items do return .Invalid_Expanded_JSON
+	if policy == .Compact && len(items) == 1 {
+		node, valid_node := object_from_value(items[0])
+		if !valid_node do return .Invalid_Expanded_JSON
+		return compact_write_graph_node(builder, state, ctx, node, policy)
+	}
+	strings.write_byte(builder, '[')
+	for item, index in items {
+		if index > 0 do strings.write_string(builder, ", ")
+		node, valid_node := object_from_value(item)
+		if !valid_node do return .Invalid_Expanded_JSON
+		if write_error := compact_write_graph_node(builder, state, ctx, node, policy); write_error != .None do return write_error
+	}
+	strings.write_byte(builder, ']')
+	return .None
+}
+
+// A graph container owns the graph node referenced by its property. Anonymous
+// graph names are an RDF implementation detail and compact directly to their
+// contents; named graph identifiers remain visible with an @graph wrapper.
+@(private) compact_write_graph_container :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, target: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+	graph_value, has_graph := object_value(target, "@graph")
+	if !has_graph do return .Invalid_Expanded_JSON
+	id_value, has_id := object_value(target, "@id")
+	identifier, valid_identifier := string_value(id_value)
+	if has_id && valid_identifier do state.compacted_graph_nodes[identifier] = true
+	has_named_id := has_id && valid_identifier && !strings.has_prefix(identifier, "_:")
+	if !has_named_id do return compact_write_graph_contents(builder, state, ctx, graph_value, policy)
+	strings.write_byte(builder, '{')
+	write_json_string(builder, compact_keyword(ctx, "@id"))
+	strings.write_string(builder, ": ")
+	if id_error := compact_write_identifier(builder, state, ctx, id_value, false); id_error != .None do return id_error
+	strings.write_string(builder, ", ")
+	write_json_string(builder, compact_keyword(ctx, "@graph"))
+	strings.write_string(builder, ": ")
+	if graph_error := compact_write_graph_contents(builder, state, ctx, graph_value, policy); graph_error != .None do return graph_error
+	strings.write_byte(builder, '}')
+	return .None
+}
+
 @(private) compact_definition_needs_context :: proc(definition: Term_Definition) -> bool {
 	return definition.has_local_context || len(definition.type) > 0 || definition.has_language || definition.language_null || definition.has_direction || definition.direction_null
 }
@@ -926,6 +983,15 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	if id, has_id := object_value(object, "@id"); has_id {
 		identifier, identifier_valid := string_value(id)
 		if !identifier_valid do return .Invalid_Expanded_JSON
+		if has_definition && definition.container_graph && !definition.container_id && !definition.container_set {
+			if target, found := state.compact_nodes[identifier]; found {
+				_, has_graph := object_value(target, "@graph")
+				target_id, has_target_id := object_value(target, "@id")
+				target_identifier, valid_target_id := string_value(target_id)
+				has_named_id := has_target_id && valid_target_id && !strings.has_prefix(target_identifier, "_:")
+				if has_graph && (has_named_id || definition.has_local_context) do return compact_write_graph_container(builder, state, resolved, target, policy)
+			}
+		}
 		if target, found := state.compact_nodes[identifier]; found && !state.compacting_nodes[identifier] && compact_reference_needs_inline(resolved, definition, target) {
 			state.compacting_nodes[identifier] = true
 			defer delete_key(&state.compacting_nodes, identifier)
@@ -1010,6 +1076,7 @@ compact :: proc(builder: ^strings.Builder, quads: []rdf.Quad, context_text: stri
 	if !valid_nodes do return .Invalid_Expanded_JSON
 	state.compact_nodes = make(map[string]json.Object)
 	state.compacting_nodes = make(map[string]bool)
+	state.compacted_graph_nodes = make(map[string]bool)
 	for node_value in nodes {
 		node, node_valid := object_from_value(node_value)
 		if !node_valid do return .Invalid_Expanded_JSON
@@ -1045,14 +1112,20 @@ compact :: proc(builder: ^strings.Builder, quads: []rdf.Quad, context_text: stri
 	strings.write_string(&temporary, "{\n  \"@context\": ")
 	if !compact_write_raw_json(&temporary, active_context) do return .Invalid_Context
 	strings.write_string(&temporary, ",\n  \"@graph\": [")
-	for node_value, index in nodes {
-		if index > 0 do strings.write_string(&temporary, ",\n")
+	written := 0
+	for node_value in nodes {
 		node, node_valid := object_from_value(node_value)
 		if !node_valid do return .Invalid_Expanded_JSON
+		if id_value, has_id := object_value(node, "@id"); has_id {
+			identifier, valid_identifier := string_value(id_value)
+			if valid_identifier && state.compacted_graph_nodes[identifier] do continue
+		}
+		if written > 0 do strings.write_string(&temporary, ",\n")
 		strings.write_string(&temporary, "\n    ")
 		if compact_error := compact_write_node(&temporary, &state, &ctx, node, options.array_policy); compact_error != .None do return compact_error
+		written += 1
 	}
-	if len(nodes) > 0 do strings.write_byte(&temporary, '\n')
+	if written > 0 do strings.write_byte(&temporary, '\n')
 	strings.write_string(&temporary, "  ]\n}\n")
 	strings.write_string(builder, strings.to_string(temporary))
 	return .None

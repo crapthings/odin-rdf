@@ -356,6 +356,10 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return .None
 }
 
+@(private) expand_is_none_key :: proc(ctx: ^Context, value: string) -> bool {
+	return value == "@none" || keyword_for(ctx, value) == "@none"
+}
+
 @(private) expand_write_language_map :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> Expand_Error {
 	object, valid := object_from_value(value)
 	if !valid do return .Invalid_Value_Object
@@ -372,8 +376,9 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 			#partial switch _ in item { case json.Null: continue }
 			if !first do strings.write_string(builder, ", ")
 			mapped_definition := definition
-			mapped_definition.has_language = language != "@none"
-			mapped_definition.language_null = language == "@none"
+			none_key := expand_is_none_key(ctx, language)
+			mapped_definition.has_language = !none_key
+			mapped_definition.language_null = none_key
 			if mapped_definition.has_language {
 				lowercase := strings.to_lower(language)
 				mapped_definition.language, _ = own(state, lowercase)
@@ -407,7 +412,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		strings.write_string(builder, expanded[:len(expanded) - 1])
 		explicit_index := false
 		_, explicit_index = has_keyword(object, ctx, "@index")
-		if !explicit_index && index_key != "@none" {
+		if !explicit_index && !expand_is_none_key(ctx, index_key) {
 			if len(expanded) > 2 do strings.write_string(builder, ", ")
 			write_json_string(builder, "@index")
 			strings.write_string(builder, ": ")
@@ -428,7 +433,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	if object, is_object := object_from_value(value); is_object {
 		_, explicit_index = has_keyword(object, ctx, "@index")
 	}
-	if !explicit_index && index_key != "@none" {
+	if !explicit_index && !expand_is_none_key(ctx, index_key) {
 		if len(expanded) > 2 do strings.write_string(builder, ", ")
 		write_json_string(builder, "@index")
 		strings.write_string(builder, ": ")
@@ -534,12 +539,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 @(private) expand_write_graph_item :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, map_key: string) -> Expand_Error {
 	strings.write_string(builder, `{"@graph": `)
 	if err := expand_write_values(builder, state, ctx, definition, value); err != .None do return err
-	if definition.container_id && map_key != "@none" {
+	if definition.container_id && !expand_is_none_key(ctx, map_key) {
 		id, iri_err := expand_iri(state, ctx, map_key, false, true)
 		if iri_err.code != .None do return expand_from_parse_error(iri_err)
 		strings.write_string(builder, `, "@id": `)
 		write_json_string(builder, id)
-	} else if definition.container_index && map_key != "@none" {
+	} else if definition.container_index && !expand_is_none_key(ctx, map_key) {
 		strings.write_string(builder, `, "@index": `)
 		write_json_string(builder, map_key)
 	}
@@ -580,9 +585,35 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 }
 
 @(private) expand_write_id_type_map_item :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, map_key: string, value: json.Value) -> Expand_Error {
-	temporary := strings.builder_make()
 	map_context := ctx^
 	if map_context.has_previous do map_context = previous_context(&map_context)
+	if definition.container_type {
+		if type_definition, found := ctx.terms[map_key]; found && type_definition.has_local_context {
+			updated, context_err := apply_term_scoped_context(state, &map_context, type_definition)
+			if context_err.code != .None do return expand_from_parse_error(context_err)
+			map_context = updated
+		}
+	}
+	none_key := expand_is_none_key(ctx, map_key)
+	if definition.container_type {
+		if text, is_string := string_value(value); is_string {
+			if len(definition.type) > 0 && definition.type != "@id" && definition.type != "@vocab" do return .Invalid_Value_Object
+			identifier, iri_err := expand_iri(state, &map_context, text, definition.type == "@vocab", true)
+			if iri_err.code != .None do return expand_from_parse_error(iri_err)
+			strings.write_string(builder, `{"@id": `)
+			write_json_string(builder, identifier)
+			if !none_key {
+				injected_type, type_err := expand_iri(state, ctx, map_key, true, true)
+				if type_err.code != .None do return expand_from_parse_error(type_err)
+				strings.write_string(builder, `, "@type": [`)
+				write_json_string(builder, injected_type)
+				strings.write_byte(builder, ']')
+			}
+			strings.write_byte(builder, '}')
+			return .None
+		}
+	}
+	temporary := strings.builder_make()
 	written, value_err := expand_write_single(&temporary, state, &map_context, definition, value, true, true)
 	if value_err != .None || !written { strings.builder_destroy(&temporary); return value_err }
 	parsed, json_err := json.parse_string(strings.to_string(temporary), .JSON, true)
@@ -593,11 +624,11 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	if !valid do return .Invalid_Value_Object
 	injected_id := ""
 	injected_type := ""
-	if definition.container_id {
+	if definition.container_id && !none_key {
 		expanded, iri_err := expand_iri(state, ctx, map_key, false, true)
 		if iri_err.code != .None do return expand_from_parse_error(iri_err)
 		injected_id = expanded
-	} else {
+	} else if definition.container_type && !none_key {
 		expanded, iri_err := expand_iri(state, ctx, map_key, true, true)
 		if iri_err.code != .None do return expand_from_parse_error(iri_err)
 		injected_type = expanded

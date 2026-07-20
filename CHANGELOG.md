@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Align Expansion's id/type, graph, index, and language container processing
+  with to-RDF for scoped type keys and `@none` aliases; extend the pinned
+  Expansion gate to 106 vectors.
 - Add JSON-LD `@type` container handling to RDF conversion, including named
   and blank-node type keys, `@none`, nested type-scoped contexts, and scalar
   `@id`/`@vocab` mappings; raise the to-RDF gate to 145 vectors.

@@ -16,7 +16,7 @@ cases='
 0032 0033 0034 0035 0036 0113 0114 0115 0116 0117 0119 0120 0121 0122 0123
 0124 0125 0126 0127 0128 0129 0130 0131 0132 0133
 di01 di02 di03 di04 di05 di06 di07 di09 di10 di11 di12
-e003 e004 e008 e014 e015 e016 e023 e027 e036 e038 e043 e046 e047 e048 e050 e056 e061 e065 e071 e072 e079 e080 e081 e082 e083 e085 e086 e087 e093 e094 e095 e096 e097 e099 e100 e101 e102 e103 e104 e106 e108 e114
+e003 e004 e008 e014 e015 e016 e023 e027 e036 e038 e043 e046 e047 e048 e050 e056 e061 e065 e071 e072 e079 e080 e081 e082 e083 e085 e086 e087 e093 e094 e095 e096 e097 e099 e100 e101 e102 e103 e104 e105 e106 e107 e108 e114
 '
 
 negative_cases='di08'
@@ -34,7 +34,7 @@ for case_id in $cases; do
   case "$case_id" in
     di09|di10) direction=i18n-datatype ;;
     di11|di12) direction=compound-literal ;;
-    di*|e003|e004|e008|e014|e015|e016|e023|e027|e036|e038|e043|e046|e047|e048|e050|e056|e061|e065|e071|e072|e079|e080|e081|e082|e083|e085|e086|e087|e093|e094|e095|e096|e097|e099|e100|e101|e102|e103|e104|e106|e108|e114) semantic_compare=true ;;
+    di*|e003|e004|e008|e014|e015|e016|e023|e027|e036|e038|e043|e046|e047|e048|e050|e056|e061|e065|e071|e072|e079|e080|e081|e082|e083|e085|e086|e087|e093|e094|e095|e096|e097|e099|e100|e101|e102|e103|e104|e105|e106|e107|e108|e114) semantic_compare=true ;;
   esac
   run_ok=true
   if ! "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/toRdf/$case_id-in.jsonld" "$suite" $direction > "$actual"; then
@@ -59,5 +59,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD to-RDF core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 109
+test "$total" -eq 111
 test "$failures" -eq 0

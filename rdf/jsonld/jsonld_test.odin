@@ -836,6 +836,21 @@ test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": [
+    {"v":"https://example.test/first/","term":"v:old"},
+    {"@vocab":"https://example.test/second/","term":"term"}
+  ],
+  "term":"value"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/second/term> "value" .`))
+	testing.expect(t, !strings.contains(actual, "first/old"))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

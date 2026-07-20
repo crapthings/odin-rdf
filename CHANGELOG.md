@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.27.0 - 2026-07-20
 
 - Add opt-in JSON-LD 1.1 `i18n-datatype` and `compound-literal`
   directional-literal mappings to to-RDF, RDF-to-JSON-LD, and context

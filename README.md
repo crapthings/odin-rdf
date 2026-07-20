@@ -24,17 +24,15 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-**Current release: `0.26.0`** — bounded, deterministic JSON-LD Expansion,
-Flattening, and Framing, each backed by pinned W3C core gates. It adds JSON-LD
-1.1 scoped-context and directional-value support, plus bounded `@included` and
-named-graph Framing.
+**Current release: `0.27.0`** — bounded, deterministic JSON-LD Expansion,
+Flattening, and Framing, each backed by pinned W3C core gates. It adds both
+standard JSON-LD 1.1 RDF direction mappings: `i18n-datatype` and
+`compound-literal`.
 
 It also supports sourced-context `@import` and enforced `@protected` terms
-through the existing explicit document loader. The development core maps
-directional literals through RDF when callers select either JSON-LD 1.1
-`i18n-datatype` or `compound-literal`; the default conversion deliberately
-omits `@direction`. Its gates run 93 Expansion, 67 to-RDF, 32 RDF-to-JSON-LD,
-and 73 compaction vectors.
+through the existing explicit document loader. JSON-LD direction mapping is
+opt-in; the default RDF conversion deliberately omits `@direction`. Its gates
+run 93 Expansion, 67 to-RDF, 32 RDF-to-JSON-LD, and 73 compaction vectors.
 
 | Area | Available now | Important boundary |
 | --- | --- | --- |

@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Inline referenced nodes when a property or type-scoped context supplies
+  semantics needed to compact their contents, while preserving ordinary
+  references and graph containers. Extend the semantic Compaction gate to 118
+  vectors.
 - Permit a property-scoped context to locally refine a protected outer term,
   while retaining protected-term enforcement for ordinary and type-scoped
   contexts. Extend the semantic Compaction gate to 116 vectors.

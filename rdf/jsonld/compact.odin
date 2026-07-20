@@ -396,9 +396,9 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 // Keep property scopes, local contexts, and non-propagating scope boundaries
 // aligned with that path; then resolve type scopes from serialized expanded
 // identifiers rather than compact input spellings.
-@(private) compact_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object) -> (Context, Context, Compact_Error) {
+@(private) compact_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object, roll_back := true) -> (Context, Context, Compact_Error) {
 	result := current^
-	if expand_rolls_back_context(&result, object) do result = previous_context(&result)
+	if roll_back && expand_rolls_back_context(&result, object) do result = previous_context(&result)
 	if definition.has_local_context {
 		updated, context_error := apply_term_scoped_context(state, &result, definition, true)
 		if context_error.code != .None do return {}, {}, compact_context_error(context_error)
@@ -759,6 +759,37 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return compact_write_node_resolved(builder, state, &active_context, &type_context, object, policy)
 }
 
+@(private) compact_definition_needs_context :: proc(definition: Term_Definition) -> bool {
+	return definition.has_local_context || len(definition.type) > 0 || definition.has_language || definition.language_null || definition.has_direction || definition.direction_null
+}
+
+@(private) compact_reference_needs_inline :: proc(ctx: ^Context, definition: Term_Definition, target: json.Object) -> bool {
+	if definition.container_graph do return false
+	if definition.has_local_context do return true
+	if types, has_types := object_value(target, "@type"); has_types {
+		items, is_array := array_from_value(types)
+		count := is_array ? len(items) : 1
+		for index in 0..<count {
+			type_id, valid := string_value(is_array ? items[index] : types)
+			if !valid do continue
+			for _, type_definition in ctx.terms do if type_definition.id == type_id && type_definition.has_local_context do return true
+		}
+	}
+	for property in target {
+		if is_keyword(property) do continue
+		for _, property_definition in ctx.terms {
+			if property_definition.id == property && compact_definition_needs_context(property_definition) do return true
+		}
+	}
+	return false
+}
+
+@(private) compact_write_referenced_node :: proc(builder: ^strings.Builder, state: ^State, inherited: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+	active_context, type_context, context_error := compact_resolve_object_context(state, inherited, {}, object, false)
+	if context_error != .None do return context_error
+	return compact_write_node_resolved(builder, state, &active_context, &type_context, object, policy)
+}
+
 @(private) compact_write_value :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {
 	object, is_object := object_from_value(value)
 	if !is_object do return .Invalid_Expanded_JSON
@@ -766,6 +797,13 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	if context_error != .None do return context_error
 	resolved := &active_context
 	if id, has_id := object_value(object, "@id"); has_id {
+		identifier, identifier_valid := string_value(id)
+		if !identifier_valid do return .Invalid_Expanded_JSON
+		if target, found := state.compact_nodes[identifier]; found && !state.compacting_nodes[identifier] && compact_reference_needs_inline(resolved, definition, target) {
+			state.compacting_nodes[identifier] = true
+			defer delete_key(&state.compacting_nodes, identifier)
+			return compact_write_referenced_node(builder, state, resolved, target, policy)
+		}
 		if has_definition && !definition.container_graph && (definition.type == "@id" || definition.type == "@vocab") do return compact_write_identifier(builder, state, resolved, id, definition.type == "@vocab")
 		strings.write_byte(builder, '{')
 		write_json_string(builder, compact_keyword(resolved, "@id"))
@@ -843,6 +881,15 @@ compact :: proc(builder: ^strings.Builder, quads: []rdf.Quad, context_text: stri
 	defer json.destroy_value(expanded_document)
 	nodes, valid_nodes := array_from_value(expanded_document)
 	if !valid_nodes do return .Invalid_Expanded_JSON
+	state.compact_nodes = make(map[string]json.Object)
+	state.compacting_nodes = make(map[string]bool)
+	for node_value in nodes {
+		node, node_valid := object_from_value(node_value)
+		if !node_valid do return .Invalid_Expanded_JSON
+		id_value, has_id := object_value(node, "@id")
+		id, id_valid := string_value(id_value)
+		if has_id && id_valid do state.compact_nodes[id] = node
+	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
 	single_default_node := false

@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Expand the pinned JSON-LD to-RDF gate to 134 vectors with graph index maps,
+  non-string `@id`/`@vocab` coercion, nested base resolution, relative
+  vocabularies, and context terms such as `valueOf` and `toString`.
 - Extend the pinned JSON-LD to-RDF gate from 114 to 127 vectors, covering
   keyword-form term and IRI handling, invalid datatype IRIs, compact and term
   `@vocab` mappings, scoped-context recursion, and base IRIs without a

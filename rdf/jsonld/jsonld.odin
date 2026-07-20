@@ -1745,8 +1745,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if definition.container_id && is_container_map(property_value) {
 				id_map, _ := object_from_value(property_value)
 				for graph_id, mapped_value in id_map {
-					graph_name, graph_name_err := identifier_term(state, &active_context, graph_id)
-					if graph_name_err.code != .None do return {}, graph_name_err
+					graph_name: rdf.Term
+					graph_name_err: Parse_Error
+					if graph_id == "@none" || keyword_for(&active_context, graph_id) == "@none" {
+						graph_name, graph_name_err = blank_node(state)
+						if graph_name_err.code != .None do return {}, graph_name_err
+					} else {
+						graph_name, graph_name_err = identifier_term(state, &active_context, graph_id)
+						if graph_name_err.code != .None do return {}, graph_name_err
+					}
 					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, mapped_value, graph, true); graph_err.code != .None do return {}, graph_err
 				}
 				continue
@@ -1764,6 +1771,19 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				count := array ? len(values) : 1
 				for index in 0..<count {
 					graph_value := array ? values[index] : source_value
+					// Serializer output may retain a graph node separately and refer to
+					// it here by @id. Keep that identifier as the graph name instead of
+					// allocating a second anonymous graph for the reference.
+					if reference, reference_valid := object_from_value(graph_value); reference_valid && len(reference) == 1 {
+						if reference_id, has_reference_id := has_keyword(reference, &active_context, "@id"); has_reference_id {
+							id, id_valid := string_value(reference_id)
+							if !id_valid do return {}, Parse_Error{code = .Invalid_IRI}
+							graph_name, graph_name_err := identifier_term(state, &active_context, id)
+							if graph_name_err.code != .None do return {}, graph_name_err
+							if emit_err := emit(state, subject, rdf.iri(predicate_iri), graph_name, graph); emit_err.code != .None do return {}, emit_err
+							continue
+						}
+					}
 					graph_name, graph_name_err := blank_node(state)
 					if graph_name_err.code != .None do return {}, graph_name_err
 					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err

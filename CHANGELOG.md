@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Resolve Compaction type-scoped contexts from serialized expanded type IRIs,
+  apply multiple scopes in JSON-LD order, and retain graph containers while
+  compacting scoped `@id` values. Avoid vocabulary candidates that conflict
+  with existing keyword aliases. Extend the semantic Compaction gate to 113
+  vectors.
 - Add a reusable RFC 3986 IRI relativizer and use it for JSON-LD Compaction
   under `@base`, including parent paths, query/fragment-only references, and
   keyword-like path segments such as `./@special`. Extend the semantic

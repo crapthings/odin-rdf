@@ -158,7 +158,10 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		if keyword_for(&type_context, key) != "@type" do continue
 		types, is_array := array_from_value(value)
 		count := is_array ? len(types) : 1
-		for index in 0..<count {
+		// Type-scoped contexts are applied in reverse type order. This lets the
+		// first compacted type term govern properties when several scopes define
+		// the same term.
+		for index := count - 1; index >= 0; index -= 1 {
 			type_name, valid := string_value(is_array ? types[index] : value)
 			if !valid {
 				if state.retain_frame_controls do continue

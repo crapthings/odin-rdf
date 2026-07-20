@@ -156,6 +156,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	container_graph: bool,
 	container_id:    bool,
 	container_type:  bool,
+	nest:           string,
 	index:          string,
 	has_index:      bool,
 	reverse:        bool,
@@ -515,6 +516,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		a.container_graph == b.container_graph &&
 		a.container_id == b.container_id &&
 		a.container_type == b.container_type &&
+		a.nest == b.nest &&
 		a.index == b.index &&
 		a.has_index == b.has_index &&
 		a.reverse == b.reverse &&
@@ -833,6 +835,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if container_value, found := object_value(definition_object, "@container"); found {
 			if !apply_container(state, &definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		}
+		if nest_value, found := object_value(definition_object, "@nest"); found {
+			nest, valid := string_value(nest_value)
+			if !valid || len(nest) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			definition.nest, make_error = own(state, nest)
+			if make_error.code != .None do return {}, make_error
 		}
 		if index_value, found := object_value(definition_object, "@index"); found {
 			index_name, valid := string_value(index_value)
@@ -1699,36 +1707,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			continue
 		}
 		if keyword == "@nest" {
-			nested, valid := object_from_value(property_value)
-			if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
-			// @nest is syntactic sugar: process its ordinary entries against the same subject.
-			for nested_key, nested_value in nested {
-				definition := active_context.terms[nested_key]
-				if definition.disabled do continue
-				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(nested_key) && strings.index_byte(nested_key, ':') < 0 do continue
-				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
-				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
-				// Blank node identifiers may be used for node and type identifiers,
-				// but cannot occupy RDF's predicate position.
-				if strings.has_prefix(predicate_iri, "_:") do continue
-				if definition.container_list {
-					list, list_err := process_list(state, &active_context, definition, container_list_value(&active_context, nested_value), graph)
-					if list_err.code != .None do return {}, list_err
-					if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None do return {}, emit_err
-					continue
-				}
-				object_terms, values_err := process_value_set_aware(state, &active_context, definition, nested_value, graph)
-				if values_err.code != .None {
-					delete(object_terms)
-					return {}, values_err
-				}
-				for object_term in object_terms {
-					if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None {
-						delete(object_terms)
-						return {}, emit_err
-					}
-				}
-				delete(object_terms)
+			// @nest is syntactic sugar. Re-enter the normal node-property path with
+			// the same subject so containers, reverse terms, and nested @nest values
+			// retain exactly the semantics of their non-nested forms.
+			nested_values, is_array := array_from_value(property_value)
+			count := is_array ? len(nested_values) : 1
+			for index in 0..<count {
+				nested_value := is_array ? nested_values[index] : property_value
+				nested, valid := object_from_value(nested_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+				if _, nested_err := process_node(state, &active_context, nested, graph, false, &subject); nested_err.code != .None do return {}, nested_err
 			}
 			continue
 		}

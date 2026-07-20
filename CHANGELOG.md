@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Do not use context terms ending in RFC 3986 general delimiters as
+  compact-IRI prefixes. Extend the semantic Compaction gate to 105 vectors.
 - Preserve nested RDF lists through both to-RDF and Compaction, writing list
   members as JSON arrays rather than redundant nested `@list` wrappers.
   Extend the W3C to-RDF and semantic Compaction gates to 162 and 104 vectors.

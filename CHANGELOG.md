@@ -6,7 +6,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - Expand nested JSON-LD `@set` values in the to-RDF processor, preserving
   list/type container semantics and dropping null values. Extend the pinned
-  to-RDF core gate to 78 vectors.
+  to-RDF core gate to 79 vectors.
 - Recognize aliases of `@value` and `@type` while converting JSON-LD value
   objects to RDF.
 - Drop unmapped JSON object properties where JSON-LD expansion has no usable
@@ -20,6 +20,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   containers during to-RDF conversion.
 - Preserve blank-node identifiers used as `@type` values during to-RDF
   conversion instead of serializing them as invalid IRIs.
+- Apply term-level datatype coercion to JSON boolean values during to-RDF
+  conversion.
 
 ## 0.27.0 - 2026-07-20
 

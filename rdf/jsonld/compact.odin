@@ -396,20 +396,23 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 // Keep property scopes, local contexts, and non-propagating scope boundaries
 // aligned with that path; then resolve type scopes from serialized expanded
 // identifiers rather than compact input spellings.
-@(private) compact_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object) -> (Context, Compact_Error) {
+@(private) compact_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object) -> (Context, Context, Compact_Error) {
 	result := current^
 	if expand_rolls_back_context(&result, object) do result = previous_context(&result)
 	if definition.has_local_context {
 		updated, context_error := apply_term_scoped_context(state, &result, definition)
-		if context_error.code != .None do return {}, compact_context_error(context_error)
+		if context_error.code != .None do return {}, {}, compact_context_error(context_error)
 		result = updated
 	}
 	if context_value, has_context := object_value(object, "@context"); has_context {
 		updated, expand_error := expand_apply_local_context(state, &result, context_value)
-		if compact_error := compact_expand_error(expand_error); compact_error != .None do return {}, compact_error
+		if compact_error := compact_expand_error(expand_error); compact_error != .None do return {}, {}, compact_error
 		result = updated
 	}
-	return compact_apply_type_scoped_contexts(state, &result, object)
+	type_context := result
+	active, compact_error := compact_apply_type_scoped_contexts(state, &result, object)
+	if compact_error != .None do return {}, {}, compact_error
+	return active, type_context, .None
 }
 
 @(private) compact_write_list :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {
@@ -590,7 +593,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return .None
 }
 
-@(private) compact_write_node_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+@(private) compact_write_node_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx, type_context: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
 	keys := compact_sorted_keys(object)
 	defer delete(keys)
 	nests := make([dynamic]Compact_Nest_Output)
@@ -684,11 +687,6 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		} else if key == "@type" {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
-			type_context := ctx
-			if ctx.has_previous {
-				previous := previous_context(ctx)
-				type_context = &previous
-			}
 			if policy == .Compact && len(array) == 1 {
 				if err := compact_write_identifier(output, state, type_context, array[0], true); err != .None do return err
 			} else {
@@ -756,15 +754,15 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 // selection at the node boundary lets nested values use the same term rules
 // regardless of which document operation writes them.
 @(private) compact_write_node :: proc(builder: ^strings.Builder, state: ^State, inherited: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
-	active_context, context_error := compact_resolve_object_context(state, inherited, {}, object)
+	active_context, type_context, context_error := compact_resolve_object_context(state, inherited, {}, object)
 	if context_error != .None do return context_error
-	return compact_write_node_resolved(builder, state, &active_context, object, policy)
+	return compact_write_node_resolved(builder, state, &active_context, &type_context, object, policy)
 }
 
 @(private) compact_write_value :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {
 	object, is_object := object_from_value(value)
 	if !is_object do return .Invalid_Expanded_JSON
-	active_context, context_error := compact_resolve_object_context(state, ctx, definition, object)
+	active_context, type_context, context_error := compact_resolve_object_context(state, ctx, definition, object)
 	if context_error != .None do return context_error
 	resolved := &active_context
 	if id, has_id := object_value(object, "@id"); has_id {
@@ -785,7 +783,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		return .None
 	}
 	if _, has_value := object_value(object, "@value"); has_value do return compact_write_value_object(builder, state, resolved, object, definition, has_definition)
-	return compact_write_node_resolved(builder, state, resolved, object, policy)
+	return compact_write_node_resolved(builder, state, resolved, &type_context, object, policy)
 }
 
 // compact atomically writes a context-directed JSON-LD dataset document.

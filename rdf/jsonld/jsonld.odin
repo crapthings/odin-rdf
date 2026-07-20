@@ -213,6 +213,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	frame_blank_counter:         u64,
 	compact_nodes:               map[string]json.Object,
 	compacting_nodes:            map[string]bool,
+	compacted_graph_nodes:       map[string]bool,
 	initial_base_iri:             string,
 }
 
@@ -227,6 +228,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if state.frame_blank_aliases != nil do delete(state.frame_blank_aliases)
 	if state.compact_nodes != nil do delete(state.compact_nodes)
 	if state.compacting_nodes != nil do delete(state.compacting_nodes)
+	if state.compacted_graph_nodes != nil do delete(state.compacted_graph_nodes)
 }
 
 @(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {

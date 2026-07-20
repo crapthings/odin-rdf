@@ -1209,17 +1209,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			mapped_definition.language = language_value
 			mapped_definition.has_language = true
 		}
-		values, array := array_from_value(mapped_value)
-		count := array ? len(values) : 1
-		for index in 0..<count {
-			item := array ? values[index] : mapped_value
-			term, err := process_value(state, ctx, mapped_definition, item, graph)
-			if err.code != .None {
-				delete(result)
-				return {}, err
-			}
-			append(&result, term)
+		terms, err := process_value_set_aware(state, ctx, mapped_definition, mapped_value, graph)
+		if err.code != .None {
+			delete(terms)
+			delete(result)
+			return {}, err
 		}
+		for term in terms do append(&result, term)
+		delete(terms)
 	}
 	return result, {}
 }
@@ -1235,27 +1232,28 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		return {}, Parse_Error{code = .Invalid_Value_Object}
 	}
 	for index_key, mapped_value in map_object {
-		values, array := array_from_value(mapped_value)
-		count := array ? len(values) : 1
-		for index in 0..<count {
-			item := array ? values[index] : mapped_value
-			term, err := process_value(state, ctx, definition, item, graph)
-			if err.code != .None {
-				delete(result)
-				return {}, err
-			}
+		terms, err := process_value_set_aware(state, ctx, definition, mapped_value, graph)
+		if err.code != .None {
+			delete(terms)
+			delete(result)
+			return {}, err
+		}
+		for term in terms {
 			if definition.has_index && definition.index != "@index" && index_key != "@none" {
 				if term.kind == .Literal {
+					delete(terms)
 					delete(result)
 					return {}, Parse_Error{code = .Invalid_Value_Object}
 				}
 				if emit_err := emit(state, term, rdf.iri(definition.index), rdf.literal(index_key), graph); emit_err.code != .None {
+					delete(terms)
 					delete(result)
 					return {}, emit_err
 				}
 			}
 			append(&result, term)
 		}
+		delete(terms)
 	}
 	return result, {}
 }

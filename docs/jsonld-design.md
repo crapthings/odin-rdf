@@ -99,8 +99,10 @@ ordinary `@index` is JSON-LD annotation rather than RDF data, so an RDF
 dataset cannot later reproduce its original keys. A custom `@index` property
 does become an RDF statement and is retained. Term- and type-scoped local
 contexts are supported, as are single-level `@import` source contexts through
-the same opt-in document loader. A built-in HTTP loader, directional literals,
-and the remaining Framing policy matrix remain separate conformance milestones.
+the same opt-in document loader. Expansion and Flattening preserve JSON-LD 1.1
+base and term `@direction` mappings on expanded value objects; RDF directional
+literal encodings, a built-in HTTP loader, and the remaining Framing policy
+matrix remain separate conformance milestones.
 Document Expansion, Flattening, and Framing honor `@propagate: false` by
 rolling back to the previous context for nested node objects; type-scoped
 contexts are non-propagating unless they set `@propagate: true`. `@protected`
@@ -151,7 +153,9 @@ source overrides, relative source identifiers resolved through an importer's
 `@vocab`, protected source definitions, and the expected rejection of
 incompatible protected-term redefinitions. It also covers property-, type-,
 and embedded-context propagation, sourced propagation, and invalid
-`@propagate` values, making its current total 84 cases.
+`@propagate` values. Default and term directions, list and language-map
+directions, explicit value directions, and invalid direction forms bring its
+current total to 93 cases.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future

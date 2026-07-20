@@ -17,6 +17,11 @@ This project follows [Semantic Versioning](https://semver.org/).
   non-propagating unless they explicitly opt in.
 - Extend the Expansion gate to 84 vectors with W3C property-, type-, embedded-,
   and sourced-context propagation coverage, plus invalid `@propagate` values.
+- Add JSON-LD 1.1 base and term `@direction` handling to document Expansion
+  and Flattening, including language maps, lists, explicit value directions,
+  and validation of invalid direction/type combinations.
+- Extend the Expansion gate to 93 vectors with W3C directional-context
+  coverage. RDF directional-literal encodings remain out of scope.
 
 ## 0.25.0 - 2026-07-20
 

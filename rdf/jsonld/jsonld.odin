@@ -130,6 +130,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	language:       string,
 	has_language:   bool,
 	language_null:  bool,
+	direction:      string,
+	has_direction:  bool,
+	direction_null: bool,
 	container_list: bool,
 	container_set:  bool,
 	container_language: bool,
@@ -152,12 +155,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	vocab:            string,
 	language:         string,
 	has_language:     bool,
+	direction:        string,
+	has_direction:    bool,
 	has_previous:     bool,
 	previous_terms:   map[string]Term_Definition,
 	previous_base_iri: string,
 	previous_vocab:    string,
 	previous_language: string,
 	previous_has_language: bool,
+	previous_direction: string,
+	previous_has_direction: bool,
 }
 
 @(private) State :: struct {
@@ -178,6 +185,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	loader:            Document_Loader,
 	loader_data:       rawptr,
 	allow_document_containers: bool,
+	allow_direction:           bool,
 	retain_id_only_nodes:       bool,
 	retain_frame_controls:      bool,
 	prune_frame_blank_ids:       bool,
@@ -215,12 +223,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.vocab = parent.vocab
 		result.language = parent.language
 		result.has_language = parent.has_language
+		result.direction = parent.direction
+		result.has_direction = parent.has_direction
 		result.has_previous = parent.has_previous
 		result.previous_terms = parent.previous_terms
 		result.previous_base_iri = parent.previous_base_iri
 		result.previous_vocab = parent.previous_vocab
 		result.previous_language = parent.previous_language
 		result.previous_has_language = parent.previous_has_language
+		result.previous_direction = parent.previous_direction
+		result.previous_has_direction = parent.previous_has_direction
 		for key in parent.terms do result.terms[key] = parent.terms[key]
 	}
 	return result, {}
@@ -242,6 +254,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	result.previous_vocab = previous.vocab
 	result.previous_language = previous.language
 	result.previous_has_language = previous.has_language
+	result.previous_direction = previous.direction
+	result.previous_has_direction = previous.has_direction
 }
 
 @(private) previous_context :: proc(ctx: ^Context) -> Context {
@@ -251,6 +265,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		vocab = ctx.previous_vocab,
 		language = ctx.previous_language,
 		has_language = ctx.previous_has_language,
+		direction = ctx.previous_direction,
+		has_direction = ctx.previous_has_direction,
 	}
 }
 
@@ -413,6 +429,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		a.language == b.language &&
 		a.has_language == b.has_language &&
 		a.language_null == b.language_null &&
+		a.direction == b.direction &&
+		a.has_direction == b.has_direction &&
+		a.direction_null == b.direction_null &&
 		a.container_list == b.container_list &&
 		a.container_set == b.container_set &&
 		a.container_language == b.container_language &&
@@ -452,7 +471,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			item_propagate := propagate
 			if object, is_object := object_from_value(item); is_object {
 				if propagate_value, found := object_value(object, "@propagate"); found {
-					item_propagate, valid := bool_value(propagate_value)
+					valid: bool
+					item_propagate, valid = bool_value(propagate_value)
 					if !valid do return {}, Parse_Error{code = .Invalid_Context}
 				}
 			}
@@ -552,7 +572,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	for key in object {
 		if key == "@import" do continue
-		if key == "@direction" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@direction" do continue
 		if key == "@propagate" do continue
 		if key == "@protected" {
 			continue
@@ -609,6 +629,19 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			result.has_language = true
 		} else {
 			#partial switch null in language_value { case json.Null: result.language = ""; result.has_language = false; case: return {}, Parse_Error{code = .Invalid_Context} }
+		}
+	}
+	if direction_value, found := object_value(object, "@direction"); found {
+		if !state.allow_direction do return {}, Parse_Error{code = .Unsupported_Feature}
+		#partial switch null in direction_value {
+		case json.Null:
+			result.direction = ""
+			result.has_direction = false
+		case:
+			direction, valid := string_value(direction_value)
+			if !valid || (direction != "ltr" && direction != "rtl") do return {}, Parse_Error{code = .Invalid_Context}
+			result.direction = direction == "ltr" ? "ltr" : "rtl"
+			result.has_direction = true
 		}
 	}
 	// Context object iteration is deliberately unordered. Establish absolute
@@ -685,6 +718,20 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				delete(lowercase)
 				if make_error.code != .None do return {}, make_error
 				definition.has_language = true
+			}
+		}
+		if direction_value, found := object_value(definition_object, "@direction"); found {
+			if !state.allow_direction do return {}, Parse_Error{code = .Unsupported_Feature}
+			#partial switch null in direction_value {
+			case json.Null:
+				definition.direction = ""
+				definition.has_direction = false
+				definition.direction_null = true
+			case:
+				direction, valid := string_value(direction_value)
+				if !valid || (direction != "ltr" && direction != "rtl") do return {}, Parse_Error{code = .Invalid_Term_Definition}
+				definition.direction = direction == "ltr" ? "ltr" : "rtl"
+				definition.has_direction = true
 			}
 		}
 		if container_value, found := object_value(definition_object, "@container"); found {
@@ -899,6 +946,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 @(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object) -> (rdf.Term, Parse_Error) {
 	value, found := object_value(object, "@value")
 	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
+	if _, has_direction := has_keyword(object, ctx, "@direction"); has_direction && !state.allow_direction do return {}, Parse_Error{code = .Unsupported_Feature}
 	if type_value, has_type := object_value(object, "@type"); has_type {
 		type_name, valid := string_value(type_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}

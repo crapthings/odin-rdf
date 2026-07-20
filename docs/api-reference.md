@@ -232,6 +232,9 @@ term ownership and use the importing context's `@vocab` for relative `@id`
 values. Expansion, Flattening, and Framing honor `@propagate: false`: nested
 node objects restore the previous context, while type-scoped contexts are
 non-propagating unless they explicitly set `@propagate: true`.
+Expansion and Flattening also retain JSON-LD 1.1 `@direction` on value objects
+from default and term mappings. RDF directional-literal encodings remain
+unsupported, so the to-RDF parser rejects directional contexts explicitly.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,

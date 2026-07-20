@@ -228,6 +228,13 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 			strings.write_string(builder, `, "@language": `)
 			write_json_string(builder, ctx.language)
 		}
+		if definition.has_direction {
+			strings.write_string(builder, `, "@direction": `)
+			write_json_string(builder, definition.direction)
+		} else if !definition.direction_null && ctx.has_direction {
+			strings.write_string(builder, `, "@direction": `)
+			write_json_string(builder, ctx.direction)
+		}
 	}
 	strings.write_byte(builder, '}')
 	return .None
@@ -237,6 +244,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	value, has_value := has_keyword(object, ctx, "@value")
 	if !has_value do return false, .Invalid_Value_Object
 	#partial switch _ in value { case json.Null: return false, .None }
+	direction_value, has_direction := has_keyword(object, ctx, "@direction")
+	if has_direction {
+		if _, has_type := has_keyword(object, ctx, "@type"); has_type do return false, .Invalid_Value_Object
+		direction, valid := string_value(direction_value)
+		if !valid || (direction != "ltr" && direction != "rtl") do return false, .Invalid_Value_Object
+	}
 	strings.write_string(builder, `{"@value": `)
 	if !compact_write_raw_json(builder, value) do return false, .Invalid_Value_Object
 	if language_value, has_language := has_keyword(object, ctx, "@language"); has_language {
@@ -280,6 +293,11 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 				write_json_string(builder, expanded)
 			}
 		}
+	}
+	if has_direction {
+		direction, _ := string_value(direction_value)
+		strings.write_string(builder, `, "@direction": `)
+		write_json_string(builder, direction == "ltr" ? "ltr" : "rtl")
 	}
 	if index_value, has_index := has_keyword(object, ctx, "@index"); has_index {
 		index, valid := string_value(index_value)
@@ -999,7 +1017,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	parsed, json_err := json.parse_string(strings.trim_space(input), .JSON, true)
 	if json_err != .None do return .Invalid_JSON
 	defer json.destroy_value(parsed)
-	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = true, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls}
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = true, allow_direction = true, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls}
 	defer destroy_state(&state)
 	ctx, context_err := make_context(&state, nil)
 	if context_err.code != .None do return expand_from_parse_error(context_err)

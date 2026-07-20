@@ -484,9 +484,10 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 }
 
 @(private) Frame_Node_Map :: struct {
-	nodes: [dynamic]json.Object,
-	ids:   map[string]int,
-	owned: [dynamic]json.Value,
+	nodes:        [dynamic]json.Object,
+	ids:          map[string]int,
+	owned:        [dynamic]json.Value,
+	graph_values: map[string]json.Array,
 }
 
 @(private) frame_destroy_node_map :: proc(node_map: ^Frame_Node_Map) {
@@ -494,6 +495,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	delete(node_map.nodes)
 	delete(node_map.ids)
 	delete(node_map.owned)
+	delete(node_map.graph_values)
 }
 
 @(private) frame_write_merged_arrays :: proc(builder: ^strings.Builder, left, right: json.Value) -> bool {
@@ -592,24 +594,82 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	append(&node_map.nodes, node)
 }
 
-@(private) frame_collect_map_node :: proc(node_map: ^Frame_Node_Map, node: json.Object) {
-	frame_add_map_node(node_map, node)
+// Add graph-scoped nodes to the fallback merged view unless a direct
+// flattened node already owns that identifier. This preserves historical
+// cross-named-graph merging for identifiers absent from the default graph,
+// while keeping a default-graph node insulated from same-ID graph members.
+@(private) frame_collect_graph_fallback_node :: proc(node_map: ^Frame_Node_Map, direct_ids: ^map[string]bool, node: json.Object) {
+	id_value, has_id := object_value(node, "@id")
+	id, id_valid := string_value(id_value)
+	if !has_id || !id_valid do return
+	if !direct_ids^[id] do frame_add_map_node(node_map, node)
 	graph, has_graph := object_value(node, "@graph")
 	if !has_graph do return
 	graph_nodes, graph_valid := array_from_value(graph)
 	if !graph_valid do return
+	node_map.graph_values[id] = graph_nodes
 	for value in graph_nodes {
 		child, child_valid := object_from_value(value)
-		if child_valid do frame_collect_map_node(node_map, child)
+		if child_valid do frame_collect_graph_fallback_node(node_map, direct_ids, child)
 	}
 }
 
 @(private) frame_make_node_map :: proc(values: json.Array) -> Frame_Node_Map {
-	result := Frame_Node_Map{nodes = make([dynamic]json.Object), ids = make(map[string]int), owned = make([dynamic]json.Value)}
+	result := Frame_Node_Map{nodes = make([dynamic]json.Object), ids = make(map[string]int), owned = make([dynamic]json.Value), graph_values = make(map[string]json.Array)}
+	direct_ids := make(map[string]bool)
+	defer delete(direct_ids)
 	for value in values {
 		node, valid := object_from_value(value)
 		if !valid do continue
-		frame_collect_map_node(&result, node)
+		// The default graph is made only from the flattened document's direct
+		// nodes. Named-graph members are available through graph_values and are
+		// intentionally not folded into this map: identical identifiers in two
+		// graph scopes describe different node-map entries while framing.
+		frame_add_map_node(&result, node)
+		id_value, has_id := object_value(node, "@id")
+		id, id_valid := string_value(id_value)
+		if has_id && id_valid do direct_ids[id] = true
+		graph, has_graph := object_value(node, "@graph")
+		if !has_graph do continue
+		graph_nodes, graph_valid := array_from_value(graph)
+		if !graph_valid do continue
+		if has_id && id_valid {
+			result.graph_values[id] = graph_nodes
+		}
+	}
+	for value in values {
+		node, valid := object_from_value(value)
+		if !valid do continue
+		graph, has_graph := object_value(node, "@graph")
+		if !has_graph do continue
+		graph_nodes, graph_valid := array_from_value(graph)
+		if !graph_valid do continue
+		for graph_value in graph_nodes {
+			graph_node, graph_node_valid := object_from_value(graph_value)
+			if graph_node_valid do frame_collect_graph_fallback_node(&result, &direct_ids, graph_node)
+		}
+	}
+	return result
+}
+
+// A named graph has its own node map.  In particular, an identifier in a
+// named graph must not inherit properties from the default graph (or another
+// named graph) merely because the identifiers happen to be equal.  Keep the
+// top-level map's merged view for ordinary framing, but build this direct
+// local view whenever a frame explicitly enters @graph.
+@(private) frame_make_graph_node_map :: proc(values: json.Array) -> Frame_Node_Map {
+	result := Frame_Node_Map{nodes = make([dynamic]json.Object), ids = make(map[string]int), owned = make([dynamic]json.Value), graph_values = make(map[string]json.Array)}
+	for value in values {
+		node, valid := object_from_value(value)
+		if !valid do continue
+		frame_add_map_node(&result, node)
+		graph, has_graph := object_value(node, "@graph")
+		if !has_graph do continue
+		graph_nodes, graph_valid := array_from_value(graph)
+		if !graph_valid do continue
+		id_value, has_id := object_value(node, "@id")
+		id, id_valid := string_value(id_value)
+		if has_id && id_valid do result.graph_values[id] = graph_nodes
 	}
 	return result
 }
@@ -725,10 +785,88 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	strings.write_byte(builder, '}')
 }
 
+@(private) frame_graph_frame :: proc(frame: json.Object) -> (json.Object, bool) {
+	value, has_graph := object_value(frame, "@graph")
+	if !has_graph do return {}, false
+	frames, frames_valid := array_from_value(value)
+	if !frames_valid || len(frames) == 0 do return {}, false
+	graph_frame, graph_frame_valid := object_from_value(frames[0])
+	return graph_frame, graph_frame_valid
+}
+
+@(private) frame_value_references_id :: proc(value: json.Value, id: string) -> bool {
+	object, object_valid := object_from_value(value)
+	if !object_valid do return false
+	if referenced, has_reference := object_value(object, "@id"); has_reference {
+		referenced_id, referenced_valid := string_value(referenced)
+		return referenced_valid && referenced_id == id
+	}
+	if list, has_list := object_value(object, "@list"); has_list {
+		items, items_valid := array_from_value(list)
+		if !items_valid do return false
+		for item in items {
+			if frame_value_references_id(item, id) do return true
+		}
+	}
+	return false
+}
+
+@(private) frame_node_references_id :: proc(node: json.Object, id: string) -> bool {
+	for key, value in node {
+		if is_keyword(key) do continue
+		values, values_valid := array_from_value(value)
+		if !values_valid do continue
+		for item in values {
+			if frame_value_references_id(item, id) do return true
+		}
+	}
+	return false
+}
+
+// Writes the framed contents of a named graph rather than its flattened raw
+// members.  The graph-local map is deliberately used for both matching and
+// recursive embedding so graph-scoped nodes cannot be contaminated by the
+// global merged node map.
+@(private) frame_write_graph :: proc(builder: ^strings.Builder, graph: json.Value, graph_frame: json.Object, output_ctx: ^Context, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
+	values, values_valid := array_from_value(graph)
+	if !values_valid do return .Invalid_Frame
+	graph_map := frame_make_graph_node_map(values)
+	defer frame_destroy_node_map(&graph_map)
+	strings.write_byte(builder, '[')
+	written := 0
+	for candidate in graph_map.nodes {
+		if !frame_matches_node_in_map(&graph_map, candidate, graph_frame) do continue
+		id_value, has_id := object_value(candidate, "@id")
+		id, id_valid := string_value(id_value)
+		if !has_id || !id_valid do return .Invalid_Frame
+		// Graph results are roots. A selected node that is already reached from
+		// another selected graph node is embedded at that reference instead of
+		// emitted a second time at the graph root.
+		referenced := false
+		for other in graph_map.nodes {
+			other_id_value, other_has_id := object_value(other, "@id")
+			other_id, other_id_valid := string_value(other_id_value)
+			if !other_has_id || !other_id_valid || other_id == id do continue
+			if !frame_matches_node_in_map(&graph_map, other, graph_frame) do continue
+			if frame_node_references_id(other, id) { referenced = true; break }
+		}
+		if referenced do continue
+		if written > 0 do strings.write_string(builder, ", ")
+		if len(embeds^) >= max_depth do return .Embedding_Limit
+		append(embeds, id)
+		candidate_mode := frame_embed_mode(graph_frame, embed_mode)
+		if err := frame_write_node(builder, &graph_map, output_ctx, candidate, graph_frame, candidate_mode, embedding_state, embeds, max_depth, {}, false); err != .None do return err
+		pop(embeds)
+		written += 1
+	}
+	strings.write_byte(builder, ']')
+	return .None
+}
+
 // Lists preserve their ordering and scalar members. Node members, however,
 // are framed through the same embedding path as ordinary property values so a
 // list can select or embed a referenced node without bypassing the frame.
-@(private) frame_write_list :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, list: json.Value, child_frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
+@(private) frame_write_list :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, list: json.Value, child_frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, inherited_graph_frame: json.Object, has_inherited_graph_frame: bool) -> Frame_Error {
 	items, valid := array_from_value(list)
 	if !valid do return .Invalid_List_Object
 	patterns_value, has_patterns := object_value(child_frame, "@list")
@@ -760,17 +898,17 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 		if item_is_object && item_is_reference && filter_node_references && !matched do continue
 		if written > 0 do strings.write_string(builder, ", ")
 		item_mode := frame_embed_mode(item_frame, embed_mode)
-		if err := frame_write_value(builder, node_map, output_ctx, item, item_frame, item_mode, embedding_state, embeds, max_depth); err != .None do return err
+		if err := frame_write_value(builder, node_map, output_ctx, item, item_frame, item_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame); err != .None do return err
 		written += 1
 	}
 	strings.write_string(builder, `]}`)
 	return .None
 }
 
-@(private) frame_write_value :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, value: json.Value, child_frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
+@(private) frame_write_value :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, value: json.Value, child_frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, inherited_graph_frame: json.Object, has_inherited_graph_frame: bool) -> Frame_Error {
 	object, valid := object_from_value(value)
 	if !valid do return compact_write_raw_json(builder, value) ? .None : .Invalid_Frame
-	if list, has_list := object_value(object, "@list"); has_list do return frame_write_list(builder, node_map, output_ctx, list, child_frame, embed_mode, embedding_state, embeds, max_depth)
+	if list, has_list := object_value(object, "@list"); has_list do return frame_write_list(builder, node_map, output_ctx, list, child_frame, embed_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame)
 	id_value, has_id := object_value(object, "@id")
 	id, id_valid := string_value(id_value)
 	if !has_id || !id_valid do return compact_write_raw_json(builder, value) ? .None : .Invalid_Frame
@@ -799,7 +937,37 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 		embedding_state.seen[id] = true
 	}
 	index, found := node_map.ids[id]
-	if !found || !frame_matches_node_in_map(node_map, node_map.nodes[index], child_frame) {
+	if !found {
+		frame_write_reference(builder, id)
+		return .None
+	}
+	resolved_map := node_map
+	resolved_node := node_map.nodes[index]
+	_, child_has_graph_frame := frame_graph_frame(child_frame)
+	if !child_has_graph_frame && !has_inherited_graph_frame {
+		if graph_values, has_graph_values := node_map.graph_values[id]; has_graph_values {
+			graph_map := frame_make_graph_node_map(graph_values)
+			defer frame_destroy_node_map(&graph_map)
+			if graph_index, graph_found := graph_map.ids[id]; graph_found {
+				if !frame_matches_node_in_map(&graph_map, graph_map.nodes[graph_index], child_frame) {
+					frame_write_reference(builder, id)
+					return .None
+				}
+				for embedded in embeds^ {
+					if embedded == id {
+						frame_write_reference(builder, id)
+						return .None
+					}
+				}
+				if len(embeds^) >= max_depth do return .Embedding_Limit
+				append(embeds, id)
+				err := frame_write_node(builder, &graph_map, output_ctx, graph_map.nodes[graph_index], child_frame, embed_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame)
+				pop(embeds)
+				return err
+			}
+		}
+	}
+	if !frame_matches_node_in_map(resolved_map, resolved_node, child_frame) {
 		frame_write_reference(builder, id)
 		return .None
 	}
@@ -811,12 +979,12 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	}
 	if len(embeds^) >= max_depth do return .Embedding_Limit
 	append(embeds, id)
-	err := frame_write_node(builder, node_map, output_ctx, node_map.nodes[index], child_frame, embed_mode, embedding_state, embeds, max_depth)
+	err := frame_write_node(builder, resolved_map, output_ctx, resolved_node, child_frame, embed_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame)
 	pop(embeds)
 	return err
 }
 
-@(private) frame_write_reverse :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, node, reverse: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
+@(private) frame_write_reverse :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, node, reverse: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, inherited_graph_frame: json.Object, has_inherited_graph_frame: bool) -> Frame_Error {
 	id_value, has_id := object_value(node, "@id")
 	id, id_valid := string_value(id_value)
 	if !has_id || !id_valid do return .Invalid_Frame
@@ -847,7 +1015,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 			if !candidate_has_id || !candidate_id_valid do return .Invalid_Frame
 			if written > 0 do strings.write_string(builder, ", ")
 			append(embeds, candidate_id)
-			if err := frame_write_node(builder, node_map, output_ctx, candidate, json.Object{}, embed_mode, embedding_state, embeds, max_depth); err != .None do return err
+			if err := frame_write_node(builder, node_map, output_ctx, candidate, json.Object{}, embed_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame); err != .None do return err
 			pop(embeds)
 			written += 1
 		}
@@ -860,7 +1028,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 // @included is evaluated before ordinary properties. Included nodes are
 // recorded so later references to the same node do not duplicate an implicit
 // embedding.
-@(private) frame_write_included :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, value: json.Value, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, first: ^bool) -> Frame_Error {
+@(private) frame_write_included :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, value: json.Value, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, first: ^bool, inherited_graph_frame: json.Object, has_inherited_graph_frame: bool) -> Frame_Error {
 	frames, frames_valid := array_from_value(value)
 	if !frames_valid do return .Invalid_Frame
 	if !first^ do strings.write_string(builder, ", ")
@@ -880,7 +1048,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 			embedding_state.included[id] = true
 			if written > 0 do strings.write_string(builder, ", ")
 			append(embeds, id)
-			if err := frame_write_node(builder, node_map, output_ctx, candidate, included_frame, included_mode, embedding_state, embeds, max_depth); err != .None do return err
+			if err := frame_write_node(builder, node_map, output_ctx, candidate, included_frame, included_mode, embedding_state, embeds, max_depth, inherited_graph_frame, has_inherited_graph_frame); err != .None do return err
 			pop(embeds)
 			written += 1
 		}
@@ -890,19 +1058,30 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	return .None
 }
 
-@(private) frame_write_node :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, node, frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
+@(private) frame_write_node :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, node, frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, inherited_graph_frame: json.Object, has_inherited_graph_frame: bool) -> Frame_Error {
 	keys := compact_sorted_keys(node)
 	defer delete(keys)
 	explicit := frame_is_explicit(frame)
+	graph_frame, has_graph_frame := frame_graph_frame(frame)
+	if !has_graph_frame && has_inherited_graph_frame {
+		graph_frame = inherited_graph_frame
+		has_graph_frame = true
+	}
 	strings.write_byte(builder, '{')
 	first := true
 	if included_value, has_included := object_value(frame, "@included"); has_included {
-		if included_error := frame_write_included(builder, node_map, output_ctx, included_value, embed_mode, embedding_state, embeds, max_depth, &first); included_error != .None do return included_error
+		if included_error := frame_write_included(builder, node_map, output_ctx, included_value, embed_mode, embedding_state, embeds, max_depth, &first, graph_frame, has_graph_frame); included_error != .None do return included_error
 	}
 	for key in keys {
 		if key == "@index" do continue
 		if key == "@graph" {
-			if _, requested := object_value(frame, "@graph"); !requested do continue
+			if !has_graph_frame do continue
+			if !first do strings.write_string(builder, ", ")
+			write_json_string(builder, key)
+			strings.write_string(builder, ": ")
+			if graph_error := frame_write_graph(builder, node[key], graph_frame, output_ctx, embed_mode, embedding_state, embeds, max_depth); graph_error != .None do return graph_error
+			first = false
+			continue
 		}
 		if explicit && !is_keyword(key) && key != "@reverse" {
 			if _, has_candidate := object_value(frame, key); !has_candidate do continue
@@ -939,7 +1118,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 			}
 			if written_values > 0 do strings.write_string(builder, ", ")
 			child_mode := frame_embed_mode(child_frame, embed_mode)
-			if err := frame_write_value(builder, node_map, output_ctx, item, child_frame, child_mode, embedding_state, embeds, max_depth); err != .None do return err
+			if err := frame_write_value(builder, node_map, output_ctx, item, child_frame, child_mode, embedding_state, embeds, max_depth, graph_frame, has_graph_frame); err != .None do return err
 			written_values += 1
 		}
 		strings.write_byte(builder, ']')
@@ -1000,7 +1179,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 		if !first do strings.write_string(builder, ", ")
 		write_json_string(builder, "@reverse")
 		strings.write_string(builder, ": ")
-		reverse_error := frame_write_reverse(builder, node_map, output_ctx, node, reverse, embed_mode, embedding_state, embeds, max_depth)
+		reverse_error := frame_write_reverse(builder, node_map, output_ctx, node, reverse, embed_mode, embedding_state, embeds, max_depth, graph_frame, has_graph_frame)
 		if reverse_error != .None do return .Invalid_Reverse_Property
 		first = false
 	}
@@ -1100,6 +1279,29 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 
 @(private) frame_compact_write_value :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {
 	if object, is_object := object_from_value(value); is_object {
+		// A graph container compacts the framed graph members as the value of
+		// its term. The synthetic graph-node identifier is an implementation
+		// detail and must not force an @graph wrapper into the compact result.
+		if has_definition && definition.container_graph {
+			if graph, has_graph := object_value(object, "@graph"); has_graph {
+				items, items_valid := array_from_value(graph)
+				if !items_valid do return .Invalid_Expanded_JSON
+				if policy == .Compact && len(items) == 1 {
+					node, node_valid := object_from_value(items[0])
+					if !node_valid do return .Invalid_Expanded_JSON
+					return frame_compact_write_node(builder, state, ctx, node, policy)
+				}
+				strings.write_byte(builder, '[')
+				for item, index in items {
+					if index > 0 do strings.write_string(builder, ", ")
+					node, node_valid := object_from_value(item)
+					if !node_valid do return .Invalid_Expanded_JSON
+					if err := frame_compact_write_node(builder, state, ctx, node, policy); err != .None do return err
+				}
+				strings.write_byte(builder, ']')
+				return .None
+			}
+		}
 		if _, has_id := object_value(object, "@id"); has_id && len(object) > 1 do return frame_compact_write_node(builder, state, ctx, object, policy)
 		if list, has_list := object_value(object, "@list"); has_list {
 			strings.write_byte(builder, '{')
@@ -1397,7 +1599,7 @@ frame :: proc(builder: ^strings.Builder, input, frame_text: string, options: Fra
 		if !first do strings.write_string(&embedded, ", ")
 		if len(embeds) >= max_depth do return .Embedding_Limit
 		append(&embeds, id)
-		if err := frame_write_node(&embedded, &node_map, &ctx, node, expanded_root_frame, root_embed_mode, &embedding_state, &embeds, max_depth); err != .None do return err
+		if err := frame_write_node(&embedded, &node_map, &ctx, node, expanded_root_frame, root_embed_mode, &embedding_state, &embeds, max_depth, {}, false); err != .None do return err
 		pop(&embeds)
 		first = false
 	}

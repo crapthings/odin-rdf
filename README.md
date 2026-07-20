@@ -9,7 +9,7 @@
 ![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
 ![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-93%2F93-0f766e)
 ![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
-![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-84%2F84-0f766e)
+![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-87%2F87-0f766e)
 ![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-28%2F28-0f766e)
 ![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-66%2F66-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
@@ -24,8 +24,10 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 
 ## Status and scope
 
-**Current release: `0.25.0`** — bounded, deterministic JSON-LD Expansion,
-Flattening, and Framing, each backed by pinned W3C core gates.
+**Current release: `0.26.0`** — bounded, deterministic JSON-LD Expansion,
+Flattening, and Framing, each backed by pinned W3C core gates. This release
+adds JSON-LD 1.1 scoped-context and directional-value support, plus bounded
+`@included` and named-graph Framing.
 
 It also supports sourced-context `@import` and enforced `@protected` terms
 through the existing explicit document loader. The development Expansion core
@@ -40,9 +42,10 @@ gate runs 93 vectors.
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
 JSON-LD Framing supports recursive embedding, standard embed modes, defaults,
-`@requireAll`, value/list patterns, basic reverse framing, and bounded
-`@included` selection. Named-graph matching, scoped contexts, graph storage,
-and SPARQL are outside the current scope. See the [JSON-LD processing profile](docs/jsonld-design.md)
+`@requireAll`, value/list patterns, basic reverse framing, bounded
+`@included` selection, and bounded named-graph subframes / `@graph`
+containers. Scoped graph storage, SPARQL, and the remaining Framing policy
+matrix are outside the current scope. See the [JSON-LD processing profile](docs/jsonld-design.md)
 for exact limits and supported behavior.
 
 For version-by-version changes, see the [changelog](CHANGELOG.md).

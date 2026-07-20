@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.26.0 - 2026-07-20
 
 - Retain owned keys while processing sourced JSON-LD contexts, so term
   definitions remain valid after the loaded JSON document is released.
@@ -26,6 +26,12 @@ This project follows [Semantic Versioning](https://semver.org/).
   and `0070` (protected empty context), for 81 passing vectors.
 - Add bounded Framing `@included` support and extend the W3C Framing gate with
   `in01`–`in03`, for 84 passing vectors.
+- Add bounded named-graph Framing: `@graph` subframes use graph-local node
+  maps, preventing same-ID default- and named-graph nodes from leaking into
+  one another; graph-container terms compact selected graph members directly.
+- Extend the Framing gate with W3C `0047`, `0050`, and `g010`, for 87 passing
+  vectors covering graph-local selection, nested graph subframes, and graph
+  containers.
 
 ## 0.25.0 - 2026-07-20
 

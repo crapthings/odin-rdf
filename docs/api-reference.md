@@ -254,8 +254,9 @@ use `.Json_LD_1_0` for legacy `@graph` output, or set both `omit_graph` and
 `omit_graph_set` to select graph shape explicitly. `max_nodes`,
 `max_embedding_depth` (128), and `max_output_bytes` (32 MiB) bound retained
 and materialized state. Basic reverse framing and reverse-term aliases are
-supported, as is bounded `@included` selection. Named-graph matching remains
-unsupported.
+supported, as are bounded `@included` selection and named-graph subframes.
+`@graph` container terms compact selected local graph members directly; broader
+graph storage and the remaining Framing policy matrix remain unsupported.
 
 `serialize` atomically appends deterministic expanded JSON-LD for a complete
 dataset, including named graphs. `Serialize_Options.max_quads` defaults to

@@ -39,8 +39,11 @@ property frames. Cycles are represented by `@id` references. It bounds nodes,
 embedding depth (128 by default), and output bytes (32 MiB by default). It
 supports `@explicit`, scalar and type defaults, value/list patterns, all
 standard embed modes, ordinary-property `@requireAll`, and basic reverse
-framing, and bounded `@included` selection. Named-graph matching remains
-later work.
+framing, bounded `@included` selection, and bounded named-graph subframes.
+Graph subframes resolve references against a graph-local node view and
+graph-container terms compact selected graph members without a synthetic
+`@graph` wrapper. Scoped graph storage and the remaining Framing policy matrix
+remain later work.
 
 ```odin
 serialize(builder: ^strings.Builder, quads: []rdf.Quad,

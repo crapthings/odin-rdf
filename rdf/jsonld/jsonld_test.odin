@@ -868,6 +868,22 @@ test_free_floating_graph_values_and_lists_do_not_emit_rdf_cells :: proc(t: ^test
 }
 
 @(test)
+test_id_coercion_uses_document_relative_iris_not_term_mappings :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "mapped":"https://example.test/not-an-id-target",
+    "link":{"@id":"https://example.test/link","@type":"@id"}
+  },
+  "@id":"https://example.test/root",
+  "link":"mapped"
+}`, Options{base_iri = "https://example.test/base/document"})
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/root> <https://example.test/link> <https://example.test/base/mapped> .`))
+	testing.expect(t, !strings.contains(actual, "not-an-id-target"))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

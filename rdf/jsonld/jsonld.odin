@@ -1006,7 +1006,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
-	value, found := object_value(object, "@value")
+	value, found := has_keyword(object, ctx, "@value")
 	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
 	direction := ""
 	has_direction := false
@@ -1016,7 +1016,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		direction = direction_value_text
 		has_direction = true
 	}
-	if type_value, has_type := object_value(object, "@type"); has_type {
+	if type_value, has_type := has_keyword(object, ctx, "@type"); has_type {
 		type_name, valid := string_value(type_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
 		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
@@ -1050,7 +1050,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if state.rdf_direction == .Compound_Literal do return compound_direction_literal(state, text, language, direction, graph)
 		}
 		if has_language do return rdf.language_literal(text, language), {}
-		if type_value, has_type := object_value(object, "@type"); has_type {
+		if type_value, has_type := has_keyword(object, ctx, "@type"); has_type {
 			type_name, valid := string_value(type_value)
 			if !valid || type_name == "@id" || type_name == "@vocab" do return {}, Parse_Error{code = .Invalid_Value_Object}
 			datatype, err := expand_iri(state, ctx, type_name, true, true)
@@ -1078,19 +1078,80 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return false
 }
 
+@(private) process_value_set_aware :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	#partial switch _ in value {
+	case json.Null:
+		return result, {}
+	}
+	if array, is_array := array_from_value(value); is_array {
+		for item in array {
+			terms, err := process_value_set_aware(state, ctx, definition, item, graph)
+			if err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+		}
+		return result, {}
+	}
+	if object, is_object := object_from_value(value); is_object {
+		active_context := ctx^
+		if context_value, found := object_value(object, "@context"); found {
+			updated, context_err := apply_context(state, ctx, context_value)
+			if context_err.code != .None {
+				delete(result)
+				return {}, context_err
+			}
+			active_context = updated
+		}
+		if value_value, has_value := has_keyword(object, &active_context, "@value"); has_value {
+			#partial switch _ in value_value {
+			case json.Null:
+				return result, {}
+			}
+		}
+		if set_value, found := has_keyword(object, &active_context, "@set"); found {
+			for key in object {
+				keyword := keyword_for(&active_context, key)
+				if keyword != "@context" && keyword != "@set" && keyword != "@index" {
+					delete(result)
+					return {}, Parse_Error{code = .Invalid_Value_Object}
+				}
+			}
+			terms, set_err := process_value_set_aware(state, &active_context, definition, set_value, graph)
+			if set_err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, set_err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+			return result, {}
+		}
+	}
+	term, err := process_value(state, ctx, definition, value, graph)
+	if err.code != .None {
+		delete(result)
+		return {}, err
+	}
+	append(&result, term)
+	return result, {}
+}
+
 @(private) process_list :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
-	array, is_array := array_from_value(value)
-	item_count := is_array ? len(array) : 1
-	if item_count == 0 do return rdf.iri(RDF_NIL), {}
+	items, items_err := process_value_set_aware(state, ctx, definition, value, graph)
+	defer delete(items)
+	if items_err.code != .None do return {}, items_err
+	if len(items) == 0 do return rdf.iri(RDF_NIL), {}
 	first, err := blank_node(state)
 	if err.code != .None do return {}, err
 	current := first
-	for index in 0..<item_count {
-		item := is_array ? array[index] : value
-		object, object_err := process_value(state, ctx, definition, item, graph)
-		if object_err.code != .None do return {}, object_err
+	for object, index in items {
 		if emit_err := emit(state, current, rdf.iri(RDF_FIRST), object, graph); emit_err.code != .None do return {}, emit_err
-		if index + 1 == item_count {
+		if index + 1 == len(items) {
 			if emit_err := emit(state, current, rdf.iri(RDF_REST), rdf.iri(RDF_NIL), graph); emit_err.code != .None do return {}, emit_err
 		} else {
 			next, node_err := blank_node(state)
@@ -1100,6 +1161,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 	}
 	return first, {}
+}
+
+@(private) container_list_value :: proc(ctx: ^Context, value: json.Value) -> json.Value {
+	if object, is_object := object_from_value(value); is_object {
+		if list, found := has_keyword(object, ctx, "@list"); found do return list
+	}
+	return value
 }
 
 // process_language_map turns a language container into its RDF values. The
@@ -1207,7 +1275,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if list, found := has_keyword(object, &active_context, "@list"); found {
 		return process_list(state, &active_context, {}, list, graph)
 	}
-	if _, found := has_keyword(object, &active_context, "@set"); found do return {}, Parse_Error{code = .Unsupported_Feature}
+	if set_value, found := has_keyword(object, &active_context, "@set"); found {
+		terms, set_err := process_value_set_aware(state, &active_context, {}, set_value, graph)
+		delete(terms)
+		if set_err.code != .None do return {}, set_err
+		return {}, {}
+	}
 
 	subject: rdf.Term
 	if id_value, found := has_keyword(object, &active_context, "@id"); found {
@@ -1303,20 +1376,24 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				if definition.disabled do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
-				values, array := array_from_value(nested_value)
-				value_count := array ? len(values) : 1
 				if definition.container_list {
-					list, list_err := process_list(state, &active_context, definition, nested_value, graph)
+					list, list_err := process_list(state, &active_context, definition, container_list_value(&active_context, nested_value), graph)
 					if list_err.code != .None do return {}, list_err
 					if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None do return {}, emit_err
 					continue
 				}
-				for index in 0..<value_count {
-					item := array ? values[index] : nested_value
-					object_term, value_err := process_value(state, &active_context, definition, item, graph)
-					if value_err.code != .None do return {}, value_err
-					if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None do return {}, emit_err
+				object_terms, values_err := process_value_set_aware(state, &active_context, definition, nested_value, graph)
+				if values_err.code != .None {
+					delete(object_terms)
+					return {}, values_err
 				}
+				for object_term in object_terms {
+					if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None {
+						delete(object_terms)
+						return {}, emit_err
+					}
+				}
+				delete(object_terms)
 			}
 			continue
 		}
@@ -1353,7 +1430,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			continue
 		}
 		if definition.container_list {
-			list, list_err := process_list(state, &active_context, definition, property_value, graph)
+			list, list_err := process_list(state, &active_context, definition, container_list_value(&active_context, property_value), graph)
 			if list_err.code != .None do return {}, list_err
 			if definition.reverse {
 				if list.kind == .Literal do return {}, Parse_Error{code = .Invalid_Reverse_Property}
@@ -1361,17 +1438,27 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None { return {}, emit_err }
 			continue
 		}
-		values, array := array_from_value(property_value)
-		value_count := array ? len(values) : 1
-		for index in 0..<value_count {
-			item := array ? values[index] : property_value
-			object_term, value_err := process_value(state, &active_context, definition, item, graph)
-			if value_err.code != .None do return {}, value_err
-			if definition.reverse {
-				if object_term.kind == .Literal do return {}, Parse_Error{code = .Invalid_Reverse_Property}
-				if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
-			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None { return {}, emit_err }
+		object_terms, values_err := process_value_set_aware(state, &active_context, definition, property_value, graph)
+		if values_err.code != .None {
+			delete(object_terms)
+			return {}, values_err
 		}
+		for object_term in object_terms {
+			if definition.reverse {
+				if object_term.kind == .Literal {
+					delete(object_terms)
+					return {}, Parse_Error{code = .Invalid_Reverse_Property}
+				}
+				if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+					delete(object_terms)
+					return {}, emit_err
+				}
+			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None {
+				delete(object_terms)
+				return {}, emit_err
+			}
+		}
+		delete(object_terms)
 	}
 	return subject, {}
 }

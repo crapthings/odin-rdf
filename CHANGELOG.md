@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Expand nested JSON-LD `@set` values in the to-RDF processor, preserving
+  list/type container semantics and dropping null values. Extend the pinned
+  to-RDF core gate to 72 vectors.
+- Recognize aliases of `@value` and `@type` while converting JSON-LD value
+  objects to RDF.
+
 ## 0.27.0 - 2026-07-20
 
 - Add opt-in JSON-LD 1.1 `i18n-datatype` and `compound-literal`

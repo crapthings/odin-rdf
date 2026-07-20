@@ -214,6 +214,39 @@ test_resource_limits_and_invalid_remote_context :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_expands_nested_set_values_and_ignores_nulls :: proc(t: ^testing.T) {
+	input := `{
+  "@context": {
+    "p": "https://example.test/p",
+    "items": {"@id":"https://example.test/items", "@container":"@list"}
+  },
+  "@id": "https://example.test/s",
+  "p": {"@set": ["one", {"@set": [null, "two"]}, null]},
+  "items": {"@list": [null]}
+}`
+	actual, err := parse_to_nquads(input)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <https://example.test/p> "one" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <https://example.test/p> "two" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/s> <https://example.test/items> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .`))
+	testing.expect(t, !strings.contains(actual, `"null"`))
+
+	aliased, aliased_err := parse_to_nquads(`{
+  "@context": {
+    "p": "https://example.test/p",
+    "value": "@value",
+    "type": "@type",
+    "xsd": "http://www.w3.org/2001/XMLSchema#"
+  },
+  "p": {"value":"2026-07-20", "type":"xsd:date"}
+}`)
+	defer delete(aliased)
+	testing.expect_value(t, aliased_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(aliased, `"2026-07-20"^^<http://www.w3.org/2001/XMLSchema#date>`))
+}
+
+@(test)
 test_reader_retains_one_bounded_document :: proc(t: ^testing.T) {
 	input := `{"@context":{"ex":"https://example.test/"},"@id":"ex:alice","ex:name":"Alice"}`
 	reader_state: strings.Reader

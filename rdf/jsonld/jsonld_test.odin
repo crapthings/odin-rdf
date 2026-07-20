@@ -956,6 +956,17 @@ test_id_coercion_resolves_fragment_colons_against_base :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_empty_prefix_compact_iris_use_the_vocabulary_mapping :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/vocab"},
+  ":term":"value"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab:term> "value" .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

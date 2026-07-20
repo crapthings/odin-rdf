@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Implement ordinary JSON-LD `@id` map expansion for to-RDF, respecting
+  explicit node identifiers; raise the to-RDF gate to 147 and the semantic
+  Compaction gate to 78 vectors.
 - Reject invalid `rdf:JSON` lexical forms during RDF-to-JSON-LD conversion,
   preserving atomic output; extend the FromRDF gate to 46 vectors covering
   JSON literals and nested RDF lists.

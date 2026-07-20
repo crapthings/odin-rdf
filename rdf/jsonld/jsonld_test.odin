@@ -1020,6 +1020,20 @@ test_type_containers_inject_map_keys_as_node_types :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_id_containers_use_map_keys_when_values_lack_ids :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/","items":{"@container":"@id"}},
+  "items":{"https://example.test/ada":{"name":"Ada"},"https://example.test/grace":{"@id":"https://example.test/override","name":"Grace"}}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/ada> <https://example.test/name> "Ada" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/override> <https://example.test/name> "Grace" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/items> <https://example.test/ada> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/items> <https://example.test/override> .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

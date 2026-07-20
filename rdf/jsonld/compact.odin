@@ -313,6 +313,10 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	// semantics that the expanded values did not have.)
 	compacted, err := compact_iri(state, ctx, iri, true)
 	if err != .None do return "", {}, false, err
+	// A compact IRI can spell exactly like a context term whose coercion did not
+	// match these values. Emitting it would reintroduce that term's semantics on
+	// parse, so keep the expanded predicate in this fallback case.
+	if conflicting, found := ctx.terms[compacted]; found && conflicting.id == iri && !compact_values_match_definition(values, conflicting) do compacted = iri
 	return compacted, {}, false, .None
 }
 

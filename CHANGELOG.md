@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Avoid compact IRI spellings that collide with a same-named coercing term
+  when that term cannot represent the property's values. Extend the semantic
+  Compaction gate to 126 vectors.
 - Resolve custom `@index` references after all local context terms are defined,
   including forward references to compact IRIs. Extend the semantic Compaction
   gate to 125 vectors.

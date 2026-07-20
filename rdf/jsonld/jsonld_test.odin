@@ -805,6 +805,21 @@ test_boolean_values_honor_term_datatype_coercion :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_object_term_definitions_expand_same_context_compact_iris :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "issue":{"@id":"https://example.test/issue/","@type":"@id"},
+    "issue:raisedBy":{"@container":"@set"}
+  },
+  "issue":"https://example.test/one",
+  "issue:raisedBy":"Ada"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/issue/raisedBy> "Ada" .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

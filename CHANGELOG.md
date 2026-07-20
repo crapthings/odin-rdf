@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Apply the coercion of a property-valued `@index` term in both JSON-LD-to-RDF
+  conversion and Compaction, moving one index value into its map key while
+  retaining any additional values on the node, or using `@none` when no value
+  can compact to a string. Extend the semantic Compaction gate to 122 vectors.
 - Inline referenced nodes when a property or type-scoped context supplies
   semantics needed to compact their contents, while preserving ordinary
   references and graph containers. Extend the semantic Compaction gate to 118

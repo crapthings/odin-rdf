@@ -211,6 +211,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	canonical_frame_blank_ids:   bool,
 	frame_blank_aliases:         map[string]string,
 	frame_blank_counter:         u64,
+	compact_nodes:               map[string]json.Object,
+	compacting_nodes:            map[string]bool,
 	initial_base_iri:             string,
 }
 
@@ -223,6 +225,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if state.named_bnodes != nil do delete(state.named_bnodes)
 	if state.referenced_frame_blank_ids != nil do delete(state.referenced_frame_blank_ids)
 	if state.frame_blank_aliases != nil do delete(state.frame_blank_aliases)
+	if state.compact_nodes != nil do delete(state.compact_nodes)
+	if state.compacting_nodes != nil do delete(state.compacting_nodes)
 }
 
 @(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {

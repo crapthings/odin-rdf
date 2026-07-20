@@ -1381,9 +1381,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			reverse_object, valid := object_from_value(property_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Reverse_Property}
 			for reverse_key, reverse_value in reverse_object {
+				definition := active_context.terms[reverse_key]
+				if definition.disabled do continue
+				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(reverse_key) && strings.index_byte(reverse_key, ':') < 0 do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, reverse_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
-				definition := active_context.terms[reverse_key]
+				if strings.has_prefix(predicate_iri, "_:") do continue
 				values, array := array_from_value(reverse_value)
 				value_count := array ? len(values) : 1
 				for index in 0..<value_count {

@@ -1517,7 +1517,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					graph_value := array ? values[index] : source_value
 					graph_name, graph_name_err := blank_node(state)
 					if graph_name_err.code != .None do return {}, graph_name_err
-					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, graph_value, graph); graph_err.code != .None do return {}, graph_err
+					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
 				}
 			}
 			continue

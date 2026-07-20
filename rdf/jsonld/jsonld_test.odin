@@ -1034,6 +1034,20 @@ test_id_containers_use_map_keys_when_values_lack_ids :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_graph_containers_keep_referenced_graph_node_names_and_none_keys :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`[
+  {"@context":{"@vocab":"https://example.test/","input":{"@container":["@graph","@id"]}},"input":{"@none":{"value":"map"}}},
+  {"@context":{"@vocab":"https://example.test/","input":{"@container":["@graph","@id"]}},"@id":"_:graph","@graph":[{"value":"reference"}]},
+  {"@context":{"@vocab":"https://example.test/","input":{"@container":["@graph","@id"]}},"input":{"@id":"_:graph"}}
+]`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "map"`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "reference"`))
+	testing.expect_value(t, strings.count(actual, `<https://example.test/input>`), 2)
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

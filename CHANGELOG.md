@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Preserve referenced graph-node identifiers and treat `@none` (including its
+  aliases) as an anonymous graph key in `@graph`/`@id` containers. Extend the
+  semantic Compaction gate to 81 vectors covering the corresponding W3C graph
+  map cases.
 - Implement ordinary JSON-LD `@id` map expansion for to-RDF, respecting
   explicit node identifiers; raise the to-RDF gate to 147 and the semantic
   Compaction gate to 78 vectors.

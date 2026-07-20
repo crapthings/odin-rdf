@@ -150,10 +150,12 @@ It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs 147 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
-output. The broader 1.1 suite remains the gate for graph-container and
+output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 81 semantic compaction
+vectors, including graph/index and graph/id map keys with `@none` aliases. The
+broader 1.1 suite remains the gate for graph-container and
 generalized RDF work.
 
-`scripts/run-w3c-jsonld-compact-tests.sh` runs 78 local-context compaction
+`scripts/run-w3c-jsonld-compact-tests.sh` runs 81 local-context compaction
 vectors from the same pinned corpus, including default, term, list, and
 language-container direction handling. It parses both generated and expected
 documents and compares their RDFC-1.0 canonical RDF datasets, so the gate

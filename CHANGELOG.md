@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Resolve custom `@index` references after all local context terms are defined,
+  including forward references to compact IRIs. Extend the semantic Compaction
+  gate to 125 vectors.
 - Compact graph-container references inline, retaining named graph IDs while
   using direct contents for anonymous graphs and `@none` for graph/id maps.
   Extend the semantic Compaction gate to 124 vectors.

@@ -289,7 +289,10 @@ values are emitted by default; `native_type_policy = .Lexical` retains lexical
 value objects. Language containers compact retained RDF language literals as
 language maps. Index containers are accepted on input; ordinary `@index`
 annotations cannot be reconstructed after RDF conversion, while custom index
-properties remain RDF statements. The CLI exposes the same operation through
+properties remain RDF statements. When a base IRI is supplied, document-relative
+node identifiers and `@id`-coerced values use RFC 3986 relative references;
+keyword-like path segments retain an explicit `./` prefix. The CLI exposes the
+same operation through
 `odin-rdf convert --to jsonld --context context.jsonld`; without `--context`,
 it intentionally emits deterministic expanded JSON-LD.
 

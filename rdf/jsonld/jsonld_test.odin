@@ -1288,3 +1288,21 @@ test_term_scoped_context_is_retained_and_applied :: proc(t: ^testing.T) {
 	testing.expect_value(t, frame(&frame_builder, frame_input, frame_document, Frame_Options{context_options = {base_iri = "https://w3c.github.io/json-ld-framing/tests/frame/0062-in.jsonld"}}), Frame_Error.None)
 	testing.expect(t, strings.contains(strings.to_string(frame_builder), `"part": [`))
 }
+
+@(test)
+test_term_scoped_context_owns_keyword_aliases :: proc(t: ^testing.T) {
+	parsed, json_error := json.parse_string(`{"@vocab":"http://example/","Type":{"@context":{"value":"@value"}}}`, .JSON, true)
+	defer json.destroy_value(parsed)
+	testing.expect_value(t, json_error, json.Error.None)
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = DEFAULT_MAX_CONTEXTS, max_remote = DEFAULT_MAX_REMOTE_CONTEXTS, allow_document_containers = true}
+	defer destroy_state(&state)
+	ctx, make_error := make_context(&state, nil)
+	testing.expect_value(t, make_error.code, Error_Code.None)
+	apply_error: Parse_Error
+	ctx, apply_error = apply_context(&state, &ctx, parsed)
+	testing.expect_value(t, apply_error.code, Error_Code.None)
+	definition := ctx.terms["Type"]
+	scoped, scoped_error := apply_term_scoped_context(&state, &ctx, definition)
+	testing.expect_value(t, scoped_error.code, Error_Code.None)
+	testing.expect_value(t, compact_keyword(&scoped, "@value"), "value")
+}

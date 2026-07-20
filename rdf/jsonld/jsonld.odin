@@ -1112,6 +1112,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			case json.Null:
 				return result, {}
 			}
+		} else if _, has_language := has_keyword(object, &active_context, "@language"); has_language {
+			return result, {}
 		}
 		if set_value, found := has_keyword(object, &active_context, "@set"); found {
 			for key in object {

@@ -20,14 +20,14 @@ cases='
 0042 0043 0049 0063 0064 0078
 n001 n002 n003 n004 n005 n006 n007 n008
 0079 0080 0081 0082 0083 0085 0086 0093 0094 0095 0096 0099 0100
-m001 m002 m003 m004 m006 m007
+m001 m002 m003 m004 m006 m007 m008 m009 m010 m011 m012 m013 m014 m015 m016 m017 m018 m019
 so08 so09 so11
 c026 c027 c028 so05 so06
 di01 di02 di03 di04 di05 di06 di07
 '
 
 negative_cases='
-so07 so10 c030 di08 di09
+so07 so10 c030 di08 di09 m020
 '
 
 total=0
@@ -51,5 +51,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD expansion core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 93
+test "$total" -eq 106
 test "$failures" -eq 0

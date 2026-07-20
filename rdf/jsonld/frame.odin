@@ -100,8 +100,6 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 		for key, item in object {
 			if key == "@context" do continue
 			switch key {
-			case "@included":
-				return true
 			case "@embed":
 				if !frame_embed_is_valid(item) do return true
 			case "@explicit", "@omitDefault", "@requireAll":
@@ -619,11 +617,13 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 @(private) Frame_Embedding_State :: struct {
 	seen:      map[string]bool,
 	remaining: map[string]int,
+	included:  map[string]bool,
 }
 
 @(private) frame_destroy_embedding_state :: proc(state: ^Frame_Embedding_State) {
 	delete(state.seen)
 	delete(state.remaining)
+	delete(state.included)
 }
 
 @(private) frame_count_references_in_value :: proc(state: ^Frame_Embedding_State, value: json.Value) {
@@ -641,7 +641,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 }
 
 @(private) frame_make_embedding_state :: proc(node_map: ^Frame_Node_Map) -> Frame_Embedding_State {
-	state := Frame_Embedding_State{seen = make(map[string]bool), remaining = make(map[string]int)}
+	state := Frame_Embedding_State{seen = make(map[string]bool), remaining = make(map[string]int), included = make(map[string]bool)}
 	for node in node_map.nodes {
 		for key, value in node {
 			if is_keyword(key) do continue
@@ -774,6 +774,10 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	id_value, has_id := object_value(object, "@id")
 	id, id_valid := string_value(id_value)
 	if !has_id || !id_valid do return compact_write_raw_json(builder, value) ? .None : .Invalid_Frame
+	if embedding_state.included[id] {
+		frame_write_reference(builder, id)
+		return .None
+	}
 	if embed_mode == .Never || frame_is_id_reference(child_frame) {
 		frame_write_reference(builder, id)
 		return .None
@@ -853,12 +857,48 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	return .None
 }
 
+// @included is evaluated before ordinary properties. Included nodes are
+// recorded so later references to the same node do not duplicate an implicit
+// embedding.
+@(private) frame_write_included :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, value: json.Value, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int, first: ^bool) -> Frame_Error {
+	frames, frames_valid := array_from_value(value)
+	if !frames_valid do return .Invalid_Frame
+	if !first^ do strings.write_string(builder, ", ")
+	write_json_string(builder, "@included")
+	strings.write_string(builder, ": [")
+	written := 0
+	for frame_value in frames {
+		included_frame, frame_valid := object_from_value(frame_value)
+		if !frame_valid do return .Invalid_Frame
+		included_mode := frame_embed_mode(included_frame, embed_mode)
+		for candidate in node_map.nodes {
+			if !frame_matches_node_in_map(node_map, candidate, included_frame) do continue
+			id_value, has_id := object_value(candidate, "@id")
+			id, id_valid := string_value(id_value)
+			if !has_id || !id_valid do return .Invalid_Frame
+			if embedding_state.included[id] do continue
+			embedding_state.included[id] = true
+			if written > 0 do strings.write_string(builder, ", ")
+			append(embeds, id)
+			if err := frame_write_node(builder, node_map, output_ctx, candidate, included_frame, included_mode, embedding_state, embeds, max_depth); err != .None do return err
+			pop(embeds)
+			written += 1
+		}
+	}
+	strings.write_byte(builder, ']')
+	first^ = false
+	return .None
+}
+
 @(private) frame_write_node :: proc(builder: ^strings.Builder, node_map: ^Frame_Node_Map, output_ctx: ^Context, node, frame: json.Object, embed_mode: Frame_Embed_Mode, embedding_state: ^Frame_Embedding_State, embeds: ^[dynamic]string, max_depth: int) -> Frame_Error {
 	keys := compact_sorted_keys(node)
 	defer delete(keys)
 	explicit := frame_is_explicit(frame)
 	strings.write_byte(builder, '{')
 	first := true
+	if included_value, has_included := object_value(frame, "@included"); has_included {
+		if included_error := frame_write_included(builder, node_map, output_ctx, included_value, embed_mode, embedding_state, embeds, max_depth, &first); included_error != .None do return included_error
+	}
 	for key in keys {
 		if key == "@index" do continue
 		if key == "@graph" {
@@ -1196,6 +1236,12 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 		has_definition := false
 		if is_keyword(key) {
 			compacted_key = compact_keyword(ctx, key)
+			for _, candidate_definition in ctx.terms {
+				if candidate_definition.id != key do continue
+				definition = candidate_definition
+				has_definition = true
+				break
+			}
 		} else {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON

@@ -43,8 +43,8 @@ container profile as Expansion.
 It supports `@id`, `@type`, property, value, and list matching; recursive
 embedding with standard embed modes; `@explicit`, defaults, and
 `@requireAll`, and basic reverse framing. Cycles fall back to `@id`
-references. Named-graph and `@included` framing are still outside the
-implemented policy matrix.
+references. Bounded `@included` framing is supported; named-graph matching is
+still outside the implemented policy matrix.
 
 All three operations accept a complete bounded JSON-LD document and atomically
 append output only after successful processing. They use the existing opt-in
@@ -74,7 +74,7 @@ renamed or treated as a JSON-LD `expand` implementation.
 3. Default-graph Flatten node-map generation: implemented.
 4. A 35-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.
-5. Framing over the same representation: implemented with an 81-case W3C
+5. Framing over the same representation: implemented with an 84-case W3C
    regression gate. Its bounded initial profile is specified in the
    [JSON-LD Framing delivery design](jsonld-framing-design.md).
 

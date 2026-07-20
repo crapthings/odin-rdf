@@ -9,7 +9,7 @@
 ![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
 ![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-93%2F93-0f766e)
 ![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
-![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-81%2F81-0f766e)
+![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-84%2F84-0f766e)
 ![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-28%2F28-0f766e)
 ![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-66%2F66-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
@@ -40,9 +40,9 @@ gate runs 93 vectors.
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
 JSON-LD Framing supports recursive embedding, standard embed modes, defaults,
-`@requireAll`, value/list patterns, and basic reverse framing. Named-graph
-matching, `@included`, scoped contexts, graph storage, and SPARQL are outside
-the current scope. See the [JSON-LD processing profile](docs/jsonld-design.md)
+`@requireAll`, value/list patterns, basic reverse framing, and bounded
+`@included` selection. Named-graph matching, scoped contexts, graph storage,
+and SPARQL are outside the current scope. See the [JSON-LD processing profile](docs/jsonld-design.md)
 for exact limits and supported behavior.
 
 For version-by-version changes, see the [changelog](CHANGELOG.md).
@@ -386,7 +386,7 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Extend the JSON-LD context and Framing profiles toward scoped contexts, named-graph matching, and `@included`; keep storage and SPARQL as separate product directions.
+1. Extend the JSON-LD Framing profile toward named-graph matching and scoped contexts; keep storage and SPARQL as separate product directions.
 
 ## License
 

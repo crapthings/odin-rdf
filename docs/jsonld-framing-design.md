@@ -32,9 +32,9 @@ The implemented first profile is intentionally small and testable:
 - produce the frame context plus an `@graph` result;
 - bound nodes, embedding depth, and output bytes; detect recursive embeds.
 
-Value and list patterns, all standard `@embed` modes, and basic reverse
-framing are implemented. Named-graph matching and `@included` remain
-deliberately rejected until their result-shaping rules have dedicated
+Value and list patterns, all standard `@embed` modes, basic reverse framing,
+and bounded `@included` selection are implemented. Named-graph matching
+remains deliberately rejected until its result-shaping rules have dedicated
 regression coverage.
 
 ## Test source
@@ -42,11 +42,11 @@ regression coverage.
 Framing has its own pinned W3C suite rather than living in `json-ld-api`.
 `scripts/fetch-w3c-jsonld-framing-tests.sh` pins
 `w3c/json-ld-framing` at `3bf782ba9a40dd1b143435abe386d38df64f2b47`.
-The gate selects 81 positive and negative vectors, including empty frames,
+The gate selects 84 positive and negative vectors, including empty frames,
 `@explicit`, all embed modes, defaults, `@requireAll`, deep node and value
-patterns, lists, `@set` containers, protected empty contexts, JSON-LD 1.1 graph
-shape, named-graph node merging, and invalid blank-node/embed frames. It
-compares compacted JSON structurally and currently passes 81/81.
+patterns, lists, `@set` containers, protected empty contexts, `@included`,
+JSON-LD 1.1 graph shape, named-graph node merging, and invalid blank-node/embed
+frames. It compares compacted JSON structurally and currently passes 84/84.
 
 ## Why compaction is part of framing
 

@@ -24,6 +24,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   coverage. RDF directional-literal encodings remain out of scope.
 - Extend the bounded Framing gate with W3C `0062` (`@set` container output)
   and `0070` (protected empty context), for 81 passing vectors.
+- Add bounded Framing `@included` support and extend the W3C Framing gate with
+  `in01`–`in03`, for 84 passing vectors.
 
 ## 0.25.0 - 2026-07-20
 

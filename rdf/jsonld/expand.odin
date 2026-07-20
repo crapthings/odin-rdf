@@ -831,6 +831,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	defer delete(keys)
 	for key in keys {
 		if key == "@context" || keyword_for(&ctx, key) == "@id" || keyword_for(&ctx, key) == "@type" || keyword_for(&ctx, key) == "@index" do continue
+		if state.retain_frame_controls && frame_is_control(key) do continue
 		value := object[key]
 		keyword := keyword_for(&ctx, key)
 		if keyword == "@set" do continue

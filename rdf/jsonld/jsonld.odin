@@ -1460,6 +1460,83 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return result, {}
 }
 
+@(private) process_id_map_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, map_id: rdf.Term, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	if values, array := array_from_value(value); array {
+		for item in values {
+			terms, err := process_id_map_value(state, ctx, definition, item, map_id, graph)
+			if err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+		}
+		return result, {}
+	}
+	object, valid := object_from_value(value)
+	if !valid {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	// An explicit @id is authoritative. Otherwise the id-map key becomes the
+	// node's identifier while its properties are processed against that node.
+	if _, has_id := has_keyword(object, ctx, "@id"); has_id {
+		term, err := process_node(state, ctx, object, graph)
+		if err.code != .None {
+			delete(result)
+			return {}, err
+		}
+		append(&result, term)
+		return result, {}
+	}
+	map_subject := map_id
+	term, err := process_node(state, ctx, object, graph, false, &map_subject)
+	if err.code != .None {
+		delete(result)
+		return {}, err
+	}
+	append(&result, term)
+	return result, {}
+}
+
+@(private) process_id_map :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	map_object, valid := object_from_value(value)
+	if !valid {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	for map_key, mapped_value in map_object {
+		if map_key == "@none" || keyword_for(ctx, map_key) == "@none" {
+			terms, err := process_value_set_aware(state, ctx, definition, mapped_value, graph)
+			if err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+			continue
+		}
+		map_id, id_err := identifier_term(state, ctx, map_key)
+		if id_err.code != .None {
+			delete(result)
+			return {}, id_err
+		}
+		terms, err := process_id_map_value(state, ctx, definition, mapped_value, map_id, graph)
+		if err.code != .None {
+			delete(terms)
+			delete(result)
+			return {}, err
+		}
+		for term in terms do append(&result, term)
+		delete(terms)
+	}
+	return result, {}
+}
+
 // A container map is distinguished from an ordinary node/value object by its
 // keys. Accepting an ordinary value here keeps RDF-originated compact output
 // parseable when index annotations were intentionally unavailable to restore.
@@ -1497,7 +1574,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return emit(state, subject, rdf.iri(predicate), graph_name, graph)
 }
 
-@(private) process_node :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad, top_level := false) -> (rdf.Term, Parse_Error) {
+@(private) process_node :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad, top_level := false, subject_override: ^rdf.Term = nil) -> (rdf.Term, Parse_Error) {
 	active_context := ctx^
 	if context_value, found := object_value(object, "@context"); found {
 		updated, context_err := apply_context(state, ctx, context_value)
@@ -1519,7 +1596,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 
 	subject: rdf.Term
-	if id_value, found := has_keyword(object, &active_context, "@id"); found {
+	if subject_override != nil {
+		subject = subject_override^
+	} else if id_value, found := has_keyword(object, &active_context, "@id"); found {
 		id, valid := string_value(id_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_IRI}
 		if len(active_context.base_iri) == 0 && !strings.has_prefix(id, "_:") && !has_iri_scheme(id) && strings.index_byte(id, ':') < 0 {
@@ -1690,6 +1769,27 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
 				}
 			}
+			continue
+		}
+		if definition.container_id && is_container_map(property_value) {
+			mapped, mapped_error := process_id_map(state, &active_context, definition, property_value, graph)
+			if mapped_error.code != .None do return {}, mapped_error
+			for mapped_term in mapped {
+				if definition.reverse {
+					if mapped_term.kind == .Literal {
+						delete(mapped)
+						return {}, Parse_Error{code = .Invalid_Reverse_Property}
+					}
+					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+						delete(mapped)
+						return {}, emit_err
+					}
+				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+					delete(mapped)
+					return {}, emit_err
+				}
+			}
+			delete(mapped)
 			continue
 		}
 		if (definition.container_language || definition.container_index) && is_container_map(property_value) {

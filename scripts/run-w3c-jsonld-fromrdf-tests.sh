@@ -19,7 +19,10 @@ cases='
 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014
 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024 0025 0026 0027 0028
 di05 di06 di11 di12
+js01 js02 js03 js04 js05 js06 js07 js10 js11 li01 li02 li03
 '
+
+negative_cases='js08 js09'
 
 total=0
 failures=0
@@ -51,6 +54,14 @@ for case_id in $cases; do
   total=$((total + 1))
 done
 
+for case_id in $negative_cases; do
+  input="$suite/fromRdf/$case_id-in.nq"
+  if "$runner" "$input" >/dev/null 2>&1; then
+    failures=$((failures + 1))
+  fi
+  total=$((total + 1))
+done
+
 printf 'W3C JSON-LD RDF-to-JSON-LD core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 32
+test "$total" -eq 46
 test "$failures" -eq 0

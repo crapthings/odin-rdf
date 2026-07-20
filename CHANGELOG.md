@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Reject invalid `rdf:JSON` lexical forms during RDF-to-JSON-LD conversion,
+  preserving atomic output; extend the FromRDF gate to 46 vectors covering
+  JSON literals and nested RDF lists.
 - Align Expansion's id/type, graph, index, and language container processing
   with to-RDF for scoped type keys and `@none` aliases; extend the pinned
   Expansion gate to 106 vectors.

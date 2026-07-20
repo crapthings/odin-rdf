@@ -143,7 +143,7 @@ contexts fail explicitly instead of causing implicit network access.
 
 The repository pins the W3C JSON-LD API test corpus. In addition to the stable
 JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
-32 RDF-to-JSON-LD core vectors, including RDF lists, named graphs,
+46 RDF-to-JSON-LD core vectors, including RDF lists, named graphs,
 `useNativeTypes`, `useRdfType`, duplicate triples, `rdf:JSON`, and i18n
 directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated

@@ -884,6 +884,19 @@ test_id_coercion_uses_document_relative_iris_not_term_mappings :: proc(t: ^testi
 }
 
 @(test)
+test_type_aliases_all_emit_rdf_types :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/","kind":"@type","alsoKind":"@type"},
+  "kind":"First",
+  "alsoKind":"Second"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://example.test/First> .`))
+	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://example.test/Second> .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

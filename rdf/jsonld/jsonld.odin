@@ -1347,20 +1347,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		subject = term
 	}
 
-	if type_value, found := has_keyword(object, &active_context, "@type"); found {
-		if types, array := array_from_value(type_value); array {
-			for index in 0..<len(types) {
-				type_item := types[index]
-				type_name, valid := string_value(type_item)
-				if !valid do return {}, Parse_Error{code = .Invalid_IRI}
-				type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
-				if type_err.code != .None do return {}, type_err
-				type_term, term_err := expanded_identifier_term(state, type_iri)
-				if term_err.code != .None do return {}, term_err
-				if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
-			}
-		} else {
-			type_name, valid := string_value(type_value)
+	for key, type_value in object {
+		if keyword_for(&active_context, key) != "@type" do continue
+		types, array := array_from_value(type_value)
+		count := array ? len(types) : 1
+		for index in 0..<count {
+			type_item := array ? types[index] : type_value
+			type_name, valid := string_value(type_item)
 			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
 			type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
 			if type_err.code != .None do return {}, type_err

@@ -508,8 +508,20 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	if term.datatype != XSD_DOUBLE do return false
 	value, valid := strconv.parse_f64(term.value)
 	if !valid || math.is_nan(value) || math.is_inf(value, 0) do return false
-	strings.write_float(builder, value, 'g', -1, 64)
+	write_json_float(builder, value)
 	return true
+}
+
+// JSON distinguishes integer and floating-point values in the in-memory
+// representation. Keep an explicit decimal point for finite doubles whose
+// shortest spelling would otherwise be reparsed as an integer.
+@(private) write_json_float :: proc(builder: ^strings.Builder, value: f64) {
+	temporary := strings.builder_make()
+	defer strings.builder_destroy(&temporary)
+	strings.write_float(&temporary, value, 'g', -1, 64)
+	formatted := strings.to_string(temporary)
+	strings.write_string(builder, formatted)
+	if strings.index_byte(formatted, '.') < 0 && strings.index_byte(formatted, 'e') < 0 && strings.index_byte(formatted, 'E') < 0 do strings.write_string(builder, ".0")
 }
 
 @(private) i18n_datatype_parts :: proc(datatype: string) -> (language, direction: string, ok: bool) {

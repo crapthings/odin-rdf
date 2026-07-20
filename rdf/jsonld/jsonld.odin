@@ -1107,7 +1107,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		type_name, valid := string_value(type_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
 		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
-		if type_name == "@json" {
+		if type_name == "@json" || keyword_for(ctx, type_name) == "@json" {
 			encoded, marshal_error := json.marshal(value)
 			if marshal_error != nil do return {}, Parse_Error{code = .Invalid_Value_Object}
 			defer delete(encoded)

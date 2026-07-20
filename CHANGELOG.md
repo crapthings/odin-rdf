@@ -6,7 +6,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - Expand nested JSON-LD `@set` values in the to-RDF processor, preserving
   list/type container semantics and dropping null values. Extend the pinned
-  to-RDF core gate to 83 vectors.
+  to-RDF core gate to 85 vectors.
 - Recognize aliases of `@value` and `@type` while converting JSON-LD value
   objects to RDF.
 - Drop unmapped JSON object properties where JSON-LD expansion has no usable
@@ -27,6 +27,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Drop unmapped relative keys inside `@reverse` maps during to-RDF conversion.
 - Resolve redefined terms against their current context prefix and `@vocab`
   settings instead of a previous definition of the same term.
+- Ignore free-floating scalar, value-object, and list entries in `@graph`
+  during to-RDF conversion while retaining graph members with properties.
 
 ## 0.27.0 - 2026-07-20
 

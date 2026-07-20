@@ -1338,6 +1338,123 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return result, {}
 }
 
+@(private) process_type_map_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, type_term: rdf.Term, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	if values, array := array_from_value(value); array {
+		for item in values {
+			terms, err := process_type_map_value(state, ctx, definition, item, type_term, graph)
+			if err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+		}
+		return result, {}
+	}
+	term: rdf.Term
+	if object, is_object := object_from_value(value); is_object {
+		err: Parse_Error
+		term, err = process_node(state, ctx, object, graph)
+		if err.code != .None {
+			delete(result)
+			return {}, err
+		}
+	} else if text, is_string := string_value(value); is_string {
+		if len(definition.type) > 0 && definition.type != "@id" && definition.type != "@vocab" {
+			delete(result)
+			return {}, Parse_Error{code = .Invalid_Value_Object}
+		}
+		if definition.type == "@vocab" {
+			identifier, err := expand_iri(state, ctx, text, true, true)
+			if err.code != .None {
+				delete(result)
+				return {}, err
+			}
+			term, err = expanded_identifier_term(state, identifier)
+			if err.code != .None {
+				delete(result)
+				return {}, err
+			}
+		} else {
+			err: Parse_Error
+			term, err = identifier_term(state, ctx, text)
+			if err.code != .None {
+				delete(result)
+				return {}, err
+			}
+		}
+	} else {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	if term.kind == .Literal || (term.kind == .IRI && len(term.value) == 0) {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	if err := emit(state, term, rdf.iri(RDF_TYPE), type_term, graph); err.code != .None {
+		delete(result)
+		return {}, err
+	}
+	append(&result, term)
+	return result, {}
+}
+
+// process_type_map injects each map key as an RDF type while preserving a
+// type term's scoped context for the corresponding value. @none (and aliases
+// of it) remains a normal value with no injected type.
+@(private) process_type_map :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
+	result := make([dynamic]rdf.Term)
+	map_object, valid := object_from_value(value)
+	if !valid {
+		delete(result)
+		return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	for type_key, mapped_value in map_object {
+		value_context := ctx^
+		if type_definition, found := ctx.terms[type_key]; found {
+			updated, context_err := apply_term_scoped_context(state, ctx, type_definition)
+			if context_err.code != .None {
+				delete(result)
+				return {}, context_err
+			}
+			value_context = updated
+		}
+		if type_key == "@none" || keyword_for(ctx, type_key) == "@none" {
+			terms, err := process_value_set_aware(state, &value_context, definition, mapped_value, graph)
+			if err.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, err
+			}
+			for term in terms do append(&result, term)
+			delete(terms)
+			continue
+		}
+		type_iri, type_err := expand_iri(state, ctx, type_key, true, false)
+		if type_err.code != .None {
+			delete(result)
+			return {}, type_err
+		}
+		if len(type_iri) == 0 do continue
+		type_term, term_err := expanded_identifier_term(state, type_iri)
+		if term_err.code != .None {
+			delete(result)
+			return {}, term_err
+		}
+		terms, err := process_type_map_value(state, &value_context, definition, mapped_value, type_term, graph)
+		if err.code != .None {
+			delete(terms)
+			delete(result)
+			return {}, err
+		}
+		for term in terms do append(&result, term)
+		delete(terms)
+	}
+	return result, {}
+}
+
 // A container map is distinguished from an ordinary node/value object by its
 // keys. Accepting an ordinary value here keeps RDF-originated compact output
 // parseable when index annotations were intentionally unavailable to restore.
@@ -1573,6 +1690,27 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			} else {
 				mapped, mapped_error = process_index_map(state, &active_context, definition, property_value, graph)
 			}
+			if mapped_error.code != .None do return {}, mapped_error
+			for mapped_term in mapped {
+				if definition.reverse {
+					if mapped_term.kind == .Literal {
+						delete(mapped)
+						return {}, Parse_Error{code = .Invalid_Reverse_Property}
+					}
+					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+						delete(mapped)
+						return {}, emit_err
+					}
+				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+					delete(mapped)
+					return {}, emit_err
+				}
+			}
+			delete(mapped)
+			continue
+		}
+		if definition.container_type && is_container_map(property_value) {
+			mapped, mapped_error := process_type_map(state, &active_context, definition, property_value, graph)
 			if mapped_error.code != .None do return {}, mapped_error
 			for mapped_term in mapped {
 				if definition.reverse {

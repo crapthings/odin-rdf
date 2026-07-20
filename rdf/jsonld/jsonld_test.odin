@@ -993,6 +993,20 @@ test_value_objects_reject_invalid_datatype_iris :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_type_containers_inject_map_keys_as_node_types :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/","items":{"@container":"@type"}},
+  "items":{"Person":{"name":"Ada"},"@none":{"name":"Anonymous"}}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/name> "Ada" .`))
+	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://example.test/Person> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/name> "Anonymous" .`))
+	testing.expect(t, strings.count(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>`) == 1)
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

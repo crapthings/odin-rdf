@@ -829,9 +829,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return rdf.blank_node(label, state.scope), {}
 }
 
-@(private) identifier_term :: proc(state: ^State, ctx: ^Context, value: string) -> (rdf.Term, Parse_Error) {
-	id, err := expand_iri(state, ctx, value, false, true)
-	if err.code != .None do return {}, err
+@(private) expanded_identifier_term :: proc(state: ^State, id: string) -> (rdf.Term, Parse_Error) {
 	if strings.has_prefix(id, "_:") {
 		if len(id) <= 2 do return {}, Parse_Error{code = .Invalid_IRI}
 		if node, exists := state.named_bnodes[id]; exists do return node, {}
@@ -841,6 +839,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		return node, {}
 	}
 	return rdf.iri(id), {}
+}
+
+@(private) identifier_term :: proc(state: ^State, ctx: ^Context, value: string) -> (rdf.Term, Parse_Error) {
+	id, err := expand_iri(state, ctx, value, false, true)
+	if err.code != .None do return {}, err
+	return expanded_identifier_term(state, id)
 }
 
 // preassign_blank_nodes makes explicit JSON-LD blank-node identifiers stable
@@ -1313,14 +1317,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				if !valid do return {}, Parse_Error{code = .Invalid_IRI}
 				type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
 				if type_err.code != .None do return {}, type_err
-				if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), rdf.iri(type_iri), graph); emit_err.code != .None do return {}, emit_err
+				type_term, term_err := expanded_identifier_term(state, type_iri)
+				if term_err.code != .None do return {}, term_err
+				if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
 			}
 		} else {
 			type_name, valid := string_value(type_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
 			type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
 			if type_err.code != .None do return {}, type_err
-			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), rdf.iri(type_iri), graph); emit_err.code != .None do return {}, emit_err
+			type_term, term_err := expanded_identifier_term(state, type_iri)
+			if term_err.code != .None do return {}, term_err
+			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
 		}
 	}
 
@@ -1389,6 +1397,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(nested_key) && strings.index_byte(nested_key, ':') < 0 do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
+				// Blank node identifiers may be used for node and type identifiers,
+				// but cannot occupy RDF's predicate position.
+				if strings.has_prefix(predicate_iri, "_:") do continue
 				if definition.container_list {
 					list, list_err := process_list(state, &active_context, definition, container_list_value(&active_context, nested_value), graph)
 					if list_err.code != .None do return {}, list_err
@@ -1416,6 +1427,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(key) && strings.index_byte(key, ':') < 0 do continue
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
+		// JSON-LD drops properties whose expanded predicate is a blank node;
+		// RDF predicates must be IRIs.
+		if strings.has_prefix(predicate_iri, "_:") do continue
 		if (definition.container_language || definition.container_index) && is_container_map(property_value) {
 			mapped: [dynamic]rdf.Term
 			mapped_error: Parse_Error

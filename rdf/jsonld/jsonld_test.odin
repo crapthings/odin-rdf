@@ -405,6 +405,19 @@ test_round_trips_rdf_json_typed_literals_as_jsonld_json_values :: proc(t: ^testi
 }
 
 @(test)
+test_serializer_rejects_invalid_rdf_json_literals :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	quad := rdf.Quad{
+		subject = rdf.iri("https://example.test/node"),
+		predicate = rdf.iri("https://example.test/value"),
+		object = rdf.typed_literal("not-json", RDF_JSON),
+	}
+	testing.expect_value(t, serialize(&builder, []rdf.Quad{quad}), Serialize_Error.Invalid_JSON_Literal)
+	testing.expect_value(t, strings.to_string(builder), "")
+}
+
+@(test)
 test_round_trips_i18n_direction_datatypes_when_enabled :: proc(t: ^testing.T) {
 	quad := rdf.default_graph_quad(rdf.Triple{
 		subject = rdf.iri("https://example.test/s"),

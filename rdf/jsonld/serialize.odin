@@ -17,6 +17,7 @@ Serialize_Error :: enum {
 	Invalid_Option,
 	Invalid_Quad,
 	Invalid_UTF8,
+	Invalid_JSON_Literal,
 	Quad_Limit,
 	Ambiguous_Blank_Node_Label,
 }
@@ -27,6 +28,7 @@ serialize_error_message :: proc(code: Serialize_Error) -> string {
 	case .Invalid_Option:             return "serializer limits must not be negative"
 	case .Invalid_Quad:               return "invalid RDF quad"
 	case .Invalid_UTF8:               return "RDF term contains invalid UTF-8"
+	case .Invalid_JSON_Literal:       return "invalid rdf:JSON literal"
 	case .Quad_Limit:                 return "JSON-LD serializer quad limit reached"
 	case .Ambiguous_Blank_Node_Label: return "blank-node labels from different source scopes cannot be serialized together"
 	}
@@ -608,6 +610,16 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	}
 }
 
+@(private) valid_rdf_json_literals :: proc(quads: []rdf.Quad) -> bool {
+	for quad in quads {
+		if quad.object.kind != .Literal || quad.object.datatype != RDF_JSON do continue
+		parsed, json_error := json.parse_string(quad.object.value, .JSON, true)
+		if json_error != .None do return false
+		json.destroy_value(parsed)
+	}
+	return true
+}
+
 @(private) write_node :: proc(builder: ^strings.Builder, state: ^Serialization_State, index: ^int, indent: int) {
 	first := state.quads[state.order[index^]]
 	write_indent(builder, indent)
@@ -643,6 +655,7 @@ serialize :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Seriali
 	if options.max_quads < 0 do return .Invalid_Option
 	max_quads := options.max_quads > 0 ? options.max_quads : DEFAULT_MAX_SERIALIZE_QUADS
 	if validation := validate_serialization_input(quads, max_quads); validation != .None do return validation
+	if !valid_rdf_json_literals(quads) do return .Invalid_JSON_Literal
 
 	state := Serialization_State{
 		quads = quads,

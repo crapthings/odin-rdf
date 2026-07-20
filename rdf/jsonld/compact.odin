@@ -87,6 +87,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	case .None:                       return .None
 	case .Invalid_Option:             return .Invalid_Option
 	case .Invalid_UTF8:               return .Invalid_UTF8
+	case .Invalid_JSON_Literal:       return .Invalid_Expanded_JSON
 	case .Invalid_Quad:               return .Invalid_Quad
 	case .Quad_Limit:                 return .Quad_Limit
 	case .Ambiguous_Blank_Node_Label: return .Ambiguous_Blank_Node_Label

@@ -1374,6 +1374,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			for nested_key, nested_value in nested {
 				definition := active_context.terms[nested_key]
 				if definition.disabled do continue
+				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(nested_key) && strings.index_byte(nested_key, ':') < 0 do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
 				if definition.container_list {
@@ -1400,6 +1401,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if len(keyword) > 0 do continue
 		definition := active_context.terms[key]
 		if definition.disabled do continue
+		if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(key) && strings.index_byte(key, ':') < 0 do continue
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
 		if (definition.container_language || definition.container_index) && is_container_map(property_value) {

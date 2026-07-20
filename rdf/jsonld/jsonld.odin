@@ -328,6 +328,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return false
 }
 
+// has_keyword_form recognizes strings reserved for future JSON-LD keywords.
+// They are not necessarily current keywords: "@" and "@foo.bar", for
+// example, remain usable terms, while "@future" must be ignored.
+@(private) has_keyword_form :: proc(value: string) -> bool {
+	if len(value) < 2 || value[0] != '@' do return false
+	for character in value[1:] {
+		if !((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z')) do return false
+	}
+	return true
+}
+
 @(private) keyword_for :: proc(ctx: ^Context, key: string) -> string {
 	if is_keyword(key) do return key
 	if definition, ok := ctx.terms[key]; ok && is_keyword(definition.id) do return definition.id
@@ -342,6 +353,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') do return false
 	}
 	return false
+}
+
+// valid_absolute_iri covers the IRI validation required before a JSON-LD
+// typed value reaches RDF. The syntax writers can escape output, but JSON-LD
+// itself must reject a raw invalid datatype IRI such as one containing space.
+@(private) valid_absolute_iri :: proc(value: string) -> bool {
+	if !has_iri_scheme(value) || !utf8.valid_string(value) do return false
+	for character in value {
+		if character <= ' ' || character == '<' || character == '>' || character == '"' || character == '{' || character == '}' || character == '|' || character == '^' || character == '`' || character == '\\' do return false
+	}
+	return true
 }
 
 @(private) resolve_iri :: proc(state: ^State, base, reference: string) -> (string, Parse_Error) {
@@ -363,6 +385,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 // expand_iri applies JSON-LD term, compact-IRI, vocabulary, and base rules.
 @(private) expand_iri :: proc(state: ^State, ctx: ^Context, value: string, vocab, document_relative: bool) -> (string, Parse_Error) {
 	if is_keyword(value) do return value, {}
+	if has_keyword_form(value) do return "", {}
 	if definition, ok := ctx.terms[value]; ok && len(definition.id) > 0 do return definition.id, {}
 	if colon := strings.index_byte(value, ':'); colon >= 0 {
 		prefix, suffix := value[:colon], value[colon + 1:]
@@ -405,6 +428,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// Preserve the package's established term fallback for that bounded mode.
 	if len(ctx.base_iri) == 0 do return expand_iri(state, ctx, value, false, true)
 	if is_keyword(value) do return value, {}
+	if has_keyword_form(value) do return "", {}
 	if colon := strings.index_byte(value, ':'); colon >= 0 {
 		prefix, suffix := value[:colon], value[colon + 1:]
 		if prefix == "_" do return own(state, value)
@@ -711,7 +735,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// prefix mappings first so a later compact IRI such as ex:friend does not
 	// depend on map iteration order.
 	for term, definition_value in object {
-		if strings.has_prefix(term, "@") do continue
+		if is_keyword(term) || has_keyword_form(term) do continue
 		id, simple := string_value(definition_value)
 		if !simple {
 			definition_object, object_ok := object_from_value(definition_value)
@@ -728,7 +752,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.terms[owned_term] = Term_Definition{id = identifier}
 	}
 	for term, definition_value in object {
-		if strings.has_prefix(term, "@") do continue
+		if is_keyword(term) || has_keyword_form(term) do continue
 		// A redefinition must not resolve its own identifier through a previous
 		// context definition. Other local prefix mappings remain available.
 		delete_key(&result.terms, term)
@@ -1118,6 +1142,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid || type_name == "@id" || type_name == "@vocab" do return {}, Parse_Error{code = .Invalid_Value_Object}
 			datatype, err := expand_iri(state, ctx, type_name, true, true)
 			if err.code != .None do return {}, err
+			if !valid_absolute_iri(datatype) do return {}, Parse_Error{code = .Invalid_Value_Object}
 			return rdf.typed_literal(text, datatype), {}
 		}
 		return rdf.literal(text), {}
@@ -1397,6 +1422,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
 			type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
 			if type_err.code != .None do return {}, type_err
+			if len(type_iri) == 0 do continue
 			type_term, term_err := expanded_identifier_term(state, type_iri)
 			if term_err.code != .None do return {}, term_err
 			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
@@ -1406,6 +1432,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	for key, property_value in object {
 		keyword := keyword_for(&active_context, key)
 		if keyword == "@context" || keyword == "@id" || keyword == "@type" || keyword == "@value" || keyword == "@list" || keyword == "@index" do continue
+		if !is_keyword(key) && has_keyword_form(key) do continue
 		if keyword == "@set" || keyword == "@direction" do return {}, Parse_Error{code = .Unsupported_Feature}
 		if keyword == "@graph" {
 			graph_quad := graph

@@ -4,6 +4,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Extend the pinned JSON-LD to-RDF gate from 114 to 127 vectors, covering
+  keyword-form term and IRI handling, invalid datatype IRIs, compact and term
+  `@vocab` mappings, scoped-context recursion, and base IRIs without a
+  trailing slash.
+- Ignore JSON-LD strings matching the reserved keyword form (`@` followed by
+  letters) while preserving usable terms such as `@` and `@foo.bar`; reject
+  invalid raw datatype IRIs before emitting RDF.
 - Expand nested JSON-LD `@set` values in the to-RDF processor, preserving
   list/type container semantics and dropping null values. Extend the pinned
   to-RDF core gate to 114 vectors.

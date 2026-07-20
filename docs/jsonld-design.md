@@ -148,7 +148,7 @@ JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
 directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
-differences. `scripts/run-w3c-jsonld-tests.sh` runs 67 to-RDF vectors,
+differences. `scripts/run-w3c-jsonld-tests.sh` runs 127 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
 output. The broader 1.1 suite remains the gate for graph-container and
 generalized RDF work.

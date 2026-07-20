@@ -136,6 +136,14 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return len(best) > 0 ? best : keyword
 }
 
+@(private) compact_term_can_prefix :: proc(term: string) -> bool {
+	if len(term) == 0 do return false
+	switch term[len(term) - 1] {
+	case ':', '/', '?', '#', '[', ']', '@': return false
+	}
+	return true
+}
+
 @(private) compact_iri :: proc(state: ^State, ctx: ^Context, value: string, vocab: bool) -> (string, Compact_Error) {
 	if strings.has_prefix(value, "_:") {
 		if !state.canonical_frame_blank_ids do return value, .None
@@ -164,7 +172,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		if len(candidate) > 0 && compact_prefer(candidate, best) do best = candidate
 	}
 	for term, definition in ctx.terms {
-		if definition.reverse || len(definition.id) == 0 || !strings.has_prefix(value, definition.id) do continue
+		if definition.reverse || !compact_term_can_prefix(term) || len(definition.id) == 0 || !strings.has_prefix(value, definition.id) do continue
 		suffix := value[len(definition.id):]
 		if len(suffix) == 0 do continue
 		candidate_builder := strings.builder_make()

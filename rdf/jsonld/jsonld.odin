@@ -1364,7 +1364,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					reverse_item := array ? values[index] : reverse_value
 					object_term, value_err := process_value(state, &active_context, definition, reverse_item, graph)
 					if value_err.code != .None || object_term.kind == .Literal { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
-					if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
+					if definition.reverse {
+						if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None do return {}, emit_err
+					} else if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
 				}
 			}
 			continue

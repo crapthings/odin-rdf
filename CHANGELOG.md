@@ -12,6 +12,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Drop unmapped JSON object properties where JSON-LD expansion has no usable
   property IRI instead of reporting an RDF conversion error.
 - Drop language-only objects that lack `@value` during to-RDF conversion.
+- Correct nested reverse-term handling inside top-level `@reverse` maps.
 
 ## 0.27.0 - 2026-07-20
 

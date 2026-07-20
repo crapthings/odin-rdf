@@ -935,12 +935,24 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 // @propagate: true in the scoped context opts into propagation. Keeping the
 // parsed form as owned JSON text makes contexts safe to retain after their
 // source document has been released.
-@(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition) -> (Context, Parse_Error) {
+@(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, allow_protected_override := false) -> (Context, Parse_Error) {
 	if !definition.has_local_context do return current^, {}
 	value, json_error := json.parse_string(definition.local_context, .JSON, true)
 	if json_error != .None do return {}, Parse_Error{code = .Invalid_Context}
 	defer json.destroy_value(value)
-	return apply_context(state, current, value, false)
+	if !allow_protected_override do return apply_context(state, current, value, false)
+	// A property-scoped context may locally refine a protected outer term. Keep
+	// a retained copy of the inherited mappings for rollback, but clear only
+	// their protection marker while the scoped context is being constructed.
+	scoped_base := current^
+	scoped_base.terms = make(map[string]Term_Definition)
+	for term, inherited_definition in current.terms {
+		inherited := inherited_definition
+		inherited.protected = false
+		scoped_base.terms[term] = inherited
+	}
+	retain_context(state, scoped_base)
+	return apply_context(state, &scoped_base, value, false)
 }
 
 @(private) blank_node :: proc(state: ^State) -> (rdf.Term, Parse_Error) {
@@ -1969,7 +1981,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// context before any context belonging to its own property is applied.
 	if is_object && !definition.container_type && !definition.container_index && expand_rolls_back_context(&active_context, object) do active_context = previous_context(&active_context)
 	if definition.has_local_context {
-		updated, context_err := apply_term_scoped_context(state, &active_context, definition)
+		updated, context_err := apply_term_scoped_context(state, &active_context, definition, true)
 		if context_err.code != .None do return {}, context_err
 		active_context = updated
 	}

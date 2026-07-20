@@ -897,6 +897,18 @@ test_type_aliases_all_emit_rdf_types :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_graph_containers_link_named_graphs_to_the_parent_node :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"input":{"@id":"https://example.test/input","@container":"@graph"},"value":"https://example.test/value"},
+  "input":{"value":"x"}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/input> _:b1 .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "x" _:b1 .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

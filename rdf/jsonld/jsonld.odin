@@ -1468,6 +1468,23 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		// JSON-LD drops properties whose expanded predicate is a blank node;
 		// RDF predicates must be IRIs.
 		if strings.has_prefix(predicate_iri, "_:") do continue
+		if definition.container_graph {
+			values, array := array_from_value(property_value)
+			count := array ? len(values) : 1
+			for index in 0..<count {
+				graph_value := array ? values[index] : property_value
+				node, valid := object_from_value(graph_value)
+				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+				graph_name, graph_name_err := blank_node(state)
+				if graph_name_err.code != .None do return {}, graph_name_err
+				graph_quad := graph
+				graph_quad.has_graph = true
+				graph_quad.graph = graph_name
+				if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
+				if emit_err := emit(state, subject, rdf.iri(predicate_iri), graph_name, graph); emit_err.code != .None do return {}, emit_err
+			}
+			continue
+		}
 		if (definition.container_language || definition.container_index) && is_container_map(property_value) {
 			mapped: [dynamic]rdf.Term
 			mapped_error: Parse_Error

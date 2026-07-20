@@ -693,6 +693,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	for term, definition_value in object {
 		if strings.has_prefix(term, "@") do continue
+		// A redefinition must not resolve its own identifier through a previous
+		// context definition. Other local prefix mappings remain available.
+		delete_key(&result.terms, term)
 		definition := Term_Definition{protected = default_protected}
 		is_null := false
 		#partial switch _ in definition_value { case json.Null: is_null = true }

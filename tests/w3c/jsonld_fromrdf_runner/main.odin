@@ -10,8 +10,8 @@ import jsonld "../../../rdf/jsonld"
 import nquads "../../../rdf/nquads"
 
 main :: proc() {
-	if len(os.args) < 2 || len(os.args) > 4 {
-		fmt.eprintln("usage: jsonld_fromrdf_runner <input.nq> [--use-native-types] [--use-rdf-type]")
+	if len(os.args) < 2 || len(os.args) > 5 {
+		fmt.eprintln("usage: jsonld_fromrdf_runner <input.nq> [--use-native-types] [--use-rdf-type] [--rdf-direction-i18n|--rdf-direction-compound]")
 		os.exit(2)
 	}
 	options: jsonld.Serialize_Options
@@ -19,6 +19,8 @@ main :: proc() {
 		switch argument {
 		case "--use-native-types": options.use_native_types = true
 		case "--use-rdf-type":     options.use_rdf_type = true
+		case "--rdf-direction-i18n": options.rdf_direction = .I18n_Datatype
+		case "--rdf-direction-compound": options.rdf_direction = .Compound_Literal
 		case:
 			fmt.eprintf("unknown option: %s\n", argument)
 			os.exit(2)

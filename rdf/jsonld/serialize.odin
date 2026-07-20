@@ -40,6 +40,7 @@ Serialize_Options :: struct {
 	max_quads:        int,
 	use_rdf_type:     bool,
 	use_native_types: bool,
+	rdf_direction:    RDF_Direction_Mode,
 }
 
 DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
@@ -49,9 +50,11 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	order:  [dynamic]int,
 	groups: [dynamic]Node_Group,
 	lists:  [dynamic]List_Info,
+	compound_literals: [dynamic]Compound_Literal_Info,
 	named_graphs:    [dynamic]rdf.Term,
 	use_rdf_type:    bool,
 	use_native_types: bool,
+	rdf_direction:    RDF_Direction_Mode,
 }
 
 @(private) Node_Group :: struct {
@@ -69,6 +72,13 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	next_same_node:       int,
 	collapsed:            bool,
 	head:                 bool,
+}
+
+@(private) Compound_Literal_Info :: struct {
+	valid:     bool,
+	value:     rdf.Term,
+	language:  string,
+	direction: string,
 }
 
 @(private) List_Node_Key :: struct {
@@ -295,6 +305,63 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	}
 }
 
+@(private) is_plain_string_literal :: proc(term: rdf.Term) -> bool {
+	return term.kind == .Literal && len(term.language) == 0 && term.datatype == rdf.XSD_STRING
+}
+
+@(private) build_compound_literal_info :: proc(state: ^Serialization_State) {
+	resize(&state.compound_literals, len(state.groups))
+	graph_names := make(map[List_Node_Key]bool)
+	defer delete(graph_names)
+	for quad in state.quads {
+		if quad.has_graph && quad.graph.kind == .Blank_Node do graph_names[List_Node_Key{value = quad.graph.value, scope = quad.graph.scope}] = true
+	}
+	for group, group_index in state.groups {
+		first := state.quads[state.order[group.start]]
+		if first.subject.kind != .Blank_Node || graph_names[List_Node_Key{value = first.subject.value, scope = first.subject.scope}] do continue
+		value_count, language_count, direction_count := 0, 0, 0
+		candidate := true
+		info: Compound_Literal_Info
+		previous: rdf.Quad
+		has_previous := false
+		for order_index in group.start..<group.end {
+			quad := state.quads[state.order[order_index]]
+			if has_previous && serialization_quad_equal(previous, quad) do continue
+			previous = quad
+			has_previous = true
+			if !is_plain_string_literal(quad.object) {
+				candidate = false
+				break
+			}
+			switch quad.predicate.value {
+			case RDF_VALUE:
+				value_count += 1
+				info.value = quad.object
+			case RDF_LANGUAGE:
+				language_count += 1
+				info.language = quad.object.value
+			case RDF_DIRECTION:
+				direction_count += 1
+				info.direction = quad.object.value
+			case:
+				candidate = false
+				break
+			}
+		}
+		if candidate && value_count == 1 && language_count <= 1 && direction_count == 1 && (info.direction == "ltr" || info.direction == "rtl") {
+			info.valid = true
+		}
+		state.compound_literals[group_index] = info
+	}
+}
+
+@(private) compound_literal_group :: proc(state: ^Serialization_State, graph: rdf.Quad, term: rdf.Term) -> int {
+	if state.rdf_direction != .Compound_Literal || term.kind != .Blank_Node do return -1
+	group_index := find_node_group(state, list_node_quad(term, graph))
+	if group_index < 0 || !state.compound_literals[group_index].valid do return -1
+	return group_index
+}
+
 @(private) serialization_term_is_utf8 :: proc(term: rdf.Term) -> bool {
 	return utf8.valid_string(term.value) && utf8.valid_string(term.language) && utf8.valid_string(term.datatype)
 }
@@ -387,6 +454,22 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	return true
 }
 
+@(private) write_compound_literal_value :: proc(builder: ^strings.Builder, state: ^Serialization_State, graph: rdf.Quad, term: rdf.Term) -> bool {
+	group_index := compound_literal_group(state, graph, term)
+	if group_index < 0 do return false
+	info := state.compound_literals[group_index]
+	strings.write_string(builder, `{"@value": `)
+	write_json_string(builder, info.value.value)
+	if len(info.language) > 0 {
+		strings.write_string(builder, `, "@language": `)
+		write_json_string(builder, info.language)
+	}
+	strings.write_string(builder, `, "@direction": `)
+	write_json_string(builder, info.direction)
+	strings.write_byte(builder, '}')
+	return true
+}
+
 @(private) write_native_integer :: proc(builder: ^strings.Builder, lexical: string) -> bool {
 	if len(lexical) == 0 do return false
 	index := 0
@@ -427,6 +510,17 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	return true
 }
 
+@(private) i18n_datatype_parts :: proc(datatype: string) -> (language, direction: string, ok: bool) {
+	if !strings.has_prefix(datatype, I18N) do return "", "", false
+	fragment := datatype[len(I18N):]
+	separator := strings.last_index_byte(fragment, '_')
+	if separator < 0 do return "", "", false
+	language = fragment[:separator]
+	direction = fragment[separator + 1:]
+	if direction != "ltr" && direction != "rtl" do return "", "", false
+	return language, direction, true
+}
+
 @(private) write_json_literal :: proc(builder: ^strings.Builder, lexical: string) -> bool {
 	value, parse_error := json.parse_string(lexical, .JSON, true)
 	if parse_error != .None do return false
@@ -437,6 +531,7 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 
 @(private) write_value :: proc(builder: ^strings.Builder, state: ^Serialization_State, graph: rdf.Quad, term: rdf.Term) {
 	if write_list_value(builder, state, graph, term) do return
+	if write_compound_literal_value(builder, state, graph, term) do return
 	if term.kind != .Literal {
 		strings.write_string(builder, `{"@id": `)
 		write_identifier(builder, term)
@@ -446,8 +541,17 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	strings.write_string(builder, `{"@value": `)
 	json_literal := len(term.language) == 0 && term.datatype == RDF_JSON && write_json_literal(builder, term.value)
 	native := !json_literal && state.use_native_types && len(term.language) == 0 && write_native_scalar(builder, term)
+	i18n_language, i18n_direction, i18n_directional := i18n_datatype_parts(term.datatype)
+	i18n_directional = i18n_directional && state.rdf_direction == .I18n_Datatype
 	if !json_literal && !native do write_json_string(builder, term.value)
-	if len(term.language) > 0 {
+	if i18n_directional {
+		if len(i18n_language) > 0 {
+			strings.write_string(builder, `, "@language": `)
+			write_json_string(builder, i18n_language)
+		}
+		strings.write_string(builder, `, "@direction": `)
+		write_json_string(builder, i18n_direction)
+	} else if len(term.language) > 0 {
 		strings.write_string(builder, `, "@language": `)
 		write_json_string(builder, term.language)
 	} else if json_literal {
@@ -521,7 +625,7 @@ DEFAULT_MAX_SERIALIZE_QUADS :: 100_000
 	first_node := true
 	for index^ < len(state.order) && serialization_same_graph(state.quads[state.order[index^]], graph) {
 		group_index := find_node_group(state, state.quads[state.order[index^]])
-		if group_index >= 0 && state.lists[group_index].collapsed {
+		if group_index >= 0 && (state.lists[group_index].collapsed || state.compound_literals[group_index].valid && state.rdf_direction == .Compound_Literal) {
 			index^ = state.groups[group_index].end
 			continue
 		}
@@ -545,20 +649,24 @@ serialize :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Seriali
 		order = make([dynamic]int),
 		groups = make([dynamic]Node_Group),
 		lists = make([dynamic]List_Info),
+		compound_literals = make([dynamic]Compound_Literal_Info),
 		named_graphs = make([dynamic]rdf.Term),
 		use_rdf_type = options.use_rdf_type,
 		use_native_types = options.use_native_types,
+		rdf_direction = options.rdf_direction,
 	}
 	defer {
 		delete(state.order)
 		delete(state.groups)
 		delete(state.lists)
+		delete(state.compound_literals)
 		delete(state.named_graphs)
 	}
 	for index in 0..<len(quads) do append(&state.order, index)
 	sort.sort(serialization_sort_interface(&state))
 	build_node_groups(&state)
 	build_list_info(&state)
+	build_compound_literal_info(&state)
 
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
@@ -568,7 +676,7 @@ serialize :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Seriali
 	for index < len(state.order) {
 		quad := state.quads[state.order[index]]
 		group_index := find_node_group(&state, quad)
-		if group_index >= 0 && state.lists[group_index].collapsed {
+		if group_index >= 0 && (state.lists[group_index].collapsed || state.compound_literals[group_index].valid && state.rdf_direction == .Compound_Literal) {
 			index = state.groups[group_index].end
 			continue
 		}

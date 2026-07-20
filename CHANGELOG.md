@@ -2,6 +2,15 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add opt-in JSON-LD 1.1 `i18n-datatype` and `compound-literal`
+  directional-literal mappings to to-RDF, RDF-to-JSON-LD, and context
+  compaction. Default RDF conversion still omits `@direction`.
+- Extend the pinned JSON-LD core gates to 67 to-RDF, 32 RDF-to-JSON-LD, and
+  73 compaction vectors, including directional datatype and compound-literal
+  coverage.
+
 ## 0.26.0 - 2026-07-20
 
 - Retain owned keys while processing sourced JSON-LD contexts, so term

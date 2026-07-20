@@ -44,8 +44,8 @@ load_document :: proc(url: string, user_data: rawptr) -> (string, bool) {
 }
 
 main :: proc() {
-	if len(os.args) != 3 && len(os.args) != 4 {
-		fmt.eprintln("usage: jsonld_runner <input.jsonld> <base-iri> [tests-root]")
+	if len(os.args) < 3 || len(os.args) > 5 {
+		fmt.eprintln("usage: jsonld_runner <input.jsonld> <base-iri> [tests-root] [i18n-datatype|compound-literal]")
 		os.exit(2)
 	}
 	data, read_error := os.read_entire_file(os.args[1], context.allocator)
@@ -58,8 +58,21 @@ main :: proc() {
 	defer strings.builder_destroy(&state.builder)
 	defer destroy_state(&state)
 	options := jsonld.Options{base_iri = os.args[2]}
-	if len(os.args) == 4 {
-		state.tests_root = os.args[3]
+	for argument in os.args[3:] {
+		switch argument {
+		case "i18n-datatype":
+			options.rdf_direction = .I18n_Datatype
+		case "compound-literal":
+			options.rdf_direction = .Compound_Literal
+		case:
+			if len(state.tests_root) > 0 {
+				fmt.eprintf("unknown jsonld runner option: %s\n", argument)
+				os.exit(2)
+			}
+			state.tests_root = argument
+		}
+	}
+	if len(state.tests_root) > 0 {
 		options.document_loader = load_document
 		options.loader_data = &state
 	}

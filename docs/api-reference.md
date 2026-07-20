@@ -233,8 +233,14 @@ values. Expansion, Flattening, and Framing honor `@propagate: false`: nested
 node objects restore the previous context, while type-scoped contexts are
 non-propagating unless they explicitly set `@propagate: true`.
 Expansion and Flattening also retain JSON-LD 1.1 `@direction` on value objects
-from default and term mappings. RDF directional-literal encodings remain
-unsupported, so the to-RDF parser rejects directional contexts explicitly.
+from default and term mappings. By default, RDF conversion omits that metadata,
+as JSON-LD's `rdfDirection: null` mapping requires. Set
+`Options.rdf_direction = .I18n_Datatype` to encode directional strings with
+the JSON-LD 1.1 i18n datatype; set `Serialize_Options.rdf_direction` (including
+`Compact_Options.serializer_options`) to the same mode to restore
+`@language`/`@direction` on output. `.Compound_Literal` instead uses and
+recognizes the RDF `rdf:value` / `rdf:direction` / optional `rdf:language`
+blank-node representation.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,
@@ -268,7 +274,9 @@ property; `use_native_types` emits valid booleans, integers, and finite doubles
 as JSON scalars. Complete and partial RDF lists are collapsed only when their
 blank nodes are not shared in another graph. Valid `rdf:JSON` typed literals
 are emitted as `@json` values and `@json` value objects parse back to
-`rdf:JSON`.
+`rdf:JSON`. `Serialize_Options.rdf_direction = .I18n_Datatype` recognizes
+JSON-LD i18n directional datatypes and emits `@direction`; the default keeps
+those datatypes explicit.
 
 `compact` adds an atomic context-directed output API. `context_text` accepts a
 JSON context definition, context array, or a document containing `@context`.

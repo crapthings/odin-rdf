@@ -18,6 +18,10 @@ RDF_REST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
 RDF_NIL   :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
 RDF_LIST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#List"
 RDF_JSON  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
+RDF_VALUE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+RDF_DIRECTION :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#direction"
+RDF_LANGUAGE  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#language"
+I18N      :: "https://www.w3.org/ns/i18n#"
 XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
 XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
 XSD_DOUBLE  :: "http://www.w3.org/2001/XMLSchema#double"
@@ -101,6 +105,17 @@ parse_error_message :: proc(code: Error_Code) -> string {
 // is opt-in so this package never performs implicit network I/O.
 Document_Loader :: proc(url: string, user_data: rawptr) -> (document: string, ok: bool)
 
+// RDF_Direction_Mode selects the lossless RDF representation used for JSON-LD
+// 1.1 value objects containing @direction. The default follows rdfDirection:
+// null and accepts direction metadata without serializing it into RDF.
+// I18n_Datatype uses the JSON-LD i18n datatype namespace. Compound_Literal
+// uses the RDF value/direction/language blank-node representation.
+RDF_Direction_Mode :: enum {
+	None,
+	I18n_Datatype,
+	Compound_Literal,
+}
+
 // Options bounds retained state. Zero selects the documented default, except
 // max_quads where zero disables the output cap. base_iri must be absolute when
 // provided; it is used to resolve document-relative identifiers and contexts.
@@ -111,6 +126,7 @@ Options :: struct {
 	max_contexts:        int,
 	max_remote_contexts: int,
 	max_quads:           int,
+	rdf_direction:       RDF_Direction_Mode,
 	document_loader:     Document_Loader,
 	loader_data:         rawptr,
 }
@@ -186,6 +202,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	loader_data:       rawptr,
 	allow_document_containers: bool,
 	allow_direction:           bool,
+	rdf_direction:             RDF_Direction_Mode,
 	retain_id_only_nodes:       bool,
 	retain_frame_controls:      bool,
 	prune_frame_blank_ids:       bool,
@@ -911,7 +928,48 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return {}, Parse_Error{code = .Invalid_Value_Object}
 }
 
-@(private) primitive_literal :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> (rdf.Term, Parse_Error) {
+@(private) direction_for_value :: proc(ctx: ^Context, definition: Term_Definition) -> (string, bool) {
+	if definition.has_direction do return definition.direction, true
+	if definition.direction_null do return "", false
+	if ctx.has_direction do return ctx.direction, true
+	return "", false
+}
+
+@(private) language_for_value :: proc(ctx: ^Context, definition: Term_Definition) -> (string, bool) {
+	if definition.has_language do return definition.language, true
+	if definition.language_null do return "", false
+	if ctx.has_language do return ctx.language, true
+	return "", false
+}
+
+@(private) i18n_direction_literal :: proc(state: ^State, text, language, direction: string) -> (rdf.Term, Parse_Error) {
+	lowercase := strings.to_lower(language)
+	defer delete(lowercase)
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, I18N)
+	strings.write_string(&builder, lowercase)
+	strings.write_byte(&builder, '_')
+	strings.write_string(&builder, direction)
+	datatype, own_error := own(state, strings.to_string(builder))
+	if own_error.code != .None do return {}, own_error
+	return rdf.typed_literal(text, datatype), {}
+}
+
+@(private) compound_direction_literal :: proc(state: ^State, text, language, direction: string, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	node, node_error := blank_node(state)
+	if node_error.code != .None do return {}, node_error
+	if emit_error := emit(state, node, rdf.iri(RDF_VALUE), rdf.literal(text), graph); emit_error.code != .None do return {}, emit_error
+	if emit_error := emit(state, node, rdf.iri(RDF_DIRECTION), rdf.literal(direction), graph); emit_error.code != .None do return {}, emit_error
+	if len(language) > 0 {
+		lowercase := strings.to_lower(language)
+		defer delete(lowercase)
+		if emit_error := emit(state, node, rdf.iri(RDF_LANGUAGE), rdf.literal(lowercase), graph); emit_error.code != .None do return {}, emit_error
+	}
+	return node, {}
+}
+
+@(private) primitive_literal :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
 	#partial switch actual in value {
 	case json.String:
 		text := string(actual)
@@ -926,9 +984,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if len(definition.type) > 0 && definition.type != "@json" {
 			return rdf.typed_literal(text, definition.type), {}
 		}
-		if definition.has_language do return rdf.language_literal(text, definition.language), {}
-		if definition.language_null do return rdf.literal(text), {}
-		if ctx.has_language do return rdf.language_literal(text, ctx.language), {}
+		language, has_language := language_for_value(ctx, definition)
+		direction, has_direction := direction_for_value(ctx, definition)
+		if has_direction {
+			if state.rdf_direction == .I18n_Datatype do return i18n_direction_literal(state, text, language, direction)
+			if state.rdf_direction == .Compound_Literal do return compound_direction_literal(state, text, language, direction, graph)
+		}
+		if has_language do return rdf.language_literal(text, language), {}
 		return rdf.literal(text), {}
 	case json.Boolean:
 		lexical := bool(actual) ? "true" : "false"
@@ -943,13 +1005,21 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return {}, Parse_Error{code = .Invalid_Value_Object}
 }
 
-@(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object) -> (rdf.Term, Parse_Error) {
+@(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
 	value, found := object_value(object, "@value")
 	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
-	if _, has_direction := has_keyword(object, ctx, "@direction"); has_direction && !state.allow_direction do return {}, Parse_Error{code = .Unsupported_Feature}
+	direction := ""
+	has_direction := false
+	if direction_value, direction_found := has_keyword(object, ctx, "@direction"); direction_found {
+		direction_value_text, direction_valid := string_value(direction_value)
+		if !direction_valid || (direction_value_text != "ltr" && direction_value_text != "rtl") do return {}, Parse_Error{code = .Invalid_Value_Object}
+		direction = direction_value_text
+		has_direction = true
+	}
 	if type_value, has_type := object_value(object, "@type"); has_type {
 		type_name, valid := string_value(type_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
 		if type_name == "@json" {
 			encoded, marshal_error := json.marshal(value)
 			if marshal_error != nil do return {}, Parse_Error{code = .Invalid_Value_Object}
@@ -963,14 +1033,23 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	case json.Null:
 		return {}, Parse_Error{code = .Invalid_Value_Object}
 	case json.Boolean, json.Integer, json.Float:
-		return primitive_literal(state, ctx, {}, value)
+		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
+		return primitive_literal(state, ctx, {}, value, graph)
 	case json.String:
 		text := string(actual)
-		if language_value, has_language := object_value(object, "@language"); has_language {
-			language, valid := string_value(language_value)
+		language := ""
+		has_language := false
+		if language_value, language_found := has_keyword(object, ctx, "@language"); language_found {
+			parsed_language, valid := string_value(language_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
-			return rdf.language_literal(text, language), {}
+			language = parsed_language
+			has_language = true
 		}
+		if has_direction {
+			if state.rdf_direction == .I18n_Datatype do return i18n_direction_literal(state, text, language, direction)
+			if state.rdf_direction == .Compound_Literal do return compound_direction_literal(state, text, language, direction, graph)
+		}
+		if has_language do return rdf.language_literal(text, language), {}
 		if type_value, has_type := object_value(object, "@type"); has_type {
 			type_name, valid := string_value(type_value)
 			if !valid || type_name == "@id" || type_name == "@vocab" do return {}, Parse_Error{code = .Invalid_Value_Object}
@@ -1123,7 +1202,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	if value, found := has_keyword(object, &active_context, "@value"); found {
 		_ = value
-		return value_object_term(state, &active_context, object)
+		return value_object_term(state, &active_context, object, graph)
 	}
 	if list, found := has_keyword(object, &active_context, "@list"); found {
 		return process_list(state, &active_context, {}, list, graph)
@@ -1301,13 +1380,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if object, is_object := object_from_value(value); is_object {
 		if value_object, has_value := has_keyword(object, ctx, "@value"); has_value {
 			_ = value_object
-			return value_object_term(state, ctx, object)
+			return value_object_term(state, ctx, object, graph)
 		}
 		if list, has_list := has_keyword(object, ctx, "@list"); has_list do return process_list(state, ctx, definition, list, graph)
 		return process_node(state, ctx, object, graph)
 	}
 	if _, is_array := array_from_value(value); is_array do return {}, Parse_Error{code = .Invalid_Value_Object}
-	return primitive_literal(state, ctx, definition, value)
+	return primitive_literal(state, ctx, definition, value, graph)
 }
 
 @(private) scan_depth :: proc(input: string, maximum: int) -> Parse_Error {
@@ -1367,8 +1446,11 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		max_contexts = max_contexts,
 		max_remote = max_remote,
 		max_quads = options.max_quads,
+		rdf_direction = options.rdf_direction,
 		loader = options.document_loader,
 		loader_data = options.loader_data,
+		allow_document_containers = true,
+		allow_direction = true,
 	}
 	defer destroy_state(&state)
 	if blank_err := preassign_blank_nodes(&state, parsed); blank_err.code != .None do return blank_err

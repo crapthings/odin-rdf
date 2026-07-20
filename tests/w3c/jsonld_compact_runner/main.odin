@@ -8,8 +8,8 @@ import dataset "../../../rdf/dataset"
 import jsonld "../../../rdf/jsonld"
 
 main :: proc() {
-	if len(os.args) != 3 {
-		fmt.eprintln("usage: jsonld_compact_runner <input.jsonld> <context.jsonld>")
+	if len(os.args) != 3 && len(os.args) != 4 {
+		fmt.eprintln("usage: jsonld_compact_runner <input.jsonld> <context.jsonld> [--rdf-direction-i18n|--rdf-direction-compound]")
 		os.exit(2)
 	}
 	input, input_error := os.read_entire_file(os.args[1], context.allocator)
@@ -30,7 +30,18 @@ main :: proc() {
 		os.exit(2)
 	}
 	defer dataset.destroy(&collector)
-	if parse_error := jsonld.parse(string(input), dataset.sink, {}, &collector); parse_error.code != .None {
+	parse_options: jsonld.Options
+	compact_options: jsonld.Compact_Options
+	if len(os.args) == 4 {
+		if os.args[3] != "--rdf-direction-i18n" && os.args[3] != "--rdf-direction-compound" {
+			fmt.eprintf("unknown compact runner option: %s\n", os.args[3])
+			os.exit(2)
+		}
+		direction := os.args[3] == "--rdf-direction-i18n" ? jsonld.RDF_Direction_Mode.I18n_Datatype : jsonld.RDF_Direction_Mode.Compound_Literal
+		parse_options.rdf_direction = direction
+		compact_options.serializer_options.rdf_direction = direction
+	}
+	if parse_error := jsonld.parse(string(input), dataset.sink, parse_options, &collector); parse_error.code != .None {
 		fmt.eprintf("%s: %s\n", os.args[1], jsonld.parse_error_message(parse_error.code))
 		os.exit(1)
 	}
@@ -40,7 +51,7 @@ main :: proc() {
 	}
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
-	if compact_error := jsonld.compact(&builder, collector.quads[:], string(context_document)); compact_error != .None {
+	if compact_error := jsonld.compact(&builder, collector.quads[:], string(context_document), compact_options); compact_error != .None {
 		fmt.eprintln(jsonld.compact_error_message(compact_error))
 		os.exit(1)
 	}

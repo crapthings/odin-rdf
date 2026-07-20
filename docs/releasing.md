@@ -54,6 +54,11 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-nquads-tests.sh
 ./scripts/run-w3c-turtle-tests.sh
 ./scripts/run-w3c-jsonld-tests.sh
+./scripts/run-w3c-jsonld-expand-tests.sh
+./scripts/run-w3c-jsonld-flatten-tests.sh
+./scripts/run-w3c-jsonld-framing-tests.sh
+./scripts/run-w3c-jsonld-fromrdf-tests.sh
+./scripts/run-w3c-jsonld-compact-tests.sh
 ./scripts/run-w3c-rdfxml-tests.sh
 ./scripts/run-w3c-trig-tests.sh
 ./scripts/run-w3c-rdf-canon-tests.sh

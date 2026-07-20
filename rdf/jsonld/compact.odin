@@ -20,6 +20,17 @@ Compact_Options :: struct {
 	native_type_policy: Compact_Native_Type_Policy,
 }
 
+@(private) Compact_List_Term_Group :: struct {
+	term:       string,
+	definition: Term_Definition,
+	values:     [dynamic]json.Value,
+}
+
+@(private) destroy_compact_list_term_groups :: proc(groups: ^[dynamic]Compact_List_Term_Group) {
+	for &group in groups^ do delete(group.values)
+	delete(groups^)
+}
+
 Compact_Error :: enum {
 	None,
 	Invalid_Option,
@@ -159,6 +170,10 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 @(private) compact_value_matches_definition :: proc(value: json.Value, definition: Term_Definition) -> bool {
 	object, valid := object_from_value(value)
 	if !valid do return false
+	direction_value, has_direction := object_value(object, "@direction")
+	direction, direction_valid := string_value(direction_value)
+	if definition.has_direction && (!has_direction || !direction_valid || direction != definition.direction) do return false
+	if definition.direction_null && has_direction do return false
 	if definition.type == "@id" || definition.type == "@vocab" {
 		_, has_id := object_value(object, "@id")
 		return has_id
@@ -226,6 +241,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		if definition.container_set do score += 1
 		if len(definition.type) > 0 do score += 2
 		if definition.has_language || definition.language_null do score += 2
+		if definition.has_direction || definition.direction_null do score += 2
 		if score > best_score || (score == best_score && compact_prefer(term, best)) {
 			best = term
 			best_definition = definition
@@ -302,8 +318,11 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	if !has_value do return .Invalid_Expanded_JSON
 	type_value, has_type := object_value(object, "@type")
 	language_value, has_language := object_value(object, "@language")
+	direction_value, has_direction := object_value(object, "@direction")
 	type_name, type_is_string := string_value(type_value)
 	language, language_is_string := string_value(language_value)
+	direction, direction_is_string := string_value(direction_value)
+	if has_direction && (!direction_is_string || (direction != "ltr" && direction != "rtl")) do return .Invalid_Expanded_JSON
 	// With a default language, an untagged RDF literal must remain a value
 	// object; emitting a scalar would silently acquire that default language on
 	// the next JSON-LD-to-RDF pass. A term with @language: null is the explicit
@@ -315,6 +334,20 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		if !has_definition && ctx.has_language && ctx.language == language do can_scalar = true
 	}
 	if has_type && type_is_string && type_name == "@json" && has_definition && definition.type == "@json" do can_scalar = true
+	expected_direction := ""
+	has_expected_direction := false
+	if has_definition && definition.has_direction {
+		expected_direction = definition.direction
+		has_expected_direction = true
+	} else if !(has_definition && definition.direction_null) && ctx.has_direction {
+		expected_direction = ctx.direction
+		has_expected_direction = true
+	}
+	if has_direction {
+		if !has_expected_direction || direction != expected_direction do can_scalar = false
+	} else if has_expected_direction {
+		can_scalar = false
+	}
 	if can_scalar {
 		if !compact_write_raw_json(builder, value) do return .Invalid_Expanded_JSON
 		return .None
@@ -329,7 +362,14 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		write_json_string(builder, compact_keyword(ctx, "@language"))
 		strings.write_string(builder, ": ")
 		write_json_string(builder, language)
-	} else if has_type {
+	}
+	if has_direction {
+		strings.write_string(builder, ", ")
+		write_json_string(builder, compact_keyword(ctx, "@direction"))
+		strings.write_string(builder, ": ")
+		write_json_string(builder, direction)
+	}
+	if has_type {
 		if !type_is_string do return .Invalid_Expanded_JSON
 		strings.write_string(builder, ", ")
 		write_json_string(builder, compact_keyword(ctx, "@type"))
@@ -449,6 +489,61 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			err: Compact_Error
 			compacted_key, definition, has_definition, err = compact_property_term(state, ctx, key, array)
 			if err != .None do return err
+			// A list container term applies to one expanded list. If values for the
+			// same predicate require different directional list terms, emit one
+			// compact property per term rather than selecting a shortest fallback
+			// that changes the list's direction semantics.
+			if !has_definition && len(array) > 1 {
+				groups := make([dynamic]Compact_List_Term_Group)
+				split_lists := true
+				for item in array {
+					single := make(json.Array)
+					append(&single, item)
+					term, candidate, candidate_found, candidate_error := compact_property_term(state, ctx, key, single)
+					delete(single)
+					if candidate_error != .None {
+						destroy_compact_list_term_groups(&groups)
+						return candidate_error
+					}
+					item_object, item_valid := object_from_value(item)
+					_, has_list := object_value(item_object, "@list")
+					if !candidate_found || !candidate.container_list || !item_valid || !has_list {
+						split_lists = false
+						break
+					}
+					group_index := -1
+					for group, index in groups do if group.term == term { group_index = index; break }
+					if group_index < 0 {
+						append(&groups, Compact_List_Term_Group{term = term, definition = candidate, values = make([dynamic]json.Value)})
+						group_index = len(groups) - 1
+					}
+					append(&groups[group_index].values, item)
+				}
+				if split_lists && len(groups) > 1 {
+					for group in groups do if len(group.values) != 1 { split_lists = false; break }
+				}
+				if split_lists && len(groups) > 1 {
+					for group in groups {
+						if !first do strings.write_string(builder, ", ")
+						write_json_string(builder, group.term)
+						strings.write_string(builder, ": ")
+						item, item_valid := object_from_value(group.values[0])
+						list, has_list := object_value(item, "@list")
+						if !item_valid || !has_list {
+							destroy_compact_list_term_groups(&groups)
+							return .Invalid_Expanded_JSON
+						}
+						if write_error := compact_write_list(builder, state, ctx, list, group.definition, true, policy); write_error != .None {
+							destroy_compact_list_term_groups(&groups)
+							return write_error
+						}
+						first = false
+					}
+					destroy_compact_list_term_groups(&groups)
+					continue
+				}
+				destroy_compact_list_term_groups(&groups)
+			}
 		}
 		if !first do strings.write_string(builder, ", ")
 		write_json_string(builder, compacted_key)
@@ -555,7 +650,16 @@ compact :: proc(builder: ^strings.Builder, quads: []rdf.Quad, context_text: stri
 	if max_contexts == 0 do max_contexts = DEFAULT_MAX_CONTEXTS
 	max_remote := context_options.max_remote_contexts
 	if max_remote == 0 do max_remote = DEFAULT_MAX_REMOTE_CONTEXTS
-	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data}
+	state := State{
+		remote_urls = make(map[string]bool),
+		named_bnodes = make(map[string]rdf.Term),
+		max_contexts = max_contexts,
+		max_remote = max_remote,
+		loader = context_options.document_loader,
+		loader_data = context_options.loader_data,
+		allow_document_containers = true,
+		allow_direction = true,
+	}
 	defer destroy_state(&state)
 	ctx, context_error := make_context(&state, nil)
 	if context_error.code != .None do return compact_context_error(context_error)

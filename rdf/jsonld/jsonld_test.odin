@@ -191,9 +191,20 @@ test_resource_limits_and_invalid_remote_context :: proc(t: ^testing.T) {
 	quad_output, quad_err := parse_to_nquads(`{"https://example.test/a":"one","https://example.test/b":"two"}`, Options{max_quads = 1})
 	defer delete(quad_output)
 	testing.expect_value(t, quad_err.code, Error_Code.Quad_Limit)
-	unsupported_output, unsupported_err := parse_to_nquads(`{"@context":{"@direction":"ltr"},"https://example.test/name":"Alice"}`)
-	defer delete(unsupported_output)
-	testing.expect_value(t, unsupported_err.code, Error_Code.Unsupported_Feature)
+	direction_output, direction_err := parse_to_nquads(`{"@context":{"@direction":"ltr"},"https://example.test/name":"Alice"}`)
+	defer delete(direction_output)
+	testing.expect_value(t, direction_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(direction_output, `"Alice"`))
+	i18n_output, i18n_err := parse_to_nquads(`{"https://example.test/name":{"@value":"Alice","@language":"EN-US","@direction":"rtl"}}`, Options{rdf_direction = .I18n_Datatype})
+	defer delete(i18n_output)
+	testing.expect_value(t, i18n_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(i18n_output, `<https://www.w3.org/ns/i18n#en-us_rtl>`))
+	compound_output, compound_err := parse_to_nquads(`{"https://example.test/name":{"@value":"Alice","@language":"EN-US","@direction":"rtl"}}`, Options{rdf_direction = .Compound_Literal})
+	defer delete(compound_output)
+	testing.expect_value(t, compound_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(compound_output, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#value> "Alice"`))
+	testing.expect(t, strings.contains(compound_output, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#language> "en-us"`))
+	testing.expect(t, strings.contains(compound_output, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#direction> "rtl"`))
 	base_output, base_err := parse_to_nquads(`{"https://example.test/name":"Alice"}`, Options{base_iri = "relative"})
 	defer delete(base_output)
 	testing.expect_value(t, base_err.code, Error_Code.Invalid_IRI)
@@ -347,6 +358,67 @@ test_round_trips_rdf_json_typed_literals_as_jsonld_json_values :: proc(t: ^testi
 	defer strings.builder_destroy(&builder)
 	testing.expect_value(t, serialize(&builder, []rdf.Quad{quad}), Serialize_Error.None)
 	testing.expect(t, strings.contains(strings.to_string(builder), `"@value": {"answer":42}, "@type": "@json"`))
+}
+
+@(test)
+test_round_trips_i18n_direction_datatypes_when_enabled :: proc(t: ^testing.T) {
+	quad := rdf.default_graph_quad(rdf.Triple{
+		subject = rdf.iri("https://example.test/s"),
+		predicate = rdf.iri("https://example.test/label"),
+		object = rdf.typed_literal("Hello", "https://www.w3.org/ns/i18n#en-us_rtl"),
+	})
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Serialize_Options{rdf_direction = .I18n_Datatype}
+	testing.expect_value(t, serialize(&builder, []rdf.Quad{quad}, options), Serialize_Error.None)
+	serialized := strings.to_string(builder)
+	testing.expect(t, strings.contains(serialized, `"@language": "en-us", "@direction": "rtl"`))
+	round_trip, parse_error := parse_to_nquads(serialized, Options{rdf_direction = .I18n_Datatype})
+	defer delete(round_trip)
+	testing.expect_value(t, parse_error.code, Error_Code.None)
+	testing.expect(t, strings.contains(round_trip, `"Hello"^^<https://www.w3.org/ns/i18n#en-us_rtl>`))
+
+	compact_builder := strings.builder_make()
+	defer strings.builder_destroy(&compact_builder)
+	context_text := `{"direction":"@direction"}`
+	testing.expect_value(t, compact(&compact_builder, []rdf.Quad{quad}, context_text, Compact_Options{serializer_options = options}), Compact_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(compact_builder), `"direction": "rtl"`))
+}
+
+@(test)
+test_round_trips_compound_direction_literals_when_enabled :: proc(t: ^testing.T) {
+	compound := rdf.blank_node("compound", 1)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = rdf.iri("https://example.test/s"), predicate = rdf.iri("https://example.test/label"), object = compound}),
+		rdf.default_graph_quad(rdf.Triple{subject = compound, predicate = rdf.iri(RDF_VALUE), object = rdf.literal("Hello")}),
+		rdf.default_graph_quad(rdf.Triple{subject = compound, predicate = rdf.iri(RDF_LANGUAGE), object = rdf.literal("en-us")}),
+		rdf.default_graph_quad(rdf.Triple{subject = compound, predicate = rdf.iri(RDF_DIRECTION), object = rdf.literal("rtl")}),
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Serialize_Options{rdf_direction = .Compound_Literal}
+	testing.expect_value(t, serialize(&builder, quads, options), Serialize_Error.None)
+	serialized := strings.to_string(builder)
+	testing.expect(t, strings.contains(serialized, `"@language": "en-us", "@direction": "rtl"`))
+	testing.expect(t, !strings.contains(serialized, RDF_VALUE))
+	round_trip, parse_error := parse_to_nquads(serialized, Options{rdf_direction = .Compound_Literal})
+	defer delete(round_trip)
+	testing.expect_value(t, parse_error.code, Error_Code.None)
+	testing.expect(t, strings.contains(round_trip, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#direction> "rtl"`))
+
+	compact_builder := strings.builder_make()
+	defer strings.builder_destroy(&compact_builder)
+	context_text := `{"direction":"@direction"}`
+	testing.expect_value(t, compact(&compact_builder, quads, context_text, Compact_Options{serializer_options = options}), Compact_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(compact_builder), `"direction": "rtl"`))
+
+	invalid_quads := []rdf.Quad{
+		quads[0], quads[1], quads[2], quads[3],
+		rdf.default_graph_quad(rdf.Triple{subject = compound, predicate = rdf.iri(RDF_TYPE), object = rdf.iri("https://example.test/other")}),
+	}
+	strings.builder_reset(&builder)
+	testing.expect_value(t, serialize(&builder, invalid_quads, options), Serialize_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), RDF_VALUE))
 }
 
 @(test)

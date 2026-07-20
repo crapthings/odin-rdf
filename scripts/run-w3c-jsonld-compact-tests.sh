@@ -20,6 +20,7 @@ cases='
 0033 0034 0035 0036 0039 0040 0041 0042 0044 0046 0047 0048 0049 0050
 0051 0052 0053 0054 0055 0056 0057 0058 0059 0060 0061 0063 0064 0065
 0067 0068 0069 0070 0071 0073 0074 0076 0112 0113
+di01 di02 di03 di04 di05 di06 di07
 '
 
 total=0
@@ -29,12 +30,14 @@ for case_id in $cases; do
   context="$suite/compact/$case_id-context.jsonld"
   expected="$suite/compact/$case_id-out.jsonld"
   actual="$root/.cache/odin-rdf-jsonld-compact-$case_id.actual.jsonld"
-  if ! "$runner" "$input" "$context" > "$actual" || ! "$cli" compare "$actual" "$expected" --max-quads 10000 --max-records 10000 >/dev/null; then
+  direction=''
+  case "$case_id" in di*) direction=--rdf-direction-compound ;; esac
+  if ! "$runner" "$input" "$context" $direction > "$actual" || ! "$cli" compare "$actual" "$expected" --max-quads 10000 --max-records 10000 >/dev/null; then
     failures=$((failures + 1))
   fi
   total=$((total + 1))
 done
 
 printf 'W3C JSON-LD compaction core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 66
+test "$total" -eq 73
 test "$failures" -eq 0

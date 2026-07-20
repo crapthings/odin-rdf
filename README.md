@@ -6,11 +6,11 @@
 ![W3C syntax tests](https://img.shields.io/badge/W3C_syntax_tests-72%2F72-16a34a)
 ![W3C N-Quads tests](https://img.shields.io/badge/W3C_N--Quads-87%2F87-65a30d)
 ![W3C Turtle tests](https://img.shields.io/badge/W3C_Turtle-313%2F313-4d7c0f)
-![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
+![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-65%2F65-0f766e)
 ![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-93%2F93-0f766e)
 ![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
 ![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-87%2F87-0f766e)
-![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-28%2F28-0f766e)
+![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-30%2F30-0f766e)
 ![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-66%2F66-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
 ![W3C TriG tests](https://img.shields.io/badge/W3C_TriG-355%2F355-15803d)
@@ -25,19 +25,21 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 ## Status and scope
 
 **Current release: `0.26.0`** — bounded, deterministic JSON-LD Expansion,
-Flattening, and Framing, each backed by pinned W3C core gates. This release
-adds JSON-LD 1.1 scoped-context and directional-value support, plus bounded
-`@included` and named-graph Framing.
+Flattening, and Framing, each backed by pinned W3C core gates. It adds JSON-LD
+1.1 scoped-context and directional-value support, plus bounded `@included` and
+named-graph Framing.
 
 It also supports sourced-context `@import` and enforced `@protected` terms
-through the existing explicit document loader. The development Expansion core
-also honors non-propagating scoped contexts and directional value metadata; its
-gate runs 93 vectors.
+through the existing explicit document loader. The development core maps
+directional literals through RDF when callers select either JSON-LD 1.1
+`i18n-datatype` or `compound-literal`; the default conversion deliberately
+omits `@direction`. Its gates run 93 Expansion, 67 to-RDF, 32 RDF-to-JSON-LD,
+and 73 compaction vectors.
 
 | Area | Available now | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, context compaction, and Framing | A documented, bounded profile—not the complete JSON-LD API. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, context compaction, and Framing | Directional RDF round trips use opt-in `i18n-datatype` or `compound-literal`; the rest of the API remains out of scope. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
@@ -54,7 +56,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 93 Expansion, 35 Flattening, 55 to-RDF, 28 RDF-to-JSON-LD, and 66 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 93 Expansion, 35 Flattening, 67 to-RDF, 32 RDF-to-JSON-LD, and 73 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.

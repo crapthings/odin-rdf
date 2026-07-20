@@ -63,6 +63,14 @@ non-finite, and all other typed values remain explicit value objects. The
 serializer recognizes `rdf:JSON` values and emits their validated JSON payload
 with `"@type": "@json"`.
 
+`Options.rdf_direction` and `Serialize_Options.rdf_direction` default to
+`.None`, which follows JSON-LD's default RDF mapping and omits `@direction`.
+Set both to `.I18n_Datatype` for a lossless RDF round trip: directional strings
+map to the JSON-LD 1.1 `https://www.w3.org/ns/i18n#` datatype form and are
+restored as `@language` and `@direction` during serialization or compaction.
+Set both to `.Compound_Literal` to use the alternative RDF blank-node mapping
+with `rdf:value`, `rdf:direction`, and optional `rdf:language` instead.
+
 ```odin
 compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
         options: Compact_Options = {}) -> Compact_Error
@@ -104,8 +112,10 @@ dataset cannot later reproduce its original keys. A custom `@index` property
 does become an RDF statement and is retained. Term- and type-scoped local
 contexts are supported, as are single-level `@import` source contexts through
 the same opt-in document loader. Expansion and Flattening preserve JSON-LD 1.1
-base and term `@direction` mappings on expanded value objects; RDF directional
-literal encodings, a built-in HTTP loader, and the remaining Framing policy
+base and term `@direction` mappings on expanded value objects. Its opt-in
+`.I18n_Datatype` mode maps those values through RDF and restores them in
+serialization and compaction; `.Compound_Literal` supplies the standard RDF
+blank-node alternative. A built-in HTTP loader and the remaining Framing policy
 matrix remain separate conformance milestones.
 Document Expansion, Flattening, and Framing honor `@propagate: false` by
 rolling back to the previous context for nested node objects; type-scoped
@@ -133,19 +143,23 @@ contexts fail explicitly instead of causing implicit network access.
 
 The repository pins the W3C JSON-LD API test corpus. In addition to the stable
 JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
-the 28 non-directional RDF-to-JSON-LD core vectors, including RDF lists, named
-graphs, `useNativeTypes`, `useRdfType`, duplicate triples, and `rdf:JSON`.
+32 RDF-to-JSON-LD core vectors, including RDF lists, named graphs,
+`useNativeTypes`, `useRdfType`, duplicate triples, `rdf:JSON`, and i18n
+directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
-differences. The broader 1.1 suite remains the gate for future scoped-context,
-direction, graph-container, and generalized RDF work.
+differences. `scripts/run-w3c-jsonld-tests.sh` runs 67 to-RDF vectors,
+including default direction omission, `i18n-datatype`, and compound-literal
+output. The broader 1.1 suite remains the gate for graph-container and
+generalized RDF work.
 
-`scripts/run-w3c-jsonld-compact-tests.sh` runs 66 local-context compaction
-vectors from the same pinned corpus. It parses both generated and expected
+`scripts/run-w3c-jsonld-compact-tests.sh` runs 73 local-context compaction
+vectors from the same pinned corpus, including default, term, list, and
+language-container direction handling. It parses both generated and expected
 documents and compares their RDFC-1.0 canonical RDF datasets, so the gate
 checks compaction semantics without requiring meaningless object-key ordering.
 
-`scripts/run-w3c-jsonld-framing-tests.sh` runs 84 pinned Framing vectors for
+`scripts/run-w3c-jsonld-framing-tests.sh` runs 87 pinned Framing vectors for
 nested and deep-node embedding, type and `@id` selection, value/list patterns,
 all embed modes, defaults, `@requireAll`, `@set` containers, protected empty
 contexts, `@included` selection, JSON-LD 1.1 graph shape, and invalid frame
@@ -164,5 +178,5 @@ current total to 93 cases.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future
-work extends its framing policy matrix while retaining JSON-LD-only metadata
-outside the RDF conversion path.
+work extends its framing policy matrix and broader JSON-LD 1.1 conversion
+coverage.

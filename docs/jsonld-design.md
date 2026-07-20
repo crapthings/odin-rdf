@@ -144,8 +144,11 @@ frame paths. It structurally compares the context-directed result.
 The selected vectors are the executable boundary for the current framing
 profile, not a claim of full JSON-LD Framing conformance.
 
-The Expansion gate also includes two sourced-context `@import` override
-vectors, making its current total 75 cases.
+The Expansion gate also includes five sourced-context `@import` vectors. They
+cover source overrides, relative source identifiers resolved through an
+importer's `@vocab`, protected source definitions, and the expected rejection
+of incompatible protected-term redefinitions, making its current total 78
+cases.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future

@@ -209,13 +209,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.vocab = parent.vocab
 		result.language = parent.language
 		result.has_language = parent.has_language
-		for key, definition in parent.terms do result.terms[key] = definition
+		for key in parent.terms do result.terms[key] = parent.terms[key]
 	}
 	return result, {}
 }
 
 @(private) retain_context :: proc(state: ^State, ctx: Context) {
 	append(&state.contexts, ctx.terms)
+}
+
+@(private) discard_unretained_context :: proc(ctx: ^Context, retained: ^bool) {
+	if !retained^ do delete(ctx.terms)
 }
 
 @(private) object_value :: proc(object: json.Object, key: string) -> (json.Value, bool) {
@@ -392,13 +396,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		a.local_context == b.local_context
 }
 
-@(private) set_term_definition :: proc(result, inherited: ^Context, term: string, definition: Term_Definition) -> Parse_Error {
+@(private) set_term_definition :: proc(state: ^State, result, inherited: ^Context, term: string, definition: Term_Definition) -> Parse_Error {
 	updated := definition
 	if previous, found := inherited.terms[term]; found && previous.protected {
 		if !term_definitions_match(previous, definition) do return Parse_Error{code = .Protected_Term_Redefinition}
 		updated.protected = true
 	}
-	result.terms[term] = updated
+	owned_term, own_error := own(state, term)
+	if own_error.code != .None do return own_error
+	result.terms[owned_term] = updated
 	return {}
 }
 
@@ -444,8 +450,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		default_protected, valid = bool_value(protected_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_Context}
 	}
-	protected_terms := make(map[string]bool)
+	protected_terms := make([dynamic]string)
 	defer delete(protected_terms)
+	imported_relative_ids := make(map[string]string)
+	defer delete(imported_relative_ids)
 	context_base := current^
 	if import_value, found := object_value(object, "@import"); found {
 		if imported_context do return {}, Parse_Error{code = .Invalid_Context}
@@ -473,8 +481,24 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !imported_object_ok do return {}, Parse_Error{code = .Invalid_Context}
 		if default_protected {
 			for term in imported_object {
-				if !strings.has_prefix(term, "@") do protected_terms[term] = true
+				if strings.has_prefix(term, "@") do continue
+				owned_term, term_error := own(state, term)
+				if term_error.code != .None do return {}, term_error
+				append(&protected_terms, owned_term)
 			}
+		}
+		for term, definition_value in imported_object {
+			if strings.has_prefix(term, "@") do continue
+			definition_object, definition_ok := object_from_value(definition_value)
+			if !definition_ok do continue
+			identifier_value, has_identifier := object_value(definition_object, "@id")
+			identifier, identifier_valid := string_value(identifier_value)
+			if !has_identifier || !identifier_valid || has_iri_scheme(identifier) || strings.index_byte(identifier, ':') >= 0 || is_keyword(identifier) do continue
+			owned_term, term_error := own(state, term)
+			if term_error.code != .None do return {}, term_error
+			owned_identifier, identifier_error := own(state, identifier)
+			if identifier_error.code != .None do return {}, identifier_error
+			imported_relative_ids[owned_term] = owned_identifier
 		}
 		context_base, err = apply_context_inner(state, current, imported_value, true)
 		if err.code != .None do return {}, err
@@ -497,7 +521,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	result, make_error := make_context(state, &context_base)
 	if make_error.code != .None do return {}, make_error
 	result_retained := false
-	defer if !result_retained do delete(result.terms)
+	defer discard_unretained_context(&result, &result_retained)
 	if base_value, found := object_value(object, "@base"); found {
 		if base_value_string, valid := string_value(base_value); valid {
 			base, err := resolve_iri(state, current.base_iri, base_value_string)
@@ -515,6 +539,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		} else {
 			#partial switch null in vocab_value { case json.Null: result.vocab = ""; case: return {}, Parse_Error{code = .Invalid_Context} }
 		}
+	}
+	// A sourced context is merged into the containing context. Its relative
+	// term identifiers therefore use the containing @vocab when one is present.
+	for term, relative_id in imported_relative_ids {
+		definition, found := result.terms[term]
+		if !found do continue
+		delete_key(&result.terms, term)
+		identifier, identifier_error := expand_iri(state, &result, relative_id, true, true)
+		if identifier_error.code != .None do return {}, identifier_error
+		definition.id = identifier
+		result.terms[term] = definition
 	}
 	if language_value, found := object_value(object, "@language"); found {
 		if language, valid := string_value(language_value); valid {
@@ -536,7 +571,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !simple || !(strings.has_prefix(id, "http://") || strings.has_prefix(id, "https://") || strings.has_prefix(id, "urn:") || strings.has_prefix(id, "_:")) do continue
 		identifier, err := own(state, id)
 		if err.code != .None do return {}, err
-		result.terms[term] = Term_Definition{id = identifier}
+		owned_term, term_error := own(state, term)
+		if term_error.code != .None do return {}, term_error
+		result.terms[owned_term] = Term_Definition{id = identifier}
 	}
 	for term, definition_value in object {
 		if strings.has_prefix(term, "@") do continue
@@ -544,14 +581,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		is_null := false
 		#partial switch _ in definition_value { case json.Null: is_null = true }
 		if is_null {
-			if err := set_term_definition(&result, &context_base, term, Term_Definition{disabled = true, protected = default_protected}); err.code != .None do return {}, err
+			if err := set_term_definition(state, &result, &context_base, term, Term_Definition{disabled = true, protected = default_protected}); err.code != .None do return {}, err
 			continue
 		}
 		if simple_id, simple := string_value(definition_value); simple {
 			id, err := expand_iri(state, &result, simple_id, true, true)
 			if err.code != .None do return {}, err
 			definition.id = id
-			if definition_err := set_term_definition(&result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
+			if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 			continue
 		}
 		definition_object, object_ok := object_from_value(definition_value)
@@ -631,7 +668,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			definition.protected = protected
 		}
-		if definition_err := set_term_definition(&result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
+		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 	}
 	for term in protected_terms {
 		if _, locally_defined := object_value(object, term); locally_defined do continue

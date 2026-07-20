@@ -7,7 +7,7 @@
 ![W3C N-Quads tests](https://img.shields.io/badge/W3C_N--Quads-87%2F87-65a30d)
 ![W3C Turtle tests](https://img.shields.io/badge/W3C_Turtle-313%2F313-4d7c0f)
 ![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-55%2F55-0f766e)
-![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-75%2F75-0f766e)
+![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-78%2F78-0f766e)
 ![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
 ![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-79%2F79-0f766e)
 ![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-28%2F28-0f766e)
@@ -28,8 +28,8 @@ A small, streaming-first RDF toolkit for Odin, built around standards compliance
 Flattening, and Framing, each backed by pinned W3C core gates.
 
 It also supports sourced-context `@import` and enforced `@protected` terms
-through the existing explicit document loader; the Expansion core gate runs 75
-vectors.
+through the existing explicit document loader; the development Expansion core
+gate runs 78 vectors.
 
 | Area | Available now | Important boundary |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 75 Expansion, 35 Flattening, 55 to-RDF, 28 RDF-to-JSON-LD, and 66 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 78 Expansion, 35 Flattening, 55 to-RDF, 28 RDF-to-JSON-LD, and 66 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.

@@ -2,6 +2,16 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Retain owned keys while processing sourced JSON-LD contexts, so term
+  definitions remain valid after the loaded JSON document is released.
+- Resolve relative sourced term identifiers against an importing context's
+  `@vocab`, as required when a source context is merged.
+- Extend the JSON-LD Expansion gate with the W3C `so07`, `so10`, and `so11`
+  source-context vectors. The gate now covers 78 vectors, including expected
+  failures for protected-term redefinitions.
+
 ## 0.25.0 - 2026-07-20
 
 - Add bounded JSON-LD `@import` source contexts through the existing opt-in

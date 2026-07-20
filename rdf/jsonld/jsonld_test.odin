@@ -244,6 +244,12 @@ test_expands_nested_set_values_and_ignores_nulls :: proc(t: ^testing.T) {
 	defer delete(aliased)
 	testing.expect_value(t, aliased_err.code, Error_Code.None)
 	testing.expect(t, strings.contains(aliased, `"2026-07-20"^^<http://www.w3.org/2001/XMLSchema#date>`))
+
+	unmapped, unmapped_err := parse_to_nquads(`{"@id":"https://example.test/s","ignored":"no","https://example.test/p":"yes"}`)
+	defer delete(unmapped)
+	testing.expect_value(t, unmapped_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(unmapped, `<https://example.test/s> <https://example.test/p> "yes" .`))
+	testing.expect(t, !strings.contains(unmapped, "ignored"))
 }
 
 @(test)

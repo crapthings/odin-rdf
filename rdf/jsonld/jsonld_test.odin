@@ -934,6 +934,17 @@ test_id_graph_containers_use_map_keys_as_graph_names :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_base_null_drops_nodes_with_relative_identifiers :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"child":"https://example.test/child","name":"https://example.test/name"},
+  "child":{"@context":{"@base":null},"@id":"relative","name":"dropped"}
+}`, Options{base_iri = "https://example.test/document"})
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect_value(t, actual, "")
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

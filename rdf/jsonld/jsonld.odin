@@ -210,6 +210,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	canonical_frame_blank_ids:   bool,
 	frame_blank_aliases:         map[string]string,
 	frame_blank_counter:         u64,
+	initial_base_iri:             string,
 }
 
 @(private) destroy_state :: proc(state: ^State) {
@@ -509,9 +510,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	case json.Null:
 		result, err := make_context(state, nil)
 		if err.code != .None do return {}, err
-		// A null local context resets the active term, vocabulary, language, and
-		// direction settings. Keep the document base available for relative IRIs.
-		result.base_iri = current.base_iri
+		// A null local context resets the active mappings to the initial
+		// context, including a document base that may differ from a parent
+		// context's local @base override.
+		result.base_iri = state.initial_base_iri
 		retain_context(state, result)
 		return result, {}
 	}
@@ -1191,7 +1193,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		delete(result)
 		return {}, err
 	}
-	append(&result, term)
+	// A node with an unresolved relative identifier is ignored by RDF
+	// conversion. Do not let that empty IRI reach a parent statement.
+	if term.kind != .IRI || len(term.value) > 0 do append(&result, term)
 	return result, {}
 }
 
@@ -1362,6 +1366,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if id_value, found := has_keyword(object, &active_context, "@id"); found {
 		id, valid := string_value(id_value)
 		if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+		if len(active_context.base_iri) == 0 && !strings.has_prefix(id, "_:") && !has_iri_scheme(id) && strings.index_byte(id, ':') < 0 {
+			if _, maps_identifier := active_context.terms[id]; !maps_identifier do return {}, {}
+		}
 		term, id_err := identifier_term(state, &active_context, id)
 		if id_err.code != .None do return {}, id_err
 		subject = term
@@ -1670,6 +1677,7 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		if base_err.code != .None do return base_err
 		ctx.base_iri = base
 	}
+	state.initial_base_iri = ctx.base_iri
 	graph: rdf.Quad
 	if array, is_array := array_from_value(parsed); is_array {
 		for index in 0..<len(array) {

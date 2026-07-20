@@ -945,6 +945,17 @@ test_base_null_drops_nodes_with_relative_identifiers :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_id_coercion_resolves_fragment_colons_against_base :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@base":"https://example.test/","item":{"@id":"urn:item:","@type":"@id"}},
+  "item":"#part:two"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<urn:item:> <https://example.test/#part:two> .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

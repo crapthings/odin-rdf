@@ -38,6 +38,17 @@ Compact_Options :: struct {
 	definition: Term_Definition,
 }
 
+@(private) Compact_Property_Index_Entry :: struct {
+	source:            json.Value,
+	object:            json.Object,
+	index_value_index: int,
+}
+
+@(private) Compact_Property_Index_Group :: struct {
+	key:     string,
+	entries: [dynamic]Compact_Property_Index_Entry,
+}
+
 @(private) destroy_compact_list_term_groups :: proc(groups: ^[dynamic]Compact_List_Term_Group) {
 	for &group in groups^ do delete(group.values)
 	delete(groups^)
@@ -46,6 +57,11 @@ Compact_Options :: struct {
 @(private) destroy_compact_nest_outputs :: proc(outputs: ^[dynamic]Compact_Nest_Output) {
 	for &output in outputs^ do strings.builder_destroy(&output.properties)
 	delete(outputs^)
+}
+
+@(private) destroy_compact_property_index_groups :: proc(groups: ^[dynamic]Compact_Property_Index_Group) {
+	for &group in groups^ do delete(group.entries)
+	delete(groups^)
 }
 
 Compact_Error :: enum {
@@ -713,7 +729,11 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		} else {
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
-			if has_definition && definition.container_language {
+			if has_definition && definition.container_index && definition.has_index && definition.index != "@index" {
+				handled, index_error := compact_write_property_index_map(output, state, ctx, array, definition, policy)
+				if index_error != .None do return index_error
+				if !handled do return .Invalid_Expanded_JSON
+			} else if has_definition && definition.container_language {
 				if err := compact_write_language_map(output, state, ctx, array, policy); err != .None do return err
 			} else if has_definition && definition.container_list && len(array) == 1 {
 				item, item_valid := object_from_value(array[0])
@@ -757,6 +777,113 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	active_context, type_context, context_error := compact_resolve_object_context(state, inherited, {}, object)
 	if context_error != .None do return context_error
 	return compact_write_node_resolved(builder, state, &active_context, &type_context, object, policy)
+}
+
+@(private) compact_property_index_key :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> (string, bool, Compact_Error) {
+	index_definition, found_definition := context_definition_for_iri(ctx, definition.index)
+	if !found_definition do index_definition = Term_Definition{}
+	object, valid := object_from_value(value)
+	if !valid do return "", false, .None
+	if id_value, has_id := object_value(object, "@id"); has_id {
+		identifier, identifier_valid := string_value(id_value)
+		if !identifier_valid do return "", false, .Invalid_Expanded_JSON
+		if !found_definition || (index_definition.type != "@id" && index_definition.type != "@vocab") do return "", false, .None
+		compacted, compact_error := compact_iri(state, ctx, identifier, index_definition.type == "@vocab")
+		if compact_error != .None do return "", false, compact_error
+		return compacted, true, .None
+	}
+	if literal_value, has_literal := object_value(object, "@value"); has_literal {
+		literal, literal_valid := string_value(literal_value)
+		_, has_type := object_value(object, "@type")
+		_, has_language := object_value(object, "@language")
+		if literal_valid && !has_type && !has_language do return literal, true, .None
+	}
+	return "", false, .None
+}
+
+@(private) compact_write_property_index_entry :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, entry: Compact_Property_Index_Entry, definition: Term_Definition, policy: Compact_Array_Policy) -> Compact_Error {
+	if entry.index_value_index < 0 do return compact_write_value(builder, state, ctx, entry.source, definition, true, policy)
+	object := entry.object
+	index_values_value, found_index_values := object_value(object, definition.index)
+	index_values, valid_index_values := array_from_value(index_values_value)
+	if !found_index_values || !valid_index_values || entry.index_value_index >= len(index_values) do return .Invalid_Expanded_JSON
+	temporary := make(json.Object)
+	defer delete(temporary)
+	for key, value in object do temporary[key] = value
+	remaining := make(json.Array)
+	defer delete(remaining)
+	for value, index in index_values {
+		if index != entry.index_value_index do append(&remaining, value)
+	}
+	if len(remaining) == 0 {
+		delete_key(&temporary, definition.index)
+	} else {
+		temporary[definition.index] = remaining
+	}
+	active_context, type_context, context_error := compact_resolve_object_context(state, ctx, definition, temporary)
+	if context_error != .None do return context_error
+	return compact_write_node_resolved(builder, state, &active_context, &type_context, temporary, policy)
+}
+
+// compact_write_property_index_map turns a custom @index property's RDF value
+// back into a map key, retaining any additional values of that property on the
+// compacted node. This mirrors process_index_map without fabricating ordinary
+// RDF-invisible @index annotations.
+@(private) compact_write_property_index_map :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, values: json.Array, definition: Term_Definition, policy: Compact_Array_Policy) -> (bool, Compact_Error) {
+	if !definition.has_index || definition.index == "@index" do return false, .None
+	groups := make([dynamic]Compact_Property_Index_Group)
+	defer destroy_compact_property_index_groups(&groups)
+	for value in values {
+		object, object_valid := object_from_value(value)
+		if !object_valid do return false, .None
+		target := object
+		if id_value, has_id := object_value(object, "@id"); has_id {
+			identifier, identifier_valid := string_value(id_value)
+			if !identifier_valid do return false, .Invalid_Expanded_JSON
+			if indexed, found := state.compact_nodes[identifier]; found do target = indexed
+		}
+		index_value_index := -1
+		key := compact_keyword(ctx, "@none")
+		if index_values_value, found_index_values := object_value(target, definition.index); found_index_values {
+			index_values, valid_index_values := array_from_value(index_values_value)
+			if !valid_index_values do return false, .Invalid_Expanded_JSON
+			for index := len(index_values) - 1; index >= 0; index -= 1 {
+				candidate, valid_key, key_error := compact_property_index_key(state, ctx, definition, index_values[index])
+				if key_error != .None do return false, key_error
+				if valid_key {
+					key = candidate
+					index_value_index = index
+					break
+				}
+			}
+		}
+		group_index := -1
+		for group, index in groups do if group.key == key { group_index = index; break }
+		if group_index < 0 {
+			append(&groups, Compact_Property_Index_Group{key = key, entries = make([dynamic]Compact_Property_Index_Entry)})
+			group_index = len(groups) - 1
+		}
+		append(&groups[group_index].entries, Compact_Property_Index_Entry{source = value, object = target, index_value_index = index_value_index})
+	}
+	strings.write_byte(builder, '{')
+	for group, group_index in groups {
+		if group_index > 0 do strings.write_string(builder, ", ")
+		write_json_string(builder, group.key)
+		strings.write_string(builder, ": ")
+		if policy == .Compact && len(group.entries) == 1 && !definition.container_set {
+			entry := group.entries[0]
+			if entry_error := compact_write_property_index_entry(builder, state, ctx, entry, definition, policy); entry_error != .None do return false, entry_error
+		} else {
+			strings.write_byte(builder, '[')
+			for entry, entry_index in group.entries {
+				if entry_index > 0 do strings.write_string(builder, ", ")
+				if entry_error := compact_write_property_index_entry(builder, state, ctx, entry, definition, policy); entry_error != .None do return false, entry_error
+			}
+			strings.write_byte(builder, ']')
+		}
+	}
+	strings.write_byte(builder, '}')
+	return true, .None
 }
 
 @(private) compact_definition_needs_context :: proc(definition: Term_Definition) -> bool {
@@ -804,7 +931,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			defer delete_key(&state.compacting_nodes, identifier)
 			return compact_write_referenced_node(builder, state, resolved, target, policy)
 		}
-		if has_definition && !definition.container_graph && (definition.type == "@id" || definition.type == "@vocab") do return compact_write_identifier(builder, state, resolved, id, definition.type == "@vocab")
+		if len(object) == 1 && has_definition && !definition.container_graph && (definition.type == "@id" || definition.type == "@vocab") do return compact_write_identifier(builder, state, resolved, id, definition.type == "@vocab")
 		strings.write_byte(builder, '{')
 		write_json_string(builder, compact_keyword(resolved, "@id"))
 		strings.write_string(builder, ": ")

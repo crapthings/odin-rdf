@@ -1396,9 +1396,21 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return result, {}
 }
 
+@(private) context_definition_for_iri :: proc(ctx: ^Context, iri: string) -> (Term_Definition, bool) {
+	best := ""
+	result: Term_Definition
+	for term, definition in ctx.terms {
+		if definition.id != iri || definition.reverse || !compact_prefer(term, best) do continue
+		best = term
+		result = definition
+	}
+	return result, len(best) > 0
+}
+
 // process_index_map deliberately treats ordinary @index entries as JSON-LD
-// annotation: RDF has no index slot. A custom @index property, however, is
-// data and becomes a normal RDF statement as required by JSON-LD 1.1.
+// annotation: RDF has no index slot. A custom @index property is data, and its
+// value still follows that property's coercion rules (@id, @vocab, language,
+// and so on) before becoming a normal RDF statement.
 @(private) process_index_map :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
 	result := make([dynamic]rdf.Term)
 	map_object, valid := object_from_value(value)
@@ -1420,7 +1432,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					delete(result)
 					return {}, Parse_Error{code = .Invalid_Value_Object}
 				}
-				if emit_err := emit(state, term, rdf.iri(definition.index), rdf.literal(index_key), graph); emit_err.code != .None {
+				index_definition, found_definition := context_definition_for_iri(ctx, definition.index)
+				if !found_definition do index_definition = Term_Definition{}
+				index_term, index_error := process_value(state, ctx, index_definition, json.String(index_key), graph)
+				if index_error.code != .None {
+					delete(terms)
+					delete(result)
+					return {}, index_error
+				}
+				if emit_err := emit(state, term, rdf.iri(definition.index), index_term, graph); emit_err.code != .None {
 					delete(terms)
 					delete(result)
 					return {}, emit_err

@@ -267,6 +267,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 
 @(private) set_previous_context :: proc(result, previous: ^Context) {
 	if result.has_previous do return
+	set_previous_context_force(result, previous)
+}
+
+// A non-propagating context array is one scope even when an intermediate item
+// is `null`. Its previous context must therefore remain the context from before
+// the whole array, not the transient empty context created by that item.
+@(private) set_previous_context_force :: proc(result, previous: ^Context) {
 	result.has_previous = true
 	result.previous_terms = previous.terms
 	result.previous_base_iri = previous.base_iri
@@ -571,6 +578,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if err.code != .None do return {}, err
 			result = updated
 		}
+		if !array_propagate && !current.has_previous do set_previous_context_force(&result, current)
 		return result, {}
 	}
 	if remote, ok := string_value(value); ok {
@@ -1649,6 +1657,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if keyword_for(&active_context, key) != "@type" do continue
 		types, array := array_from_value(type_value)
 		count := array ? len(types) : 1
+		type_context := active_context
 		for index in 0..<count {
 			type_item := array ? types[index] : type_value
 			type_name, valid := string_value(type_item)
@@ -1659,7 +1668,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			type_term, term_err := expanded_identifier_term(state, type_iri)
 			if term_err.code != .None do return {}, term_err
 			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
-			if definition, found := active_context.terms[type_name]; found && definition.has_local_context {
+		}
+		// Apply scopes in reverse order, resolving each term from the pre-scope
+		// context so a preceding null scope cannot hide a later type definition.
+		for index := count - 1; index >= 0; index -= 1 {
+			type_item := array ? types[index] : type_value
+			type_name, valid := string_value(type_item)
+			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+			if definition, found := type_context.terms[type_name]; found && definition.has_local_context {
 				updated, context_err := apply_term_scoped_context(state, &active_context, definition)
 				if context_err.code != .None do return {}, context_err
 				active_context = updated

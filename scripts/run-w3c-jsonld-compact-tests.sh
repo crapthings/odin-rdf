@@ -21,7 +21,7 @@ cases='
 0051 0052 0053 0054 0055 0056 0057 0058 0059 0060 0061 0062 0063 0064 0065
 0066 0067 0068 0069 0070 0071 0073 0074 0076 0111 0112 0113
 di01 di02 di03 di04 di05 di06 di07
-c001 c002 c003 c005 c012 c013 c017 c018 c019 c023 c024 c025 c027 js09 li01 li02 li03 li04 li05 m001 m002 m005 m012 m013 m014 m017 m018 m019 n006 n007 n008 n009 p003 tn01 tn02 tn03
+c001 c002 c003 c005 c012 c013 c017 c018 c019 c020 c023 c024 c025 c027 js09 li01 li02 li03 li04 li05 m001 m002 m005 m012 m013 m014 m017 m018 m019 n006 n007 n008 n009 p003 tn01 tn02 tn03
 '
 
 total=0
@@ -44,5 +44,5 @@ for case_id in $cases; do
 done
 
 printf 'W3C JSON-LD compaction core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 114
+test "$total" -eq 115
 test "$failures" -eq 0

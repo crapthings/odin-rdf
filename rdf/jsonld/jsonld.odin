@@ -538,6 +538,45 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !term_definitions_match(previous, definition) do return Parse_Error{code = .Protected_Term_Redefinition}
 		updated.protected = true
 	}
+	// A term-scoped context is parsed from temporary JSON and released after it
+	// is applied. Preserve every definition string in State so keyword aliases
+	// (which do not pass through IRI allocation) cannot retain dangling input
+	// slices after that temporary document is destroyed.
+	if len(updated.id) > 0 {
+		owned, err := own(state, updated.id)
+		if err.code != .None do return err
+		updated.id = owned
+	}
+	if len(updated.type) > 0 {
+		owned, err := own(state, updated.type)
+		if err.code != .None do return err
+		updated.type = owned
+	}
+	if len(updated.language) > 0 {
+		owned, err := own(state, updated.language)
+		if err.code != .None do return err
+		updated.language = owned
+	}
+	if len(updated.direction) > 0 {
+		owned, err := own(state, updated.direction)
+		if err.code != .None do return err
+		updated.direction = owned
+	}
+	if len(updated.nest) > 0 {
+		owned, err := own(state, updated.nest)
+		if err.code != .None do return err
+		updated.nest = owned
+	}
+	if len(updated.index) > 0 {
+		owned, err := own(state, updated.index)
+		if err.code != .None do return err
+		updated.index = owned
+	}
+	if len(updated.local_context) > 0 {
+		owned, err := own(state, updated.local_context)
+		if err.code != .None do return err
+		updated.local_context = owned
+	}
 	owned_term, own_error := own(state, term)
 	if own_error.code != .None do return own_error
 	result.terms[owned_term] = updated

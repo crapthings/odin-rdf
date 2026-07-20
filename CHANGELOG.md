@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Copy every term-definition string into the JSON-LD processor state, so
+  keyword aliases in temporary term-scoped contexts remain valid after their
+  source JSON is released. Extend the semantic Compaction gate to 115 vectors.
 - Keep the context from before type-scoped processing available for `@type`
   output, including scoped-context arrays that reset mappings with `null`.
   Extend the semantic Compaction gate to 114 vectors.

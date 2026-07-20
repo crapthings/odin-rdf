@@ -2,6 +2,7 @@ package jsonld
 
 import "core:strings"
 import "core:testing"
+import json "core:encoding/json"
 import rdf ".."
 import nquads "../nquads"
 
@@ -467,4 +468,255 @@ test_serializer_merges_named_graph_objects_with_default_graph_properties :: proc
 	testing.expect(t, strings.contains(output, `"@graph": [`))
 	testing.expect(t, strings.contains(output, `"@type": ["https://example.test/Graph"]`))
 	testing.expect(t, strings.contains(output, `"https://example.test/name": [{"@value": "Graph"}]`))
+}
+
+@(test)
+test_expands_document_without_losing_set_or_context_semantics :: proc(t: ^testing.T) {
+	input := `{
+  "@context": {
+    "ex": "https://example.test/",
+    "name": "ex:name",
+    "homepage": {"@id": "ex:homepage", "@type": "@id"},
+    "items": {"@id": "ex:items", "@container": "@list"}
+  },
+  "@id": "ex:alice",
+  "name": {"@set": ["Alice", "A."]},
+  "homepage": "https://example.test/alice",
+  "items": ["one", 2]
+}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, expand(&builder, input, Expand_Options{context_options = {base_iri = "https://example.test/document"}}), Expand_Error.None)
+	expected := `[{"@id": "https://example.test/alice", "https://example.test/homepage": [{"@id": "https://example.test/alice"}], "https://example.test/items": [{"@list": [{"@value": "one"}, {"@value": 2}]}], "https://example.test/name": [{"@value": "Alice"}, {"@value": "A."}]}]
+`
+	testing.expect_value(t, strings.to_string(builder), expected)
+}
+
+@(test)
+test_expansion_is_atomic_and_bounded :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "previous\n")
+	input := `{"@context":{"name":"https://example.test/name"},"name":"Alice"}`
+	testing.expect_value(t, expand(&builder, input, Expand_Options{max_output_bytes = 4}), Expand_Error.Output_Too_Large)
+	testing.expect_value(t, strings.to_string(builder), "previous\n")
+	testing.expect_value(t, expand(&builder, `{`), Expand_Error.Invalid_JSON)
+	testing.expect_value(t, strings.to_string(builder), "previous\n")
+}
+
+@(test)
+test_null_term_definitions_suppress_rdf_and_document_properties :: proc(t: ^testing.T) {
+	input := `{
+  "@context": {"@vocab":"https://example.test/", "ignored":null, "alsoIgnored":{"@id":null}},
+  "@id":"https://example.test/s",
+  "name":"Alice",
+  "ignored":"no",
+  "alsoIgnored":"no"
+}`
+	quads, parse_err := parse_to_nquads(input)
+	defer delete(quads)
+	testing.expect_value(t, parse_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(quads, `<https://example.test/s> <https://example.test/name> "Alice" .`))
+	testing.expect(t, !strings.contains(quads, "ignored"))
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, expand(&builder, input), Expand_Error.None)
+	testing.expect(t, !strings.contains(strings.to_string(builder), "ignored"))
+}
+
+@(test)
+test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
+	input := `{
+  "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},
+  "@id":"https://example.test/alice",
+  "name":"Alice",
+  "knows":{"@id":"https://example.test/bob", "name":"Bob"},
+  "@reverse":{"knows":{"@id":"https://example.test/carol", "name":"Carol"}}
+}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "previous\n")
+	testing.expect_value(t, flatten(&builder, input, Flatten_Options{max_output_bytes = 4}), Flatten_Error.Output_Too_Large)
+	testing.expect_value(t, strings.to_string(builder), "previous\n")
+	testing.expect_value(t, flatten(&builder, input), Flatten_Error.None)
+	expected := `[{"@id": "https://example.test/alice", "https://example.test/knows": [{"@id": "https://example.test/bob"}], "https://example.test/name": [{"@value": "Alice"}]}, {"@id": "https://example.test/bob", "https://example.test/name": [{"@value": "Bob"}]}, {"@id": "https://example.test/carol", "https://example.test/knows": [{"@id": "https://example.test/alice"}], "https://example.test/name": [{"@value": "Carol"}]}]
+`
+	testing.expect_value(t, strings.to_string(builder)[len("previous\n"):], expected)
+}
+
+@(test)
+test_flattening_bounds_node_map_and_handles_cycles :: proc(t: ^testing.T) {
+	input := `{"@context":{"p":"https://example.test/p"},"@id":"https://example.test/a","p":{"@id":"https://example.test/a"}}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "previous\n")
+	testing.expect_value(t, flatten(&builder, input, Flatten_Options{max_nodes = 0, max_output_bytes = 4}), Flatten_Error.Output_Too_Large)
+	testing.expect_value(t, strings.to_string(builder), "previous\n")
+	testing.expect_value(t, flatten(&builder, input), Flatten_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"https://example.test/p": [{"@id": "https://example.test/a"}]`))
+	strings.builder_reset(&builder)
+	testing.expect_value(t, flatten(&builder, `[{"@id":"https://example.test/a","https://example.test/p":"a"},{"@id":"https://example.test/b","https://example.test/p":"b"}]`, Flatten_Options{max_nodes = 1}), Flatten_Error.Node_Limit)
+	testing.expect_value(t, strings.to_string(builder), "")
+}
+
+@(test)
+test_expansion_and_flattening_support_transparent_nesting :: proc(t: ^testing.T) {
+	input := `{
+  "@context":{"@vocab":"https://example.test/", "nest":"@nest"},
+  "name":"top",
+  "nest":[{"name":"nested"}, {"@type":"Thing", "label":"inside"}]
+}`
+	expanded := strings.builder_make()
+	defer strings.builder_destroy(&expanded)
+	testing.expect_value(t, expand(&expanded, input), Expand_Error.None)
+	expected_expanded := `[{"@type": ["https://example.test/Thing"], "https://example.test/label": [{"@value": "inside"}], "https://example.test/name": [{"@value": "top"}, {"@value": "nested"}]}]
+`
+	testing.expect_value(t, strings.to_string(expanded), expected_expanded)
+	flattened := strings.builder_make()
+	defer strings.builder_destroy(&flattened)
+	testing.expect_value(t, flatten(&flattened, input), Flatten_Error.None)
+	expected_flattened := `[{"@id": "_:b0", "@type": ["https://example.test/Thing"], "https://example.test/label": [{"@value": "inside"}], "https://example.test/name": [{"@value": "top"}, {"@value": "nested"}]}]
+`
+	testing.expect_value(t, strings.to_string(flattened), expected_flattened)
+	invalid := `{"@context":{"@vocab":"https://example.test/"},"@nest":"no"}`
+	testing.expect_value(t, expand(&expanded, invalid), Expand_Error.Invalid_Value_Object)
+}
+
+@(test)
+test_frame_matching_filters_expanded_node_map :: proc(t: ^testing.T) {
+	node_value, node_error := json.parse_string(`{"@id":"https://example.test/library","@type":["https://example.test/Library"],"https://example.test/contains":[{"@id":"https://example.test/book"}]}`, .JSON, true)
+	defer json.destroy_value(node_value)
+	testing.expect_value(t, node_error, json.Error.None)
+	node, node_valid := object_from_value(node_value)
+	testing.expect(t, node_valid)
+	frame_value, frame_error := json.parse_string(`{"@type":["https://example.test/Library"],"https://example.test/contains":{}}`, .JSON, true)
+	defer json.destroy_value(frame_value)
+	testing.expect_value(t, frame_error, json.Error.None)
+	frame, frame_valid := object_from_value(frame_value)
+	testing.expect(t, frame_valid)
+	testing.expect(t, frame_matches_node(node, frame))
+	wrong_value, wrong_error := json.parse_string(`{"@id":["https://example.test/book"]}`, .JSON, true)
+	defer json.destroy_value(wrong_value)
+	testing.expect_value(t, wrong_error, json.Error.None)
+	wrong, wrong_valid := object_from_value(wrong_value)
+	testing.expect(t, wrong_valid)
+	testing.expect(t, !frame_matches_node(node, wrong))
+}
+
+@(test)
+test_frame_accepts_explicit_control :: proc(t: ^testing.T) {
+	value, err := json.parse_string(`{"@context":{"ex":"https://example.test/"},"@explicit":true,"ex:p":{"@explicit":true}}`, .JSON, true)
+	defer json.destroy_value(value)
+	testing.expect_value(t, err, json.Error.None)
+	testing.expect(t, !frame_has_unsupported_policy(value))
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, expand_frame(&builder, `{"@context":{"ex":"https://example.test/"},"@explicit":true,"@type":"ex:T","ex:p":{"@explicit":true}}`), Expand_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"@explicit": true`))
+	strings.builder_reset(&builder)
+	testing.expect_value(t, frame(&builder, `{"@context":{"ex":"https://example.test/"},"@id":"ex:a","@type":"ex:T","ex:p":"value"}`, `{"@context":{"ex":"https://example.test/"},"@explicit":true,"@type":"ex:T"}`), Frame_Error.None)
+	testing.expect(t, !strings.contains(strings.to_string(builder), `"ex:p"`))
+}
+
+@(test)
+test_frame_embeds_library_children_and_preserves_context :: proc(t: ^testing.T) {
+	input := `{
+  "@context": {"dcterms":"http://purl.org/dc/terms/", "ex":"http://example.org/vocab#", "ex:contains":{"@type":"@id"}},
+  "@graph": [
+    {"@id":"http://example.org/test/#library", "@type":"ex:Library", "ex:contains":"http://example.org/test#book"},
+    {"@id":"http://example.org/test#book", "@type":"ex:Book", "dcterms:title":"My Book", "ex:contains":"http://example.org/test#chapter"},
+    {"@id":"http://example.org/test#chapter", "@type":"ex:Chapter", "dcterms:title":"Chapter One"}
+  ]
+}`
+	frame_document := `{
+  "@context": {"dcterms":"http://purl.org/dc/terms/", "ex":"http://example.org/vocab#"},
+  "@type":"ex:Library",
+  "ex:contains":{"@type":"ex:Book", "ex:contains":{"@type":"ex:Chapter"}}
+}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, "previous\n")
+	testing.expect_value(t, frame(&builder, input, frame_document, Frame_Options{processing_mode = .Json_LD_1_0}), Frame_Error.None)
+	actual := strings.to_string(builder)[len("previous\n"):]
+	testing.expect(t, strings.contains(actual, `"@graph": [`))
+	testing.expect(t, strings.contains(actual, `"@type": "ex:Library"`))
+	testing.expect(t, strings.contains(actual, `"@type": "ex:Book"`))
+	testing.expect(t, strings.contains(actual, `"@type": "ex:Chapter"`))
+	testing.expect(t, strings.contains(actual, `"Chapter One"`))
+	strings.builder_reset(&builder)
+	testing.expect_value(t, frame(&builder, input, `{"@context":{"ex":"http://example.org/vocab#"},"@type":"ex:Missing"}`), Frame_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"@graph": []`))
+	strings.builder_reset(&builder)
+	testing.expect_value(t, frame(&builder, input, frame_document, Frame_Options{max_embedding_depth = 1}), Frame_Error.Embedding_Limit)
+	testing.expect_value(t, strings.to_string(builder), "")
+	testing.expect_value(t, frame(&builder, input, `{"@context":{"ex":"http://example.org/vocab#"},"@type":"ex:Library","@embed":"@never"}`), Frame_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"@type": "ex:Library"`))
+}
+
+@(test)
+test_term_scoped_context_is_retained_and_applied :: proc(t: ^testing.T) {
+	parsed, json_error := json.parse_string(`{"p1":{"@context":{"@protected":true,"p2":{"@id":"ex:p2","@type":"@id"}},"@id":"ex:p1"}}`, .JSON, true)
+	defer json.destroy_value(parsed)
+	testing.expect_value(t, json_error, json.Error.None)
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = DEFAULT_MAX_CONTEXTS, max_remote = DEFAULT_MAX_REMOTE_CONTEXTS, allow_document_containers = true}
+	defer destroy_state(&state)
+	ctx, make_error := make_context(&state, nil)
+	testing.expect_value(t, make_error.code, Error_Code.None)
+	context_error: Parse_Error
+	ctx, context_error = apply_context(&state, &ctx, parsed)
+	testing.expect_value(t, context_error.code, Error_Code.None)
+	definition := ctx.terms["p1"]
+	testing.expect(t, definition.has_local_context)
+	scoped, scoped_error := apply_term_scoped_context(&state, &ctx, definition)
+	testing.expect_value(t, scoped_error.code, Error_Code.None)
+	_, has_p2 := scoped.terms["p2"]
+	testing.expect(t, has_p2)
+	value, value_error := json.parse_string(`{"@id":"ex:1","@type":"T","p2":"ex:test"}`, .JSON, true)
+	defer json.destroy_value(value)
+	testing.expect_value(t, value_error, json.Error.None)
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	written, expand_error := expand_write_single(&builder, &state, &ctx, definition, value, true)
+	testing.expect(t, written)
+	testing.expect_value(t, expand_error, Expand_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"ex:p2"`))
+	full_input := `{"@context":{"T":{"@id":"ex:T","@context":{}},"p1":{"@id":"ex:p1","@context":{"@protected":true,"p2":{"@id":"ex:p2","@type":"@id"}}}},"p1":{"@id":"ex:1","@type":"T","p2":"ex:test"}}`
+	full_builder := strings.builder_make()
+	defer strings.builder_destroy(&full_builder)
+	testing.expect_value(t, expand_document(&full_builder, full_input, Expand_Options{}, false, false), Expand_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(full_builder), `"ex:p2"`))
+	compact_context, compact_context_error := json.parse_string(`{"@version":1.1,"@vocab":"http://example.org/vocab#","Production":{"@context":{"part":{"@container":"@set","@type":"@id"}}}}`, .JSON, true)
+	defer json.destroy_value(compact_context)
+	testing.expect_value(t, compact_context_error, json.Error.None)
+	compact_state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = DEFAULT_MAX_CONTEXTS, max_remote = DEFAULT_MAX_REMOTE_CONTEXTS, allow_document_containers = true}
+	defer destroy_state(&compact_state)
+	compact_ctx, compact_make_error := make_context(&compact_state, nil)
+	testing.expect_value(t, compact_make_error.code, Error_Code.None)
+	compact_apply_error: Parse_Error
+	compact_ctx, compact_apply_error = apply_context(&compact_state, &compact_ctx, compact_context)
+	testing.expect_value(t, compact_apply_error.code, Error_Code.None)
+	node_value, node_error := json.parse_string(`{"@type":["http://example.org/vocab#Production"]}`, .JSON, true)
+	defer json.destroy_value(node_value)
+	node, node_valid := object_from_value(node_value)
+	testing.expect_value(t, node_error, json.Error.None)
+	testing.expect(t, node_valid)
+	scoped_compact, scoped_compact_error := frame_context_for_node(&compact_state, &compact_ctx, node)
+	testing.expect_value(t, scoped_compact_error, Compact_Error.None)
+	part_definition, has_part := scoped_compact.terms["part"]
+	testing.expect(t, has_part && part_definition.container_set)
+	compact_node_value, compact_node_error := json.parse_string(`{"@id":"_:b0","@type":["http://example.org/vocab#Production"],"http://example.org/vocab#part":[{"@id":"_:b1","@type":["http://example.org/vocab#Production"]}]}`, .JSON, true)
+	defer json.destroy_value(compact_node_value)
+	compact_node, compact_node_valid := object_from_value(compact_node_value)
+	testing.expect_value(t, compact_node_error, json.Error.None)
+	testing.expect(t, compact_node_valid)
+	compact_builder := strings.builder_make()
+	defer strings.builder_destroy(&compact_builder)
+	testing.expect_value(t, frame_compact_write_node(&compact_builder, &compact_state, &compact_ctx, compact_node, .Compact), Compact_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(compact_builder), `"part": [`))
+	frame_builder := strings.builder_make()
+	defer strings.builder_destroy(&frame_builder)
+	frame_input := `{"@context":{"@version":1.1,"@vocab":"http://example.org/vocab#"},"@id":"http://example.org/1","@type":"HumanMadeObject","produced_by":{"@type":"Production","_label":"Top Production","part":{"@type":"Production","_label":"Test Part"}}}`
+	frame_document := `{"@context":{"@version":1.1,"@vocab":"http://example.org/vocab#","Production":{"@context":{"part":{"@container":"@set","@type":"@id"}}}},"@id":"http://example.org/1"}`
+	testing.expect_value(t, frame(&frame_builder, frame_input, frame_document, Frame_Options{context_options = {base_iri = "https://w3c.github.io/json-ld-framing/tests/frame/0062-in.jsonld"}}), Frame_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(frame_builder), `"part": [`))
 }

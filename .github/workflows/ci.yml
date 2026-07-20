@@ -59,6 +59,11 @@ jobs:
       - run: ./scripts/run-w3c-turtle-tests.sh
 
       - run: ./scripts/run-w3c-jsonld-tests.sh
+      - run: ./scripts/run-w3c-jsonld-expand-tests.sh
+      - run: ./scripts/run-w3c-jsonld-flatten-tests.sh
+      - run: ./scripts/run-w3c-jsonld-framing-tests.sh
+      - run: ./scripts/run-w3c-jsonld-fromrdf-tests.sh
+      - run: ./scripts/run-w3c-jsonld-compact-tests.sh
       - run: ./scripts/run-w3c-rdfxml-tests.sh
       - run: ./scripts/run-w3c-trig-tests.sh
       - run: ./scripts/run-w3c-rdf-canon-tests.sh
@@ -87,6 +92,11 @@ jobs:
       - run: odin check tests/w3c/support -no-entry-point -vet -warnings-as-errors
 
       - run: odin check tests/w3c/jsonld_runner -vet -warnings-as-errors
+      - run: odin check tests/w3c/jsonld_expand_runner -vet -warnings-as-errors
+      - run: odin check tests/w3c/jsonld_flatten_runner -vet -warnings-as-errors
+      - run: odin check tests/w3c/jsonld_frame_runner -vet -warnings-as-errors
+      - run: odin check tests/w3c/jsonld_fromrdf_runner -vet -warnings-as-errors
+      - run: odin check tests/w3c/jsonld_compact_runner -vet -warnings-as-errors
       - run: odin check tests/w3c/rdfxml_runner -vet -warnings-as-errors
       - run: odin check tests/w3c/trig_runner -vet -warnings-as-errors
       - run: odin check tests/w3c/canon_runner -vet -warnings-as-errors

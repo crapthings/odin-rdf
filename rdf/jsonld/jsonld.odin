@@ -132,9 +132,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	container_set:  bool,
 	container_language: bool,
 	container_index: bool,
+	container_graph: bool,
+	container_id:    bool,
+	container_type:  bool,
 	index:          string,
 	has_index:      bool,
 	reverse:        bool,
+	disabled:       bool,
+	has_local_context: bool,
+	local_context:     string,
 }
 
 @(private) Context :: struct {
@@ -162,6 +168,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	max_quads:         int,
 	loader:            Document_Loader,
 	loader_data:       rawptr,
+	allow_document_containers: bool,
+	retain_id_only_nodes:       bool,
+	retain_frame_controls:      bool,
+	prune_frame_blank_ids:       bool,
+	referenced_frame_blank_ids:  map[string]bool,
+	canonical_frame_blank_ids:   bool,
+	frame_blank_aliases:         map[string]string,
+	frame_blank_counter:         u64,
 }
 
 @(private) destroy_state :: proc(state: ^State) {
@@ -171,6 +185,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	delete(state.contexts)
 	if state.remote_urls != nil do delete(state.remote_urls)
 	if state.named_bnodes != nil do delete(state.named_bnodes)
+	if state.referenced_frame_blank_ids != nil do delete(state.referenced_frame_blank_ids)
+	if state.frame_blank_aliases != nil do delete(state.frame_blank_aliases)
 }
 
 @(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {
@@ -209,6 +225,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	case json.String: return string(actual), true
 	}
 	return "", false
+}
+
+@(private) bool_value :: proc(value: json.Value) -> (bool, bool) {
+	#partial switch actual in value {
+	case json.Boolean: return bool(actual), true
+	}
+	return false, false
 }
 
 @(private) object_from_value :: proc(value: json.Value) -> (json.Object, bool) {
@@ -292,7 +315,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return own(state, value)
 }
 
-@(private) apply_container :: proc(definition: ^Term_Definition, value: json.Value) -> bool {
+@(private) apply_container :: proc(state: ^State, definition: ^Term_Definition, value: json.Value) -> bool {
 	items: [dynamic]json.Value
 	defer delete(items)
 	if _, is_string := string_value(value); is_string {
@@ -319,14 +342,25 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		case "@index":
 			if definition.container_index do return false
 			definition.container_index = true
+		case "@graph":
+			if !state.allow_document_containers || definition.container_graph do return false
+			definition.container_graph = true
+		case "@id":
+			if !state.allow_document_containers || definition.container_id do return false
+			definition.container_id = true
+		case "@type":
+			if !state.allow_document_containers || definition.container_type do return false
+			definition.container_type = true
 		case: return false
 		}
 	}
-	// The supported 1.1 combinations retain the same RDF interpretation as
-	// their single-container counterparts. Graph/id/type containers need the
-	// expanded-document layer and remain rejected for now.
+	// The supported combinations retain the same RDF interpretation as their
+	// single-container counterparts. Graph containers are document-level only.
 	if definition.container_list && (definition.container_language || definition.container_index) do return false
 	if definition.container_language && definition.container_index do return false
+	if definition.container_graph && (definition.container_list || definition.container_language) do return false
+	if definition.container_id && (definition.container_list || definition.container_language || definition.container_index) do return false
+	if definition.container_type && (definition.container_list || definition.container_language || definition.container_index || definition.container_id) do return false
 	return true
 }
 
@@ -364,7 +398,19 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	object, ok := object_from_value(value)
 	if !ok do return {}, Parse_Error{code = .Invalid_Context}
 	for key in object {
-		if key == "@direction" || key == "@import" || key == "@propagate" || key == "@protected" || key == "@version" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@direction" || key == "@import" || key == "@propagate" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@protected" {
+			_, valid := bool_value(object[key])
+			if !valid do return {}, Parse_Error{code = .Invalid_Context}
+		}
+		if key == "@version" {
+			if !state.allow_document_containers do return {}, Parse_Error{code = .Unsupported_Feature}
+			#partial switch version in object[key] {
+			case json.Float:   if f64(version) != 1.1 do return {}, Parse_Error{code = .Invalid_Context}
+			case json.Integer: if i64(version) != 1 do return {}, Parse_Error{code = .Invalid_Context}
+			case: return {}, Parse_Error{code = .Invalid_Context}
+			}
+		}
 	}
 	result, make_error := make_context(state, current)
 	if make_error.code != .None do return {}, make_error
@@ -403,7 +449,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	for term, definition_value in object {
 		if strings.has_prefix(term, "@") do continue
 		id, simple := string_value(definition_value)
-		if !simple || !(strings.has_prefix(id, "http://") || strings.has_prefix(id, "https://") || strings.has_prefix(id, "urn:")) do continue
+		if !simple || !(strings.has_prefix(id, "http://") || strings.has_prefix(id, "https://") || strings.has_prefix(id, "urn:") || strings.has_prefix(id, "_:")) do continue
 		identifier, err := own(state, id)
 		if err.code != .None do return {}, err
 		result.terms[term] = Term_Definition{id = identifier}
@@ -414,7 +460,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		is_null := false
 		#partial switch _ in definition_value { case json.Null: is_null = true }
 		if is_null {
-			delete_key(&result.terms, term)
+			result.terms[term] = Term_Definition{disabled = true}
 			continue
 		}
 		if simple_id, simple := string_value(definition_value); simple {
@@ -436,6 +482,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			#partial switch null in id_value {
 			case json.Null:
 				definition.id = ""
+				definition.disabled = true
 			case:
 				id, valid := string_value(id_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
@@ -471,7 +518,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			}
 		}
 		if container_value, found := object_value(definition_object, "@container"); found {
-			if !apply_container(&definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if !apply_container(state, &definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		}
 		if index_value, found := object_value(definition_object, "@index"); found {
 			index_name, valid := string_value(index_value)
@@ -484,10 +531,32 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			}
 			definition.has_index = true
 		}
+		if local_context, found := object_value(definition_object, "@context"); found {
+			serialized := strings.builder_make()
+			if !compact_write_raw_json(&serialized, local_context) {
+				strings.builder_destroy(&serialized)
+				return {}, Parse_Error{code = .Invalid_Term_Definition}
+			}
+			definition.local_context, make_error = own(state, strings.to_string(serialized))
+			strings.builder_destroy(&serialized)
+			if make_error.code != .None do return {}, make_error
+			definition.has_local_context = true
+		}
 		result.terms[term] = definition
 	}
 	retain_context(state, result)
 	return result, {}
+}
+
+// Term-scoped contexts apply to values of a term and to nodes whose type is
+// represented by that term. Keeping the parsed form as owned JSON text makes
+// contexts safe to retain after their source document has been released.
+@(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition) -> (Context, Parse_Error) {
+	if !definition.has_local_context do return current^, {}
+	value, json_error := json.parse_string(definition.local_context, .JSON, true)
+	if json_error != .None do return {}, Parse_Error{code = .Invalid_Context}
+	defer json.destroy_value(value)
+	return apply_context(state, current, value)
 }
 
 @(private) blank_node :: proc(state: ^State) -> (rdf.Term, Parse_Error) {
@@ -918,9 +987,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
 			// @nest is syntactic sugar: process its ordinary entries against the same subject.
 			for nested_key, nested_value in nested {
+				definition := active_context.terms[nested_key]
+				if definition.disabled do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, nested_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
-				definition := active_context.terms[nested_key]
 				values, array := array_from_value(nested_value)
 				value_count := array ? len(values) : 1
 				if definition.container_list {
@@ -939,9 +1009,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			continue
 		}
 		if len(keyword) > 0 do continue
+		definition := active_context.terms[key]
+		if definition.disabled do continue
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
-		definition := active_context.terms[key]
 		if (definition.container_language || definition.container_index) && is_container_map(property_value) {
 			mapped: [dynamic]rdf.Term
 			mapped_error: Parse_Error

@@ -2,6 +2,19 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.24.0 - 2026-07-20
+
+- Add bounded, deterministic JSON-LD Expansion and Flattening APIs. Expansion
+  preserves document-level JSON-LD annotations before RDF conversion; Flattening
+  builds a bounded deterministic node-map.
+- Add a bounded JSON-LD Framing profile with recursive embedding, standard
+  embed modes, `@explicit`, defaults, `@requireAll`, value/list patterns, and
+  basic reverse framing. Named-graph matching, `@included`, and the remaining
+  Framing policy matrix remain explicitly out of scope.
+- Add pinned W3C core gates for 73 Expansion, 35 Flattening, and 79 Framing
+  vectors. No implicit network access is added; document loading remains
+  caller-controlled.
+
 ## 0.23.0 - 2026-07-18
 
 - Add bounded, deterministic RDF dataset to expanded JSON-LD serialization with

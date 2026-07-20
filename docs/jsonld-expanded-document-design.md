@@ -22,9 +22,31 @@ expand(builder: ^strings.Builder, input: string,
        options: Expand_Options = {}) -> Expand_Error
 flatten(builder: ^strings.Builder, input: string,
         options: Flatten_Options = {}) -> Flatten_Error
+frame(builder: ^strings.Builder, input, frame: string,
+      options: Frame_Options = {}) -> Frame_Error
 ```
 
-Both operations accept a complete bounded JSON-LD document and atomically
+`expand` is implemented as the first bounded document-level operation. Its
+current core is guarded by 73 pinned W3C Expand vectors and covers aliases,
+value/type/language expansion, lists, sets, transparent nesting, language/index
+containers, reverse maps, default/named graph expansion, and document-level
+`@graph`, `@id`, and `@type` containers. Scoped contexts remain later
+context-profile work.
+
+`flatten` expands first, then builds a bounded deterministic node-map that
+merges embedded nodes, allocates blank nodes, preserves list/index values,
+converts reverse maps into forward node references, and retains nested graph
+objects in their enclosing graph map. It consumes the same document-level
+container profile as Expansion.
+
+`frame` consumes that same node-map and returns a context-directed document.
+It supports `@id`, `@type`, property, value, and list matching; recursive
+embedding with standard embed modes; `@explicit`, defaults, and
+`@requireAll`, and basic reverse framing. Cycles fall back to `@id`
+references. Named-graph and `@included` framing are still outside the
+implemented policy matrix.
+
+All three operations accept a complete bounded JSON-LD document and atomically
 append output only after successful processing. They use the existing opt-in
 document loader contract; neither adds implicit network I/O.
 
@@ -46,12 +68,15 @@ renamed or treated as a JSON-LD `expand` implementation.
 
 ## Delivery gates
 
-1. Expansion core: aliases, `@id`, `@type`, scalar and value expansion,
-   lists, `@set`, language and index maps, `@reverse`, and `@graph`.
-2. A pinned W3C Expand core selection with structural JSON comparison.
-3. Flatten node-map generation and graph merging over the expanded document.
-4. A pinned W3C Flatten core selection, including index and named-graph cases.
-5. Only then add Framing; framing consumes the same node-map representation.
+1. Expansion core: implemented for aliases, `@id`, `@type`, scalar and value
+   expansion, lists, `@set`, `@nest`, language and index maps, `@reverse`, and `@graph`.
+2. A 73-case pinned W3C Expand core selection with structural JSON comparison.
+3. Default-graph Flatten node-map generation: implemented.
+4. A 35-case pinned W3C Flatten selection with structural JSON
+   comparison: implemented.
+5. Framing over the same representation: implemented with a 79-case W3C
+   regression gate. Its bounded initial profile is specified in the
+   [JSON-LD Framing delivery design](jsonld-framing-design.md).
 
 The existing JSON-LD to-RDF, RDF-to-JSON-LD, and context-directed compaction
 gates remain mandatory for every stage.

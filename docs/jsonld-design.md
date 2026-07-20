@@ -10,11 +10,36 @@ document state.
 ```odin
 parse(input: string, sink: Sink, options: Options = {}, user_data: rawptr = nil) -> Parse_Error
 parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {}, user_data: rawptr = nil) -> Reader_Result
+expand(builder: ^strings.Builder, input: string, options: Expand_Options = {}) -> Expand_Error
+flatten(builder: ^strings.Builder, input: string, options: Flatten_Options = {}) -> Flatten_Error
+frame(builder: ^strings.Builder, input, frame: string, options: Frame_Options = {}) -> Frame_Error
 ```
 
-Both entry points produce `rdf.Quad` values. String fields are transient and
+`parse` and `parse_reader` produce `rdf.Quad` values. String fields are transient and
 valid for the callback only. The reader retains at most `max_document_bytes`
 (16 MiB by default); it is a bounded document reader, not a record stream.
+
+`expand` is separate from `serialize`: it takes a JSON-LD document and emits
+the JSON-LD Expansion form before an RDF conversion could discard ordinary
+`@index` annotations. It is atomic, deterministic, and independently bounds
+the expanded output at 32 MiB by default. Its first W3C-gated core includes
+aliases, value/type/language expansion, `@list`, `@set`, `@nest`, language and
+index containers, reverse maps, default/named graph expansion, and document-level
+`@graph`, `@id`, and `@type` containers including `@graph` composites.
+
+`flatten` consumes that expanded-document boundary and emits a deterministic,
+bounded node-map. It merges embedded nodes by identifier, preserves lists and
+ordinary `@index`, applies reverse relationships to their referenced nodes,
+and retains nested graph objects.
+
+`frame` reuses that bounded node-map and atomically emits a context-directed
+`@graph` document. Its first profile matches nodes by `@id`, `@type`, and
+required ordinary properties, then recursively embeds values selected by nested
+property frames. Cycles are represented by `@id` references. It bounds nodes,
+embedding depth (128 by default), and output bytes (32 MiB by default). It
+supports `@explicit`, scalar and type defaults, value/list patterns, all
+standard embed modes, ordinary-property `@requireAll`, and basic reverse
+framing. Named-graph matching and `@included` remain later work.
 
 ```odin
 serialize(builder: ^strings.Builder, quads: []rdf.Quad,
@@ -72,9 +97,9 @@ compaction. The input processor accepts language and index containers,
 including their `@set` combinations; an
 ordinary `@index` is JSON-LD annotation rather than RDF data, so an RDF
 dataset cannot later reproduce its original keys. A custom `@index` property
-does become an RDF statement and is retained. Framing, a built-in HTTP loader,
-directional literals, scoped contexts, `@import`, protected terms, and graph
-containers remain separate conformance milestones.
+does become an RDF statement and is retained. A built-in HTTP loader,
+directional literals, scoped contexts, `@import`, protected terms, and the
+remaining Framing policy matrix remain separate conformance milestones.
 
 ## Conversion and CLI
 
@@ -107,7 +132,14 @@ vectors from the same pinned corpus. It parses both generated and expected
 documents and compares their RDFC-1.0 canonical RDF datasets, so the gate
 checks compaction semantics without requiring meaningless object-key ordering.
 
-The next document-level work is specified in
-[Expanded JSON-LD document core](jsonld-expanded-document-design.md). It keeps
-JSON-LD expansion and flattening separate from RDF dataset serialization so
-that JSON-LD-only metadata is not silently lost.
+`scripts/run-w3c-jsonld-framing-tests.sh` runs 79 pinned Framing vectors for
+nested and deep-node embedding, type and `@id` selection, value/list patterns,
+all embed modes, defaults, `@requireAll`, JSON-LD 1.1 graph shape, and invalid
+frame paths. It structurally compares the context-directed result.
+The selected vectors are the executable boundary for the current framing
+profile, not a claim of full JSON-LD Framing conformance.
+
+The document core is specified in
+[Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future
+work extends its framing policy matrix while retaining JSON-LD-only metadata
+outside the RDF conversion path.

@@ -193,6 +193,12 @@ parse(input: string, sink: Sink, options: Options = {},
       user_data: rawptr = nil) -> Parse_Error
 parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {},
              user_data: rawptr = nil) -> Reader_Result
+expand(builder: ^strings.Builder, input: string,
+       options: Expand_Options = {}) -> Expand_Error
+flatten(builder: ^strings.Builder, input: string,
+        options: Flatten_Options = {}) -> Flatten_Error
+frame(builder: ^strings.Builder, input, frame: string,
+      options: Frame_Options = {}) -> Frame_Error
 serialize(builder: ^strings.Builder, quads: []rdf.Quad,
           options: Serialize_Options = {}) -> Serialize_Error
 compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
@@ -210,6 +216,36 @@ document bound through `max_document_bytes`. `Reader_Result` reports `quads`,
 `bytes_read`, and any underlying `reader_error`. See the [JSON-LD design
 boundary](jsonld-design.md) for the supported to-RDF profile and deliberately
 deferred JSON-LD API features.
+
+`expand` is the document-level JSON-LD operation: it atomically appends a
+deterministic expanded document before conversion to RDF can discard ordinary
+`@index` annotations. `Expand_Options.context_options` has the same bounded,
+opt-in loader policy as `parse`; `max_output_bytes` defaults to 32 MiB. The
+current core covers aliases, values and coercion, `@list`, `@set`, `@nest`,
+language and index containers, `@reverse`, default/named graph expansion, and
+document-level `@graph`, `@id`, and `@type` containers (including
+`[@graph, @index]` / `[@graph, @id]` composites). It does not yet implement
+scoped contexts.
+
+`flatten` first expands the document, then atomically produces a deterministic
+node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,
+preserves lists and `@index`, normalizes reverse properties, and retains nested
+`@graph` objects.
+`Flatten_Options.max_nodes` defaults to 100,000 and `max_output_bytes` to
+32 MiB.
+
+`frame` expands both source and frame, builds the bounded flattened node-map,
+and atomically writes the frame context. It matches `@id`, `@type`, ordinary
+properties, value patterns, and list patterns; nested property frames embed
+matching nodes, while cycles become `@id` references. `@explicit`, defaults,
+`@omitDefault`, and `@requireAll` are supported. Embed controls include
+boolean values and `@always`, `@never`, `@first`, `@last`, and `@once`.
+JSON-LD 1.1 is the default processing mode and emits one framed node directly;
+use `.Json_LD_1_0` for legacy `@graph` output, or set both `omit_graph` and
+`omit_graph_set` to select graph shape explicitly. `max_nodes`,
+`max_embedding_depth` (128), and `max_output_bytes` (32 MiB) bound retained
+and materialized state. Basic reverse framing and reverse-term aliases are
+supported; named-graph matching and `@included` remain unsupported.
 
 `serialize` atomically appends deterministic expanded JSON-LD for a complete
 dataset, including named graphs. `Serialize_Options.max_quads` defaults to

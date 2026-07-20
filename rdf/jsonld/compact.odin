@@ -114,7 +114,19 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 }
 
 @(private) compact_iri :: proc(state: ^State, ctx: ^Context, value: string, vocab: bool) -> (string, Compact_Error) {
-	if strings.has_prefix(value, "_:") do return value, .None
+	if strings.has_prefix(value, "_:") {
+		if !state.canonical_frame_blank_ids do return value, .None
+		if alias, found := state.frame_blank_aliases[value]; found do return alias, .None
+		builder := strings.builder_make()
+		defer strings.builder_destroy(&builder)
+		strings.write_string(&builder, "_:b")
+		strings.write_u64(&builder, state.frame_blank_counter)
+		state.frame_blank_counter += 1
+		alias, own_error := own(state, strings.to_string(builder))
+		if own_error.code != .None do return "", .Out_Of_Memory
+		state.frame_blank_aliases[value] = alias
+		return alias, .None
+	}
 	best := ""
 	for term, definition in ctx.terms {
 		if definition.reverse || len(definition.id) == 0 do continue
@@ -122,6 +134,10 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	}
 	if vocab && len(ctx.vocab) > 0 && strings.has_prefix(value, ctx.vocab) {
 		candidate := value[len(ctx.vocab):]
+		if len(candidate) > 0 && compact_prefer(candidate, best) do best = candidate
+	}
+	if !vocab && len(ctx.base_iri) > 0 && strings.has_prefix(value, ctx.base_iri) {
+		candidate := value[len(ctx.base_iri):]
 		if len(candidate) > 0 && compact_prefer(candidate, best) do best = candidate
 	}
 	for term, definition in ctx.terms {
@@ -217,10 +233,13 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		}
 	}
 	if len(best) > 0 do return best, best_definition, true, .None
-	// No single term can represent this mixed value set. Leaving the property
-	// expanded is semantically exact; choosing an arbitrary context alias could
-	// silently add a language, type, or list container.
-	return iri, {}, false, .None
+	// No single term can represent this mixed value set. A plain compact IRI
+	// preserves those value semantics while still using an applicable prefix.
+	// (Choosing a term definition here could add language, type, or container
+	// semantics that the expanded values did not have.)
+	compacted, err := compact_iri(state, ctx, iri, true)
+	if err != .None do return "", {}, false, err
+	return compacted, {}, false, .None
 }
 
 @(private) compact_write_raw_json :: proc(builder: ^strings.Builder, value: json.Value) -> bool {

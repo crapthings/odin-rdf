@@ -322,6 +322,12 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	strings.write_byte(builder, '[')
 	for item, index in array {
 		if index > 0 do strings.write_string(builder, ", ")
+		if item_object, is_object := object_from_value(item); is_object {
+			if nested_list, has_list := object_value(item_object, "@list"); has_list {
+				if err := compact_write_list(builder, state, ctx, nested_list, definition, has_definition, policy); err != .None do return err
+				continue
+			}
+		}
 		if err := compact_write_value(builder, state, ctx, item, definition, has_definition, policy); err != .None do return err
 	}
 	strings.write_byte(builder, ']')

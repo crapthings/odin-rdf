@@ -525,7 +525,7 @@ test_language_and_index_containers_preserve_rdf_semantics :: proc(t: ^testing.T)
   "@context": {"label":{"@id":"https://example.test/label","@container":"@language"},"person":{"@id":"https://example.test/person","@container":"@index","@index":"https://example.test/name"}},
   "@id":"https://example.test/article",
   "label":{"en":"Hello","de":["Hallo","Guten Tag"]},
-  "person":{"alice":{"@id":"https://example.test/alice"}}
+  "person":{"alice":{"@id":"https://example.test/alice"},"discarded":null,"alsoDiscarded":{"@value":null}}
 }`
 	parsed, parse_error := parse_to_nquads(input)
 	defer delete(parsed)

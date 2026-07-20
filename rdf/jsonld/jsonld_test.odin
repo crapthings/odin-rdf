@@ -764,6 +764,28 @@ test_null_term_definitions_suppress_rdf_and_document_properties :: proc(t: ^test
 }
 
 @(test)
+test_null_local_context_resets_to_rdf_term_mappings :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "child": "https://example.test/child",
+    "discarded": "https://example.test/discarded"
+  },
+  "@id": "https://example.test/root",
+  "child": {
+    "@context": null,
+    "@id": "https://example.test/child-node",
+    "discarded": "not emitted",
+    "https://example.test/retained": "yes"
+  }
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/root> <https://example.test/child> <https://example.test/child-node> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/child-node> <https://example.test/retained> "yes" .`))
+	testing.expect(t, !strings.contains(actual, "discarded"))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

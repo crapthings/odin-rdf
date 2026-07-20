@@ -1359,12 +1359,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				for index in 0..<len(graph_nodes) {
 					node_value := graph_nodes[index]
 					node, valid := object_from_value(node_value)
-					if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+					// Free-floating values do not produce RDF statements. A list has
+					// no graph-visible anchor either, so do not emit its RDF cells.
+					if !valid do continue
+					if _, is_list := has_keyword(node, &active_context, "@list"); is_list do continue
 					if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
 				}
 			} else {
 				node, valid := object_from_value(property_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+				if _, is_list := has_keyword(node, &active_context, "@list"); is_list do continue
 				if _, graph_err := process_node(state, &active_context, node, graph_quad); graph_err.code != .None do return {}, graph_err
 			}
 			continue

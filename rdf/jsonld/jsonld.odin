@@ -480,6 +480,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 // JSON-LD 1.1 permits one @import indirection only; outer context members are
 // applied afterwards and therefore deliberately override imported definitions.
 @(private) apply_context_inner :: proc(state: ^State, current: ^Context, value: json.Value, imported_context, propagate: bool) -> (Context, Parse_Error) {
+	#partial switch _ in value {
+	case json.Null:
+		result, err := make_context(state, nil)
+		if err.code != .None do return {}, err
+		// A null local context resets the active term, vocabulary, language, and
+		// direction settings. Keep the document base available for relative IRIs.
+		result.base_iri = current.base_iri
+		retain_context(state, result)
+		return result, {}
+	}
 	if array, ok := array_from_value(value); ok {
 		result := current^
 		array_propagate := propagate

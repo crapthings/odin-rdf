@@ -820,6 +820,22 @@ test_object_term_definitions_expand_same_context_compact_iris :: proc(t: ^testin
 }
 
 @(test)
+test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"knows":"https://example.test/knows"},
+  "@id":"https://example.test/alice",
+  "@reverse": {
+    "knows":{"@id":"https://example.test/bob"},
+    "ignored":{"@id":"https://example.test/carol"}
+  }
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/bob> <https://example.test/knows> <https://example.test/alice> .`))
+	testing.expect(t, !strings.contains(actual, "carol"))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

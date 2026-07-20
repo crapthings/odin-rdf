@@ -1008,6 +1008,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		return rdf.literal(text), {}
 	case json.Boolean:
 		lexical := bool(actual) ? "true" : "false"
+		type_iri := definition.type
+		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" do type_iri = ""
+		if len(type_iri) > 0 do return rdf.typed_literal(lexical, type_iri), {}
 		return rdf.typed_literal(lexical, XSD_BOOLEAN), {}
 	case json.Integer, json.Float:
 		type_iri := definition.type

@@ -794,6 +794,17 @@ test_blank_node_types_remain_blank_nodes_in_rdf :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_boolean_values_honor_term_datatype_coercion :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"flag":{"@id":"https://example.test/flag","@type":"https://example.test/boolean"}},
+  "flag":true
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/flag> "true"^^<https://example.test/boolean> .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

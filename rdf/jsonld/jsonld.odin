@@ -1414,7 +1414,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	for type_key, mapped_value in map_object {
 		value_context := ctx^
 		if type_definition, found := ctx.terms[type_key]; found {
-			updated, context_err := apply_term_scoped_context(state, ctx, type_definition)
+			// A type map's key selects the context for its value. If the
+			// containing value was already under a non-propagating type scope,
+			// start from its previous context rather than leaking that scope.
+			scoped_base := ctx^
+			if ctx.has_previous do scoped_base = previous_context(ctx)
+			updated, context_err := apply_term_scoped_context(state, &scoped_base, type_definition)
 			if context_err.code != .None {
 				delete(result)
 				return {}, context_err
@@ -1543,6 +1548,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			type_term, term_err := expanded_identifier_term(state, type_iri)
 			if term_err.code != .None do return {}, term_err
 			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
+			if definition, found := active_context.terms[type_name]; found && definition.has_local_context {
+				updated, context_err := apply_term_scoped_context(state, &active_context, definition)
+				if context_err.code != .None do return {}, context_err
+				active_context = updated
+			}
 		}
 	}
 

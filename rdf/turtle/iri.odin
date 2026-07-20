@@ -116,6 +116,128 @@ import "core:strings"
 	}
 }
 
+@(private) same_iri_authority :: proc(a, b: IRI_Parts) -> bool {
+	return a.has_authority == b.has_authority && (!a.has_authority || a.authority == b.authority)
+}
+
+@(private) write_base_directory :: proc(path: string, builder: ^strings.Builder) {
+	if len(path) == 0 do return
+	if path[len(path) - 1] == '/' {
+		strings.write_string(builder, path)
+		return
+	}
+	if slash := strings.last_index_byte(path, '/'); slash >= 0 do strings.write_string(builder, path[:slash + 1])
+}
+
+@(private) write_relative_path :: proc(base_path, target_path: string, builder: ^strings.Builder) {
+	base_directory_builder := strings.builder_make()
+	defer strings.builder_destroy(&base_directory_builder)
+	write_base_directory(base_path, &base_directory_builder)
+	base_directory := strings.to_string(base_directory_builder)
+
+	common_end := 0
+	limit := len(base_directory) < len(target_path) ? len(base_directory) : len(target_path)
+	for index in 0..<limit {
+		if base_directory[index] != target_path[index] do break
+		if base_directory[index] == '/' do common_end = index + 1
+	}
+
+	base_tail := base_directory[common_end:]
+	segment_start := 0
+	for index in 0..<len(base_tail) {
+		if base_tail[index] == '/' {
+			if index > segment_start do strings.write_string(builder, "../")
+			segment_start = index + 1
+		}
+	}
+	if segment_start < len(base_tail) do strings.write_string(builder, "../")
+
+	target_tail := target_path[common_end:]
+	if len(target_tail) > 0 {
+		strings.write_string(builder, target_tail)
+	} else if len(base_tail) == 0 {
+		// An empty reference inherits the base document, not its directory.
+		strings.write_string(builder, "./")
+	}
+}
+
+@(private) relative_path_needs_dot_prefix :: proc(value: string) -> bool {
+	if len(value) == 0 || strings.has_prefix(value, "./") || strings.has_prefix(value, "../") || value[0] == '/' do return false
+	// JSON-LD treats keyword-like values specially. A path segment beginning
+	// with @ must therefore be explicitly document-relative.
+	if value[0] == '@' do return true
+	for character in value {
+		if character == ':' do return true
+		if character == '/' || character == '?' || character == '#' do break
+	}
+	return false
+}
+
+@(private) write_reference_suffix :: proc(builder: ^strings.Builder, parts: IRI_Parts) {
+	if parts.has_query {
+		strings.write_byte(builder, '?')
+		strings.write_string(builder, parts.query)
+	}
+	if parts.has_fragment {
+		strings.write_byte(builder, '#')
+		strings.write_string(builder, parts.fragment)
+	}
+}
+
+@(private) consider_relative_reference :: proc(base, target, candidate: string, best: ^string) {
+	if len(candidate) == 0 do return
+	resolved, ok := resolve_iri_reference(base, candidate)
+	if !ok do return
+	valid := resolved == target
+	delete(resolved)
+	if !valid || (len(best^) > 0 && (len(candidate) > len(best^) || (len(candidate) == len(best^) && strings.compare(candidate, best^) >= 0))) do return
+	copy := strings.clone(candidate) or_else ""
+	if len(copy) == 0 do return
+	if len(best^) > 0 do delete(best^)
+	best^ = copy
+}
+
+// relativize_iri_reference returns the shortest safe relative reference from
+// base to target when both references share a scheme and authority. The result
+// is validated through resolve_iri_reference so query, fragment, dot-segment,
+// and keyword-like path edge cases retain RFC 3986 semantics.
+relativize_iri_reference :: proc(base, target: string) -> (string, bool) {
+	b := split_reference(base)
+	t := split_reference(target)
+	if len(b.scheme) == 0 || len(t.scheme) == 0 || b.scheme != t.scheme || !same_iri_authority(b, t) do return "", false
+
+	best := ""
+
+	path_builder := strings.builder_make()
+	defer strings.builder_destroy(&path_builder)
+	write_relative_path(b.path, t.path, &path_builder)
+	path := strings.to_string(path_builder)
+	candidate_builder := strings.builder_make()
+	defer strings.builder_destroy(&candidate_builder)
+	if relative_path_needs_dot_prefix(path) do strings.write_string(&candidate_builder, "./")
+	strings.write_string(&candidate_builder, path)
+	write_reference_suffix(&candidate_builder, t)
+	consider_relative_reference(base, target, strings.to_string(candidate_builder), &best)
+
+	// When the path is unchanged, query- and fragment-only references are both
+	// shorter and avoid manufacturing a redundant document filename.
+	if t.path == b.path && t.has_query {
+		strings.builder_reset(&candidate_builder)
+		strings.write_byte(&candidate_builder, '?')
+		strings.write_string(&candidate_builder, t.query)
+		write_reference_suffix(&candidate_builder, IRI_Parts{has_fragment = t.has_fragment, fragment = t.fragment})
+		consider_relative_reference(base, target, strings.to_string(candidate_builder), &best)
+	}
+	if t.path == b.path && t.has_fragment && t.has_query == b.has_query && (!t.has_query || t.query == b.query) {
+		strings.builder_reset(&candidate_builder)
+		strings.write_byte(&candidate_builder, '#')
+		strings.write_string(&candidate_builder, t.fragment)
+		consider_relative_reference(base, target, strings.to_string(candidate_builder), &best)
+	}
+	if len(best) == 0 do return "", false
+	return best, true
+}
+
 // resolve_iri_reference resolves a reference against an absolute base according
 // to RFC 3986. Syntax packages use it for document-relative RDF identifiers.
 resolve_iri_reference :: proc(base, reference: string) -> (string, bool) {

@@ -532,6 +532,51 @@ test_compaction_uses_an_imported_context :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_compaction_relativizes_document_identifiers_against_base :: proc(t: ^testing.T) {
+	base := "https://w3c.github.io/json-ld-api/tests/compact/0045-in.jsonld"
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{
+			subject = rdf.iri("https://w3c.github.io/json-ld-api/tests/compact/term"),
+			predicate = rdf.iri("http://example.com/property"),
+			object = rdf.iri("https://w3c.github.io/json-ld-api/tests/parent-node"),
+		}),
+	}
+	context_text := `{"@context":{"term":"http://example.com/terms-are-not-considered-in-id","property":{"@id":"http://example.com/property","@type":"@id"},"@vocab":"http://example.org/vocab-is-not-considered-for-id"}}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Compact_Options{context_options = {base_iri = base}}
+	testing.expect_value(t, compact(&builder, quads, context_text, options), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"@id": "term"`))
+	testing.expect(t, strings.contains(output, `"property": "../parent-node"`))
+	round_trip, parse_error := parse_to_nquads(output, Options{base_iri = base})
+	defer delete(round_trip)
+	testing.expect_value(t, parse_error.code, Error_Code.None)
+	testing.expect(t, strings.contains(round_trip, `<https://w3c.github.io/json-ld-api/tests/compact/term> <http://example.com/property> <https://w3c.github.io/json-ld-api/tests/parent-node> .`))
+}
+
+@(test)
+test_compaction_relativizes_keyword_like_path_segments :: proc(t: ^testing.T) {
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{
+			subject = rdf.blank_node("root"),
+			predicate = rdf.iri("http://example.org/address"),
+			object = rdf.iri("http://localhost/@special"),
+		}),
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Compact_Options{context_options = {base_iri = "http://localhost/"}}
+	testing.expect_value(t, compact(&builder, quads, `{"@context":{"ex":"http://example.org/","@base":"http://localhost/","address":{"@id":"ex:address","@type":"@id"}}}`, options), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"address": "./@special"`))
+	round_trip, parse_error := parse_to_nquads(output, Options{base_iri = "http://localhost/"})
+	defer delete(round_trip)
+	testing.expect_value(t, parse_error.code, Error_Code.None)
+	testing.expect(t, strings.contains(round_trip, `<http://example.org/address> <http://localhost/@special> .`))
+}
+
+@(test)
 test_language_and_index_containers_preserve_rdf_semantics :: proc(t: ^testing.T) {
 	context_text := `{"@context":{"label":{"@id":"https://example.test/label","@container":"@language"},"person":{"@id":"https://example.test/person","@container":"@index","@index":"https://example.test/name"}}}`
 	input := `{

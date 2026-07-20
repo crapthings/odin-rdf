@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Add a reusable RFC 3986 IRI relativizer and use it for JSON-LD Compaction
+  under `@base`, including parent paths, query/fragment-only references, and
+  keyword-like path segments such as `./@special`. Extend the semantic
+  Compaction gate to 109 vectors.
 - Do not use context terms ending in RFC 3986 general delimiters as
   compact-IRI prefixes. Extend the semantic Compaction gate to 105 vectors.
 - Preserve nested RDF lists through both to-RDF and Compaction, writing list

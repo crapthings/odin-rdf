@@ -8,8 +8,8 @@ import dataset "../../../rdf/dataset"
 import jsonld "../../../rdf/jsonld"
 
 main :: proc() {
-	if len(os.args) != 3 && len(os.args) != 4 {
-		fmt.eprintln("usage: jsonld_compact_runner <input.jsonld> <context.jsonld> [--rdf-direction-i18n|--rdf-direction-compound]")
+	if len(os.args) < 3 {
+		fmt.eprintln("usage: jsonld_compact_runner <input.jsonld> <context.jsonld> [--base IRI] [--rdf-direction-i18n|--rdf-direction-compound]")
 		os.exit(2)
 	}
 	input, input_error := os.read_entire_file(os.args[1], context.allocator)
@@ -32,14 +32,24 @@ main :: proc() {
 	defer dataset.destroy(&collector)
 	parse_options: jsonld.Options
 	compact_options: jsonld.Compact_Options
-	if len(os.args) == 4 {
-		if os.args[3] != "--rdf-direction-i18n" && os.args[3] != "--rdf-direction-compound" {
-			fmt.eprintf("unknown compact runner option: %s\n", os.args[3])
+	for index := 3; index < len(os.args); index += 1 {
+		switch os.args[index] {
+		case "--base":
+			if index + 1 >= len(os.args) {
+				fmt.eprintln("--base requires an absolute IRI")
+				os.exit(2)
+			}
+			index += 1
+			parse_options.base_iri = os.args[index]
+			compact_options.context_options.base_iri = os.args[index]
+		case "--rdf-direction-i18n", "--rdf-direction-compound":
+			direction := os.args[index] == "--rdf-direction-i18n" ? jsonld.RDF_Direction_Mode.I18n_Datatype : jsonld.RDF_Direction_Mode.Compound_Literal
+			parse_options.rdf_direction = direction
+			compact_options.serializer_options.rdf_direction = direction
+		case:
+			fmt.eprintf("unknown compact runner option: %s\n", os.args[index])
 			os.exit(2)
 		}
-		direction := os.args[3] == "--rdf-direction-i18n" ? jsonld.RDF_Direction_Mode.I18n_Datatype : jsonld.RDF_Direction_Mode.Compound_Literal
-		parse_options.rdf_direction = direction
-		compact_options.serializer_options.rdf_direction = direction
 	}
 	if parse_error := jsonld.parse(string(input), dataset.sink, parse_options, &collector); parse_error.code != .None {
 		fmt.eprintf("%s: %s\n", os.args[1], jsonld.parse_error_message(parse_error.code))

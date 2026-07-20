@@ -6,6 +6,7 @@ import "core:sort"
 import "core:strings"
 import "core:unicode/utf8"
 import rdf ".."
+import turtle "../turtle"
 
 Compact_Array_Policy :: enum { Compact, Preserve }
 
@@ -167,9 +168,14 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		candidate := value[len(ctx.vocab):]
 		if len(candidate) > 0 && compact_prefer(candidate, best) do best = candidate
 	}
-	if !vocab && len(ctx.base_iri) > 0 && strings.has_prefix(value, ctx.base_iri) {
-		candidate := value[len(ctx.base_iri):]
-		if len(candidate) > 0 && compact_prefer(candidate, best) do best = candidate
+	if !vocab && len(ctx.base_iri) > 0 {
+		candidate, relative := turtle.relativize_iri_reference(ctx.base_iri, value)
+		if relative {
+			owned_candidate, own_error := own(state, candidate)
+			delete(candidate)
+			if own_error.code != .None do return "", .Out_Of_Memory
+			if compact_prefer(owned_candidate, best) do best = owned_candidate
+		}
 	}
 	for term, definition in ctx.terms {
 		if definition.reverse || !compact_term_can_prefix(term) || len(definition.id) == 0 || !strings.has_prefix(value, definition.id) do continue

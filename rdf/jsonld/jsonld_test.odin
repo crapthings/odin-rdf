@@ -786,6 +786,14 @@ test_null_local_context_resets_to_rdf_term_mappings :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_blank_node_types_remain_blank_nodes_in_rdf :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@id":"_:kind","@type":"_:kind"}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> _:b0 .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

@@ -922,6 +922,18 @@ test_index_graph_containers_discard_index_annotations :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_id_graph_containers_use_map_keys_as_graph_names :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/","input":{"@container":["@graph","@id"]}},
+  "input":{"https://graphs.example/one":{"value":"x"}}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/input> <https://graphs.example/one> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "x" <https://graphs.example/one> .`))
+}
+
+@(test)
 test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"knows":"https://example.test/knows", "name":"https://example.test/name"},

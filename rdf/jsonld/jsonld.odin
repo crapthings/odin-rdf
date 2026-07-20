@@ -387,6 +387,31 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return own(state, value)
 }
 
+// expand_identifier_iri follows the document-relative branch of IRI
+// expansion for node identifiers and @id-coerced values. A term definition is
+// not itself an identifier value, but its prefix remains available in a
+// compact IRI such as ex:item.
+@(private) expand_identifier_iri :: proc(state: ^State, ctx: ^Context, value: string) -> (string, Parse_Error) {
+	// Without a document base there is no document-relative target to resolve.
+	// Preserve the package's established term fallback for that bounded mode.
+	if len(ctx.base_iri) == 0 do return expand_iri(state, ctx, value, false, true)
+	if is_keyword(value) do return value, {}
+	if colon := strings.index_byte(value, ':'); colon >= 0 {
+		prefix, suffix := value[:colon], value[colon + 1:]
+		if prefix != "_" && !strings.has_prefix(suffix, "//") {
+			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
+				builder := strings.builder_make()
+				defer strings.builder_destroy(&builder)
+				strings.write_string(&builder, definition.id)
+				strings.write_string(&builder, suffix)
+				return own(state, strings.to_string(builder))
+			}
+		}
+		return own(state, value)
+	}
+	return resolve_iri(state, ctx.base_iri, value)
+}
+
 @(private) apply_container :: proc(state: ^State, definition: ^Term_Definition, value: json.Value) -> bool {
 	items: [dynamic]json.Value
 	defer delete(items)
@@ -852,7 +877,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) identifier_term :: proc(state: ^State, ctx: ^Context, value: string) -> (rdf.Term, Parse_Error) {
-	id, err := expand_iri(state, ctx, value, false, true)
+	id, err := expand_identifier_iri(state, ctx, value)
 	if err.code != .None do return {}, err
 	return expanded_identifier_term(state, id)
 }

@@ -477,7 +477,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return .None
 }
 
-@(private) compact_write_node :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+@(private) compact_write_node_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
 	keys := compact_sorted_keys(object)
 	defer delete(keys)
 	strings.write_byte(builder, '{')
@@ -605,6 +605,15 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	}
 	strings.write_byte(builder, '}')
 	return .None
+}
+
+// Compaction and Framing share type-scoped-context selection. Keeping the
+// selection at the node boundary lets nested values use the same term rules
+// regardless of which document operation writes them.
+@(private) compact_write_node :: proc(builder: ^strings.Builder, state: ^State, inherited: ^Context, object: json.Object, policy: Compact_Array_Policy) -> Compact_Error {
+	active_context, context_error := frame_context_for_node(state, inherited, object)
+	if context_error != .None do return context_error
+	return compact_write_node_resolved(builder, state, &active_context, object, policy)
 }
 
 @(private) compact_write_value :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {

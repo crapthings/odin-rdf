@@ -1895,16 +1895,22 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) process_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	active_context := ctx^
+	if definition.has_local_context {
+		updated, context_err := apply_term_scoped_context(state, ctx, definition)
+		if context_err.code != .None do return {}, context_err
+		active_context = updated
+	}
 	if object, is_object := object_from_value(value); is_object {
-		if value_object, has_value := has_keyword(object, ctx, "@value"); has_value {
+		if value_object, has_value := has_keyword(object, &active_context, "@value"); has_value {
 			_ = value_object
-			return value_object_term(state, ctx, object, graph)
+			return value_object_term(state, &active_context, object, graph)
 		}
-		if list, has_list := has_keyword(object, ctx, "@list"); has_list do return process_list(state, ctx, definition, list, graph)
-		return process_node(state, ctx, object, graph)
+		if list, has_list := has_keyword(object, &active_context, "@list"); has_list do return process_list(state, &active_context, definition, list, graph)
+		return process_node(state, &active_context, object, graph)
 	}
 	if _, is_array := array_from_value(value); is_array do return {}, Parse_Error{code = .Invalid_Value_Object}
-	return primitive_literal(state, ctx, definition, value, graph)
+	return primitive_literal(state, &active_context, definition, value, graph)
 }
 
 @(private) scan_depth :: proc(input: string, maximum: int) -> Parse_Error {

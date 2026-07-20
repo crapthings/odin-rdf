@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Apply property scoped contexts while processing their values, and reuse the
+  type-scoped context selection used by Framing during Compaction. Extend the
+  W3C to-RDF and semantic Compaction gates to 153 and 94 vectors.
 - Compact aliases of `@none` in language maps and aliases of `@json` in value
   objects; preserve value-object form for `@type: @none` terms and native
   `xsd:double` values whose shortest JSON spelling looks like an integer.

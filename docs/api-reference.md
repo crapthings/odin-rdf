@@ -229,7 +229,9 @@ type-scoped local contexts plus single-level `@import` source contexts through
 the opt-in loader, and rejects incompatible redefinitions of `@protected`
 terms with `Protected_Term_Redefinition`. Sourced definitions retain stable
 term ownership and use the importing context's `@vocab` for relative `@id`
-values. `@propagate` remains unsupported.
+values. Expansion, Flattening, and Framing honor `@propagate: false`: nested
+node objects restore the previous context, while type-scoped contexts are
+non-propagating unless they explicitly set `@propagate: true`.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,

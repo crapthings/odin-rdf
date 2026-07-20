@@ -143,12 +143,44 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return result, .None
 }
 
-// Resolves the context which governs an object value. A term-scoped context is
-// applied first, then the object's own local context. Callers that inspect an
-// object for aliases such as @set must pass the resulting context on to the
-// writer, rather than resolving the same local context again.
-@(private) expand_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object) -> (Context, Expand_Error) {
+@(private) expand_rolls_back_context :: proc(ctx: ^Context, object: json.Object) -> bool {
+	if !ctx.has_previous do return false
+	if _, has_value := has_keyword(object, ctx, "@value"); has_value do return false
+	if len(object) != 1 do return true
+	_, has_id := has_keyword(object, ctx, "@id")
+	return !has_id
+}
+
+@(private) expand_apply_type_scoped_contexts :: proc(state: ^State, current: ^Context, object: json.Object) -> (Context, Expand_Error) {
 	result := current^
+	type_context := current^
+	for key, value in object {
+		if keyword_for(&type_context, key) != "@type" do continue
+		types, is_array := array_from_value(value)
+		count := is_array ? len(types) : 1
+		for index in 0..<count {
+			type_name, valid := string_value(is_array ? types[index] : value)
+			if !valid {
+				if state.retain_frame_controls do continue
+				return {}, .Invalid_IRI
+			}
+			definition, found := type_context.terms[type_name]
+			if !found || !definition.has_local_context do continue
+			updated, context_err := apply_term_scoped_context(state, &result, definition)
+			if context_err.code != .None do return {}, expand_from_parse_error(context_err)
+			result = updated
+		}
+	}
+	return result, .None
+}
+
+// Resolves the context which governs an object value. A non-propagated context
+// rolls back at each newly entered node object, before property-, local-, and
+// type-scoped contexts are applied. Callers expanding an @id/@type map pass
+// from_map to keep the map's deliberately selected context.
+@(private) expand_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object, from_map := false) -> (Context, Expand_Error) {
+	result := current^
+	if !from_map && expand_rolls_back_context(&result, object) do result = previous_context(&result)
 	if definition.has_local_context {
 		updated, context_err := apply_term_scoped_context(state, &result, definition)
 		if context_err.code != .None do return {}, expand_from_parse_error(context_err)
@@ -159,7 +191,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		if context_err != .None do return {}, context_err
 		result = updated
 	}
-	return result, .None
+	return expand_apply_type_scoped_contexts(state, &result, object)
 }
 
 @(private) expand_write_identifier :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, vocab: bool) -> Expand_Error {
@@ -531,7 +563,9 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 
 @(private) expand_write_id_type_map_item :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, map_key: string, value: json.Value) -> Expand_Error {
 	temporary := strings.builder_make()
-	written, value_err := expand_write_single(&temporary, state, ctx, definition, value, true)
+	map_context := ctx^
+	if map_context.has_previous do map_context = previous_context(&map_context)
+	written, value_err := expand_write_single(&temporary, state, &map_context, definition, value, true, true)
 	if value_err != .None || !written { strings.builder_destroy(&temporary); return value_err }
 	parsed, json_err := json.parse_string(strings.to_string(temporary), .JSON, true)
 	strings.builder_destroy(&temporary)
@@ -878,7 +912,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return expand_write_node_resolved(builder, state, ctx, object, nested)
 }
 
-@(private) expand_write_single :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, nested: bool) -> (bool, Expand_Error) {
+@(private) expand_write_single :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, nested: bool, from_map := false) -> (bool, Expand_Error) {
 	#partial switch _ in value { case json.Null: return false, .None }
 	if definition.type == "@json" {
 		strings.write_string(builder, `{"@value": `)
@@ -887,7 +921,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return true, .None
 	}
 	if object, is_object := object_from_value(value); is_object {
-		active, context_err := expand_resolve_object_context(state, ctx, definition, object)
+		active, context_err := expand_resolve_object_context(state, ctx, definition, object, from_map)
 		if context_err != .None do return false, context_err
 		return expand_write_single_resolved(builder, state, &active, definition, value, nested)
 	}

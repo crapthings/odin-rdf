@@ -11,6 +11,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Extend the JSON-LD Expansion gate with the W3C `so07`, `so10`, and `so11`
   source-context vectors. The gate now covers 78 vectors, including expected
   failures for protected-term redefinitions.
+- Support JSON-LD 1.1 non-propagating scoped contexts in document Expansion,
+  Flattening, and Framing. `@propagate: false` now restores the previous
+  context at nested node objects, while type-scoped contexts are
+  non-propagating unless they explicitly opt in.
+- Extend the Expansion gate to 84 vectors with W3C property-, type-, embedded-,
+  and sourced-context propagation coverage, plus invalid `@propagate` values.
 
 ## 0.25.0 - 2026-07-20
 

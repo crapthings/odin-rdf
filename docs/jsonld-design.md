@@ -100,11 +100,13 @@ dataset cannot later reproduce its original keys. A custom `@index` property
 does become an RDF statement and is retained. Term- and type-scoped local
 contexts are supported, as are single-level `@import` source contexts through
 the same opt-in document loader. A built-in HTTP loader, directional literals,
-`@propagate`, and the remaining Framing policy matrix remain separate
-conformance milestones. `@protected` term definitions are retained across
-contexts and reject later incompatible redefinitions; definitions that share
-the importing context may still override its sourced terms before protection
-is applied.
+and the remaining Framing policy matrix remain separate conformance milestones.
+Document Expansion, Flattening, and Framing honor `@propagate: false` by
+rolling back to the previous context for nested node objects; type-scoped
+contexts are non-propagating unless they set `@propagate: true`. `@protected`
+term definitions are retained across contexts and reject later incompatible
+redefinitions; definitions that share the importing context may still override
+its sourced terms before protection is applied.
 
 ## Conversion and CLI
 
@@ -144,11 +146,12 @@ frame paths. It structurally compares the context-directed result.
 The selected vectors are the executable boundary for the current framing
 profile, not a claim of full JSON-LD Framing conformance.
 
-The Expansion gate also includes five sourced-context `@import` vectors. They
-cover source overrides, relative source identifiers resolved through an
-importer's `@vocab`, protected source definitions, and the expected rejection
-of incompatible protected-term redefinitions, making its current total 78
-cases.
+The Expansion gate includes five sourced-context `@import` vectors. They cover
+source overrides, relative source identifiers resolved through an importer's
+`@vocab`, protected source definitions, and the expected rejection of
+incompatible protected-term redefinitions. It also covers property-, type-,
+and embedded-context propagation, sourced propagation, and invalid
+`@propagate` values, making its current total 84 cases.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future

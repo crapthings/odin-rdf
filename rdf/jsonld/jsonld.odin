@@ -152,6 +152,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	vocab:            string,
 	language:         string,
 	has_language:     bool,
+	has_previous:     bool,
+	previous_terms:   map[string]Term_Definition,
+	previous_base_iri: string,
+	previous_vocab:    string,
+	previous_language: string,
+	previous_has_language: bool,
 }
 
 @(private) State :: struct {
@@ -209,6 +215,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.vocab = parent.vocab
 		result.language = parent.language
 		result.has_language = parent.has_language
+		result.has_previous = parent.has_previous
+		result.previous_terms = parent.previous_terms
+		result.previous_base_iri = parent.previous_base_iri
+		result.previous_vocab = parent.previous_vocab
+		result.previous_language = parent.previous_language
+		result.previous_has_language = parent.previous_has_language
 		for key in parent.terms do result.terms[key] = parent.terms[key]
 	}
 	return result, {}
@@ -220,6 +232,26 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 
 @(private) discard_unretained_context :: proc(ctx: ^Context, retained: ^bool) {
 	if !retained^ do delete(ctx.terms)
+}
+
+@(private) set_previous_context :: proc(result, previous: ^Context) {
+	if result.has_previous do return
+	result.has_previous = true
+	result.previous_terms = previous.terms
+	result.previous_base_iri = previous.base_iri
+	result.previous_vocab = previous.vocab
+	result.previous_language = previous.language
+	result.previous_has_language = previous.has_language
+}
+
+@(private) previous_context :: proc(ctx: ^Context) -> Context {
+	return Context{
+		terms = ctx.previous_terms,
+		base_iri = ctx.previous_base_iri,
+		vocab = ctx.previous_vocab,
+		language = ctx.previous_language,
+		has_language = ctx.previous_has_language,
+	}
 }
 
 @(private) object_value :: proc(object: json.Object, key: string) -> (json.Value, bool) {
@@ -371,8 +403,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return true
 }
 
-@(private) apply_context :: proc(state: ^State, current: ^Context, value: json.Value) -> (Context, Parse_Error) {
-	return apply_context_inner(state, current, value, false)
+@(private) apply_context :: proc(state: ^State, current: ^Context, value: json.Value, propagate := true) -> (Context, Parse_Error) {
+	return apply_context_inner(state, current, value, false, propagate)
 }
 
 @(private) term_definitions_match :: proc(a, b: Term_Definition) -> bool {
@@ -411,12 +443,22 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 // imported_context prevents a sourced context from importing another source.
 // JSON-LD 1.1 permits one @import indirection only; outer context members are
 // applied afterwards and therefore deliberately override imported definitions.
-@(private) apply_context_inner :: proc(state: ^State, current: ^Context, value: json.Value, imported_context: bool) -> (Context, Parse_Error) {
+@(private) apply_context_inner :: proc(state: ^State, current: ^Context, value: json.Value, imported_context, propagate: bool) -> (Context, Parse_Error) {
 	if array, ok := array_from_value(value); ok {
 		result := current^
+		array_propagate := propagate
 		for index in 0..<len(array) {
 			item := array[index]
-			updated, err := apply_context_inner(state, &result, item, imported_context)
+			item_propagate := propagate
+			if object, is_object := object_from_value(item); is_object {
+				if propagate_value, found := object_value(object, "@propagate"); found {
+					item_propagate, valid := bool_value(propagate_value)
+					if !valid do return {}, Parse_Error{code = .Invalid_Context}
+				}
+			}
+			if index > 0 && item_propagate != array_propagate do return {}, Parse_Error{code = .Invalid_Context}
+			array_propagate = item_propagate
+			updated, err := apply_context_inner(state, &result, item, imported_context, item_propagate)
 			if err.code != .None do return {}, err
 			result = updated
 		}
@@ -440,10 +482,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !object_ok do return {}, Parse_Error{code = .Invalid_Context}
 		remote_context, context_ok := object_value(remote_object, "@context")
 		if !context_ok do return {}, Parse_Error{code = .Invalid_Context}
-		return apply_context_inner(state, current, remote_context, imported_context)
+		return apply_context_inner(state, current, remote_context, imported_context, propagate)
 	}
 	object, ok := object_from_value(value)
 	if !ok do return {}, Parse_Error{code = .Invalid_Context}
+	active_propagate := propagate
+	if propagate_value, found := object_value(object, "@propagate"); found {
+		active_propagate, ok = bool_value(propagate_value)
+		if !ok do return {}, Parse_Error{code = .Invalid_Context}
+	}
 	default_protected := false
 	if protected_value, found := object_value(object, "@protected"); found {
 		valid: bool
@@ -500,12 +547,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if identifier_error.code != .None do return {}, identifier_error
 			imported_relative_ids[owned_term] = owned_identifier
 		}
-		context_base, err = apply_context_inner(state, current, imported_value, true)
+		context_base, err = apply_context_inner(state, current, imported_value, true, active_propagate)
 		if err.code != .None do return {}, err
 	}
 	for key in object {
 		if key == "@import" do continue
-		if key == "@direction" || key == "@propagate" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@direction" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@propagate" do continue
 		if key == "@protected" {
 			continue
 		}
@@ -522,6 +570,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if make_error.code != .None do return {}, make_error
 	result_retained := false
 	defer discard_unretained_context(&result, &result_retained)
+	if !active_propagate do set_previous_context(&result, current)
 	if base_value, found := object_value(object, "@base"); found {
 		if base_value_string, valid := string_value(base_value); valid {
 			base, err := resolve_iri(state, current.base_iri, base_value_string)
@@ -617,7 +666,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if type_value, found := object_value(definition_object, "@type"); found {
 			type_name, valid := string_value(type_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
-			if type_name == "@id" || type_name == "@vocab" || type_name == "@json" { definition.type = type_name } else {
+			if type_name == "@id" { definition.type = "@id" } else if type_name == "@vocab" { definition.type = "@vocab" } else if type_name == "@json" { definition.type = "@json" } else {
 				definition.type, make_error = expand_iri(state, &result, type_name, true, true)
 				if make_error.code != .None do return {}, make_error
 			}
@@ -683,14 +732,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 // Term-scoped contexts apply to values of a term and to nodes whose type is
-// represented by that term. Keeping the parsed form as owned JSON text makes
-// contexts safe to retain after their source document has been released.
+// represented by that term. They are non-propagating by default; an explicit
+// @propagate: true in the scoped context opts into propagation. Keeping the
+// parsed form as owned JSON text makes contexts safe to retain after their
+// source document has been released.
 @(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition) -> (Context, Parse_Error) {
 	if !definition.has_local_context do return current^, {}
 	value, json_error := json.parse_string(definition.local_context, .JSON, true)
 	if json_error != .None do return {}, Parse_Error{code = .Invalid_Context}
 	defer json.destroy_value(value)
-	return apply_context(state, current, value)
+	return apply_context(state, current, value, false)
 }
 
 @(private) blank_node :: proc(state: ^State) -> (rdf.Term, Parse_Error) {

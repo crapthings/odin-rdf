@@ -677,6 +677,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	for term, definition_value in object {
 		if strings.has_prefix(term, "@") do continue
 		id, simple := string_value(definition_value)
+		if !simple {
+			definition_object, object_ok := object_from_value(definition_value)
+			if object_ok {
+				identifier_value, has_identifier := object_value(definition_object, "@id")
+				if has_identifier do id, simple = string_value(identifier_value)
+			}
+		}
 		if !simple || !(strings.has_prefix(id, "http://") || strings.has_prefix(id, "https://") || strings.has_prefix(id, "urn:") || strings.has_prefix(id, "_:")) do continue
 		identifier, err := own(state, id)
 		if err.code != .None do return {}, err

@@ -21,6 +21,7 @@ Expand_Error :: enum {
 	Loading_Document_Failed,
 	Invalid_Context,
 	Invalid_Term_Definition,
+	Protected_Term_Redefinition,
 	Invalid_IRI,
 	Invalid_Value_Object,
 	Invalid_List_Object,
@@ -44,6 +45,7 @@ expand_error_message :: proc(code: Expand_Error) -> string {
 	case .Loading_Document_Failed:    return "failed to load remote context"
 	case .Invalid_Context:            return "invalid JSON-LD context"
 	case .Invalid_Term_Definition:    return "invalid JSON-LD term definition"
+	case .Protected_Term_Redefinition:return "protected JSON-LD term redefinition"
 	case .Invalid_IRI:                return "invalid JSON-LD IRI"
 	case .Invalid_Value_Object:       return "invalid JSON-LD value object"
 	case .Invalid_List_Object:        return "invalid JSON-LD list object"
@@ -79,6 +81,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	case .Loading_Document_Failed:    return .Loading_Document_Failed
 	case .Invalid_Context:            return .Invalid_Context
 	case .Invalid_Term_Definition:    return .Invalid_Term_Definition
+	case .Protected_Term_Redefinition:return .Protected_Term_Redefinition
 	case .Invalid_IRI:                return .Invalid_IRI
 	case .Invalid_Value_Object:       return .Invalid_Value_Object
 	case .Invalid_List_Object:        return .Invalid_List_Object
@@ -137,6 +140,25 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	}
 	result, err := apply_context(state, current, value)
 	if err.code != .None do return {}, expand_from_parse_error(err)
+	return result, .None
+}
+
+// Resolves the context which governs an object value. A term-scoped context is
+// applied first, then the object's own local context. Callers that inspect an
+// object for aliases such as @set must pass the resulting context on to the
+// writer, rather than resolving the same local context again.
+@(private) expand_resolve_object_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, object: json.Object) -> (Context, Expand_Error) {
+	result := current^
+	if definition.has_local_context {
+		updated, context_err := apply_term_scoped_context(state, &result, definition)
+		if context_err.code != .None do return {}, expand_from_parse_error(context_err)
+		result = updated
+	}
+	if context_value, has_context := object_value(object, "@context"); has_context {
+		updated, context_err := expand_apply_local_context(state, &result, context_value)
+		if context_err != .None do return {}, context_err
+		result = updated
+	}
 	return result, .None
 }
 
@@ -252,15 +274,19 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return .None
 	}
 	if object, is_object := object_from_value(value); is_object {
-		active := ctx^
-		if context_value, has_context := object_value(object, "@context"); has_context {
-			updated, context_err := expand_apply_local_context(state, ctx, context_value)
-			if context_err != .None do return context_err
-			active = updated
-		}
+		active, context_err := expand_resolve_object_context(state, ctx, definition, object)
+		if context_err != .None do return context_err
 		if set_value, has_set := has_keyword(object, &active, "@set"); has_set {
 			return expand_write_values_item(builder, state, &active, definition, set_value, first)
 		}
+		temporary := strings.builder_make()
+		defer strings.builder_destroy(&temporary)
+		written, err := expand_write_single_resolved(&temporary, state, &active, definition, value, true)
+		if err != .None || !written do return err
+		if !first^ do strings.write_string(builder, ", ")
+		strings.write_string(builder, strings.to_string(temporary))
+		first^ = false
+		return .None
 	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
@@ -319,13 +345,27 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return .None
 	}
 	if object, is_object := object_from_value(value); is_object {
-		active := ctx^
-		if context_value, has_context := object_value(object, "@context"); has_context {
-			updated, context_err := expand_apply_local_context(state, ctx, context_value)
-			if context_err != .None do return context_err
-			active = updated
-		}
+		active, context_err := expand_resolve_object_context(state, ctx, definition, object)
+		if context_err != .None do return context_err
 		if set_value, has_set := has_keyword(object, &active, "@set"); has_set do return expand_write_indexed_item(builder, state, &active, definition, index_key, set_value, first)
+		temporary := strings.builder_make()
+		defer strings.builder_destroy(&temporary)
+		written, err := expand_write_single_resolved(&temporary, state, &active, definition, value, true)
+		if err != .None || !written do return err
+		if !first^ do strings.write_string(builder, ", ")
+		expanded := strings.to_string(temporary)
+		strings.write_string(builder, expanded[:len(expanded) - 1])
+		explicit_index := false
+		_, explicit_index = has_keyword(object, ctx, "@index")
+		if !explicit_index && index_key != "@none" {
+			if len(expanded) > 2 do strings.write_string(builder, ", ")
+			write_json_string(builder, "@index")
+			strings.write_string(builder, ": ")
+			write_json_string(builder, index_key)
+		}
+		strings.write_byte(builder, '}')
+		first^ = false
+		return .None
 	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
@@ -649,13 +689,8 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return .None
 }
 
-@(private) expand_write_node :: proc(builder: ^strings.Builder, state: ^State, inherited: ^Context, object: json.Object, nested: bool) -> (bool, Expand_Error) {
-	ctx := inherited^
-	if context_value, has_context := object_value(object, "@context"); has_context {
-		updated, context_err := expand_apply_local_context(state, inherited, context_value)
-		if context_err != .None do return false, context_err
-		ctx = updated
-	}
+@(private) expand_write_node_resolved :: proc(builder: ^strings.Builder, state: ^State, resolved: ^Context, object: json.Object, nested: bool) -> (bool, Expand_Error) {
+	ctx := resolved^
 	if _, has_value := has_keyword(object, &ctx, "@value"); has_value do return expand_write_value_object(builder, state, &ctx, object)
 	if _, has_language := has_keyword(object, &ctx, "@language"); has_language do return false, .None
 	if list_value, has_list := has_keyword(object, &ctx, "@list"); has_list {
@@ -827,6 +862,16 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return true, .None
 }
 
+@(private) expand_write_single_resolved :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, nested: bool) -> (bool, Expand_Error) {
+	object, is_object := object_from_value(value)
+	if !is_object do return false, .Invalid_Value_Object
+	if list_value, has_list := has_keyword(object, ctx, "@list"); has_list {
+		if err := expand_write_list(builder, state, ctx, definition, list_value); err != .None do return false, err
+		return true, .None
+	}
+	return expand_write_node_resolved(builder, state, ctx, object, nested)
+}
+
 @(private) expand_write_single :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, nested: bool) -> (bool, Expand_Error) {
 	#partial switch _ in value { case json.Null: return false, .None }
 	if definition.type == "@json" {
@@ -836,22 +881,9 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return true, .None
 	}
 	if object, is_object := object_from_value(value); is_object {
-		active := ctx^
-		if definition.has_local_context {
-			updated, context_err := apply_term_scoped_context(state, &active, definition)
-			if context_err.code != .None do return false, expand_from_parse_error(context_err)
-			active = updated
-		}
-		if context_value, has_context := object_value(object, "@context"); has_context {
-			updated, context_err := expand_apply_local_context(state, &active, context_value)
-			if context_err != .None do return false, context_err
-			active = updated
-		}
-		if list_value, has_list := has_keyword(object, &active, "@list"); has_list {
-			if err := expand_write_list(builder, state, &active, definition, list_value); err != .None do return false, err
-			return true, .None
-		}
-		return expand_write_node(builder, state, &active, object, nested)
+		active, context_err := expand_resolve_object_context(state, ctx, definition, object)
+		if context_err != .None do return false, context_err
+		return expand_write_single_resolved(builder, state, &active, definition, value, nested)
 	}
 	if _, is_array := array_from_value(value); is_array do return false, .Invalid_Value_Object
 	if err := expand_write_primitive(builder, state, ctx, definition, value); err != .None do return false, err
@@ -866,12 +898,8 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return .None
 	}
 	if object, is_object := object_from_value(value); is_object {
-		active := ctx^
-		if context_value, has_context := object_value(object, "@context"); has_context {
-			updated, context_err := expand_apply_local_context(state, ctx, context_value)
-			if context_err != .None do return context_err
-			active = updated
-		}
+		active, context_err := expand_resolve_object_context(state, ctx, {}, object)
+		if context_err != .None do return context_err
 		if set_value, has_set := has_keyword(object, &active, "@set"); has_set do return expand_write_top_item(builder, state, &active, set_value, first)
 		if graph_value, has_graph := has_keyword(object, &active, "@graph"); has_graph {
 			_, has_id := has_keyword(object, &active, "@id")
@@ -885,6 +913,14 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 			}
 			if !has_id && !has_other do return expand_write_top_item(builder, state, &active, graph_value, first)
 		}
+		temporary := strings.builder_make()
+		defer strings.builder_destroy(&temporary)
+		written, err := expand_write_single_resolved(&temporary, state, &active, {}, value, false)
+		if err != .None || !written do return err
+		if !first^ do strings.write_string(builder, ", ")
+		strings.write_string(builder, strings.to_string(temporary))
+		first^ = false
+		return .None
 	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)

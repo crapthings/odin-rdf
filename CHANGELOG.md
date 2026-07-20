@@ -2,6 +2,20 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.25.0 - 2026-07-20
+
+- Add bounded JSON-LD `@import` source contexts through the existing opt-in
+  document loader. Imported definitions apply before definitions in the
+  containing context, and recursive or array-valued source contexts are
+  rejected explicitly.
+- Enforce JSON-LD `@protected` term definitions, including sourced contexts:
+  same-context overrides remain valid, while later incompatible redefinitions
+  return `Protected_Term_Redefinition`.
+- Resolve each object context once during Expansion, avoiding duplicate remote
+  loads while keeping term-scoped and object-local contexts in one path.
+- Extend the pinned JSON-LD Expansion gate with two sourced-context override
+  vectors, for 75 cases total.
+
 ## 0.24.0 - 2026-07-20
 
 - Add bounded, deterministic JSON-LD Expansion and Flattening APIs. Expansion

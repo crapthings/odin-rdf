@@ -30,6 +30,32 @@ import nquads "../nquads"
 	return "", false
 }
 
+@(private) imported_context :: proc(url: string, _: rawptr) -> (string, bool) {
+	switch url {
+	case "https://example.test/document/imported.jsonld":
+		return `{"@context":{"name":"https://example.test/imported-name","term":"https://example.test/imported-term"}}`, true
+	case "https://example.test/document/array.jsonld":
+		return `{"@context":[{"term":"https://example.test/term"}]}`, true
+	case "https://example.test/document/nested.jsonld":
+		return `{"@context":{"@import":"imported.jsonld"}}`, true
+	case "https://example.test/document/protected.jsonld":
+		return `{"@context":{"protected1":{"@id":"https://example.test/protected1"},"protected2":{"@id":"https://example.test/protected2"}}}`, true
+	case "https://w3c.github.io/json-ld-api/tests/expand/so07-context.jsonld":
+		return `{"@context":{"protected1":{"@id":"http://example.com/protected1"},"protected2":{"@id":"http://example.com/protected2"}}}`, true
+	}
+	return "", false
+}
+
+@(private) Import_Load_State :: struct {
+	calls: int,
+}
+
+@(private) counting_imported_context :: proc(url: string, user_data: rawptr) -> (string, bool) {
+	state := cast(^Import_Load_State)user_data
+	state.calls += 1
+	return imported_context(url, nil)
+}
+
 @(test)
 test_basic_context_and_typed_values :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`
@@ -66,6 +92,89 @@ test_list_reverse_named_graph_and_remote_context :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(actual, `<https://example.test/bob> <https://example.test/knows> <https://example.test/alice> .`))
 	testing.expect(t, strings.contains(actual, `<https://example.test/inside> <https://schema.org/name> "Inside" <https://example.test/alice> .`))
 	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> "one"`))
+}
+
+@(test)
+test_imported_context_applies_before_local_definitions :: proc(t: ^testing.T) {
+	options := Options{base_iri = "https://example.test/document/input.jsonld", document_loader = imported_context}
+	actual, err := parse_to_nquads(`{
+  "@context": {"@import": "imported.jsonld", "name": "https://example.test/local-name"},
+  "@id": "https://example.test/resource",
+  "name": "Alice",
+  "term": "value"
+}`, options)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/resource> <https://example.test/local-name> "Alice" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/resource> <https://example.test/imported-term> "value" .`))
+
+	no_loader, no_loader_err := parse_to_nquads(`{"@context":{"@import":"imported.jsonld"}}`, Options{base_iri = options.base_iri})
+	defer delete(no_loader)
+	testing.expect_value(t, no_loader_err.code, Error_Code.Remote_Context_Disallowed)
+	array_source, array_source_err := parse_to_nquads(`{"@context":{"@import":"array.jsonld"}}`, options)
+	defer delete(array_source)
+	testing.expect_value(t, array_source_err.code, Error_Code.Invalid_Context)
+	nested_source, nested_source_err := parse_to_nquads(`{"@context":{"@import":"nested.jsonld"}}`, options)
+	defer delete(nested_source)
+	testing.expect_value(t, nested_source_err.code, Error_Code.Invalid_Context)
+}
+
+@(test)
+test_protected_imported_terms_reject_later_redefinition :: proc(t: ^testing.T) {
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = DEFAULT_MAX_CONTEXTS, max_remote = DEFAULT_MAX_REMOTE_CONTEXTS, loader = imported_context, allow_document_containers = true}
+	defer destroy_state(&state)
+	ctx, make_error := make_context(&state, nil)
+	testing.expect_value(t, make_error.code, Error_Code.None)
+	ctx.base_iri = "https://example.test/document/input.jsonld"
+	protected_context, protected_json_error := json.parse_string(`{"@protected":true,"@import":"protected.jsonld"}`, .JSON, true)
+	defer json.destroy_value(protected_context)
+	testing.expect_value(t, protected_json_error, json.Error.None)
+	apply_error: Parse_Error
+	ctx, apply_error = apply_context(&state, &ctx, protected_context)
+	testing.expect_value(t, apply_error.code, Error_Code.None)
+	imported_definition := ctx.terms["protected1"]
+	testing.expect(t, imported_definition.protected)
+	redefinition, redefinition_json_error := json.parse_string(`{"protected1":"https://example.test/redefined"}`, .JSON, true)
+	defer json.destroy_value(redefinition)
+	testing.expect_value(t, redefinition_json_error, json.Error.None)
+	_, redefinition_error := apply_context(&state, &ctx, redefinition)
+	testing.expect_value(t, redefinition_error.code, Error_Code.Protected_Term_Redefinition)
+	merge_state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = DEFAULT_MAX_CONTEXTS, max_remote = DEFAULT_MAX_REMOTE_CONTEXTS, loader = imported_context, allow_document_containers = true}
+	defer destroy_state(&merge_state)
+	merge_ctx, merge_make_error := make_context(&merge_state, nil)
+	testing.expect_value(t, merge_make_error.code, Error_Code.None)
+	merge_ctx.base_iri = "https://example.test/document/input.jsonld"
+	merged_context, merged_json_error := json.parse_string(`{"@protected":true,"@import":"protected.jsonld","protected1":"https://example.test/override"}`, .JSON, true)
+	defer json.destroy_value(merged_context)
+	testing.expect_value(t, merged_json_error, json.Error.None)
+	merge_ctx, apply_error = apply_context(&merge_state, &merge_ctx, merged_context)
+	testing.expect_value(t, apply_error.code, Error_Code.None)
+	merged_definition := merge_ctx.terms["protected1"]
+	testing.expect_value(t, merged_definition.id, "https://example.test/override")
+	testing.expect(t, merged_definition.protected)
+	expanded := strings.builder_make()
+	defer strings.builder_destroy(&expanded)
+	input := `{"@context":{"@vocab":"http://example.com/","@version":1.1,"@protected":true,"@import":"so07-context.jsonld"},"protected1":{"@context":{"protected1":"http://example.com/something-else","protected2":"http://example.com/something-else"},"protected1":"error / property http://example.com/protected1","protected2":"error / property http://example.com/protected2"}}`
+	expand_options := Expand_Options{context_options = {base_iri = "https://w3c.github.io/json-ld-api/tests/expand/so07-in.jsonld", document_loader = imported_context}}
+	testing.expect_value(t, expand(&expanded, input, expand_options), Expand_Error.Protected_Term_Redefinition)
+}
+
+@(test)
+test_expand_resolves_each_object_context_once :: proc(t: ^testing.T) {
+	load_state := Import_Load_State{}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	input := `{
+  "@context": {"ex": "https://example.test/"},
+  "ex:property": {
+    "@context": {"@import": "imported.jsonld"},
+    "term": "value"
+  }
+}`
+	options := Expand_Options{context_options = {base_iri = "https://example.test/document/input.jsonld", document_loader = counting_imported_context, loader_data = &load_state}}
+	testing.expect_value(t, expand_document(&builder, input, options, false, false), Expand_Error.None)
+	testing.expect_value(t, load_state.calls, 1)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"https://example.test/imported-term"`))
 }
 
 @(test)
@@ -277,6 +386,20 @@ test_compacts_a_dataset_with_a_local_context_and_round_trips :: proc(t: ^testing
 	testing.expect(t, strings.contains(round_trip, `<https://example.test/alice> <https://example.test/knows> <https://example.test/bob> .`))
 	testing.expect(t, strings.contains(round_trip, `<https://example.test/alice> <https://example.test/age> "42"^^<http://www.w3.org/2001/XMLSchema#integer> .`))
 	testing.expect(t, strings.contains(round_trip, `<https://example.test/inside> <https://example.test/name> "Inside" <https://example.test/graph> .`))
+}
+
+@(test)
+test_compaction_uses_an_imported_context :: proc(t: ^testing.T) {
+	quads := []rdf.Quad{rdf.default_graph_quad(rdf.Triple{
+		subject = rdf.iri("https://example.test/resource"),
+		predicate = rdf.iri("https://example.test/imported-term"),
+		object = rdf.literal("value"),
+	})}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Compact_Options{context_options = {base_iri = "https://example.test/document/input.jsonld", document_loader = imported_context}}
+	testing.expect_value(t, compact(&builder, quads, `{"@import":"imported.jsonld"}`, options), Compact_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"term": "value"`))
 }
 
 @(test)

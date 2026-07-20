@@ -982,6 +982,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	case .Loading_Document_Failed:    return .Loading_Document_Failed
 	case .Invalid_Context:            return .Invalid_Context
 	case .Invalid_Term_Definition:    return .Invalid_Term_Definition
+	case .Protected_Term_Redefinition:return .Invalid_Context
 	case .Invalid_IRI:                return .Invalid_IRI
 	case .Invalid_Value_Object:       return .Invalid_Value_Object
 	case .Invalid_List_Object:        return .Invalid_List_Object

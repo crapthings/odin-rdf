@@ -224,8 +224,10 @@ opt-in loader policy as `parse`; `max_output_bytes` defaults to 32 MiB. The
 current core covers aliases, values and coercion, `@list`, `@set`, `@nest`,
 language and index containers, `@reverse`, default/named graph expansion, and
 document-level `@graph`, `@id`, and `@type` containers (including
-`[@graph, @index]` / `[@graph, @id]` composites). It does not yet implement
-scoped contexts.
+`[@graph, @index]` / `[@graph, @id]` composites). It supports term- and
+type-scoped local contexts plus single-level `@import` source contexts through
+the opt-in loader, and rejects incompatible redefinitions of `@protected`
+terms with `Protected_Term_Redefinition`. `@propagate` remains unsupported.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,

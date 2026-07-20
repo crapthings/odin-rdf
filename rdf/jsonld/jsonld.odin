@@ -42,6 +42,7 @@ Error_Code :: enum {
 	Loading_Document_Failed,
 	Invalid_Context,
 	Invalid_Term_Definition,
+	Protected_Term_Redefinition,
 	Invalid_IRI,
 	Invalid_Value_Object,
 	Invalid_List_Object,
@@ -81,6 +82,7 @@ parse_error_message :: proc(code: Error_Code) -> string {
 	case .Loading_Document_Failed:    return "failed to load remote context"
 	case .Invalid_Context:            return "invalid JSON-LD context"
 	case .Invalid_Term_Definition:    return "invalid JSON-LD term definition"
+	case .Protected_Term_Redefinition:return "protected JSON-LD term redefinition"
 	case .Invalid_IRI:                return "invalid JSON-LD IRI"
 	case .Invalid_Value_Object:       return "invalid JSON-LD value object"
 	case .Invalid_List_Object:        return "invalid JSON-LD list object"
@@ -139,6 +141,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	has_index:      bool,
 	reverse:        bool,
 	disabled:       bool,
+	protected:      bool,
 	has_local_context: bool,
 	local_context:     string,
 }
@@ -365,11 +368,49 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) apply_context :: proc(state: ^State, current: ^Context, value: json.Value) -> (Context, Parse_Error) {
+	return apply_context_inner(state, current, value, false)
+}
+
+@(private) term_definitions_match :: proc(a, b: Term_Definition) -> bool {
+	return a.id == b.id &&
+		a.type == b.type &&
+		a.language == b.language &&
+		a.has_language == b.has_language &&
+		a.language_null == b.language_null &&
+		a.container_list == b.container_list &&
+		a.container_set == b.container_set &&
+		a.container_language == b.container_language &&
+		a.container_index == b.container_index &&
+		a.container_graph == b.container_graph &&
+		a.container_id == b.container_id &&
+		a.container_type == b.container_type &&
+		a.index == b.index &&
+		a.has_index == b.has_index &&
+		a.reverse == b.reverse &&
+		a.disabled == b.disabled &&
+		a.has_local_context == b.has_local_context &&
+		a.local_context == b.local_context
+}
+
+@(private) set_term_definition :: proc(result, inherited: ^Context, term: string, definition: Term_Definition) -> Parse_Error {
+	updated := definition
+	if previous, found := inherited.terms[term]; found && previous.protected {
+		if !term_definitions_match(previous, definition) do return Parse_Error{code = .Protected_Term_Redefinition}
+		updated.protected = true
+	}
+	result.terms[term] = updated
+	return {}
+}
+
+// imported_context prevents a sourced context from importing another source.
+// JSON-LD 1.1 permits one @import indirection only; outer context members are
+// applied afterwards and therefore deliberately override imported definitions.
+@(private) apply_context_inner :: proc(state: ^State, current: ^Context, value: json.Value, imported_context: bool) -> (Context, Parse_Error) {
 	if array, ok := array_from_value(value); ok {
 		result := current^
 		for index in 0..<len(array) {
 			item := array[index]
-			updated, err := apply_context(state, &result, item)
+			updated, err := apply_context_inner(state, &result, item, imported_context)
 			if err.code != .None do return {}, err
 			result = updated
 		}
@@ -393,15 +434,56 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !object_ok do return {}, Parse_Error{code = .Invalid_Context}
 		remote_context, context_ok := object_value(remote_object, "@context")
 		if !context_ok do return {}, Parse_Error{code = .Invalid_Context}
-		return apply_context(state, current, remote_context)
+		return apply_context_inner(state, current, remote_context, imported_context)
 	}
 	object, ok := object_from_value(value)
 	if !ok do return {}, Parse_Error{code = .Invalid_Context}
+	default_protected := false
+	if protected_value, found := object_value(object, "@protected"); found {
+		valid: bool
+		default_protected, valid = bool_value(protected_value)
+		if !valid do return {}, Parse_Error{code = .Invalid_Context}
+	}
+	protected_terms := make(map[string]bool)
+	defer delete(protected_terms)
+	context_base := current^
+	if import_value, found := object_value(object, "@import"); found {
+		if imported_context do return {}, Parse_Error{code = .Invalid_Context}
+		import_reference, valid := string_value(import_value)
+		if !valid do return {}, Parse_Error{code = .Invalid_Context}
+		if state.loader == nil do return {}, Parse_Error{code = .Remote_Context_Disallowed}
+		url, err := resolve_iri(state, current.base_iri, import_reference)
+		if err.code != .None do return {}, err
+		if url in state.remote_urls do return {}, Parse_Error{code = .Invalid_Context}
+		if state.remote_count >= state.max_remote do return {}, Parse_Error{code = .Remote_Context_Limit}
+		state.remote_count += 1
+		state.remote_urls[url] = true
+		defer delete_key(&state.remote_urls, url)
+		document, loaded := state.loader(url, state.loader_data)
+		if !loaded do return {}, Parse_Error{code = .Loading_Document_Failed}
+		parsed, json_error := json.parse_string(strings.trim_space(document), .JSON, true)
+		if json_error != .None do return {}, Parse_Error{code = .Loading_Document_Failed}
+		defer json.destroy_value(parsed)
+		import_document, document_ok := object_from_value(parsed)
+		if !document_ok do return {}, Parse_Error{code = .Invalid_Context}
+		imported_value, context_ok := object_value(import_document, "@context")
+		if !context_ok do return {}, Parse_Error{code = .Invalid_Context}
+		if _, is_array := array_from_value(imported_value); is_array do return {}, Parse_Error{code = .Invalid_Context}
+		imported_object, imported_object_ok := object_from_value(imported_value)
+		if !imported_object_ok do return {}, Parse_Error{code = .Invalid_Context}
+		if default_protected {
+			for term in imported_object {
+				if !strings.has_prefix(term, "@") do protected_terms[term] = true
+			}
+		}
+		context_base, err = apply_context_inner(state, current, imported_value, true)
+		if err.code != .None do return {}, err
+	}
 	for key in object {
-		if key == "@direction" || key == "@import" || key == "@propagate" do return {}, Parse_Error{code = .Unsupported_Feature}
+		if key == "@import" do continue
+		if key == "@direction" || key == "@propagate" do return {}, Parse_Error{code = .Unsupported_Feature}
 		if key == "@protected" {
-			_, valid := bool_value(object[key])
-			if !valid do return {}, Parse_Error{code = .Invalid_Context}
+			continue
 		}
 		if key == "@version" {
 			if !state.allow_document_containers do return {}, Parse_Error{code = .Unsupported_Feature}
@@ -412,8 +494,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			}
 		}
 	}
-	result, make_error := make_context(state, current)
+	result, make_error := make_context(state, &context_base)
 	if make_error.code != .None do return {}, make_error
+	result_retained := false
+	defer if !result_retained do delete(result.terms)
 	if base_value, found := object_value(object, "@base"); found {
 		if base_value_string, valid := string_value(base_value); valid {
 			base, err := resolve_iri(state, current.base_iri, base_value_string)
@@ -456,18 +540,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	for term, definition_value in object {
 		if strings.has_prefix(term, "@") do continue
-		definition: Term_Definition
+		definition := Term_Definition{protected = default_protected}
 		is_null := false
 		#partial switch _ in definition_value { case json.Null: is_null = true }
 		if is_null {
-			result.terms[term] = Term_Definition{disabled = true}
+			if err := set_term_definition(&result, &context_base, term, Term_Definition{disabled = true, protected = default_protected}); err.code != .None do return {}, err
 			continue
 		}
 		if simple_id, simple := string_value(definition_value); simple {
 			id, err := expand_iri(state, &result, simple_id, true, true)
 			if err.code != .None do return {}, err
 			definition.id = id
-			result.terms[term] = definition
+			if definition_err := set_term_definition(&result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 			continue
 		}
 		definition_object, object_ok := object_from_value(definition_value)
@@ -542,9 +626,22 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if make_error.code != .None do return {}, make_error
 			definition.has_local_context = true
 		}
+		if protected_value, found := object_value(definition_object, "@protected"); found {
+			protected, valid := bool_value(protected_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			definition.protected = protected
+		}
+		if definition_err := set_term_definition(&result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
+	}
+	for term in protected_terms {
+		if _, locally_defined := object_value(object, term); locally_defined do continue
+		definition, found := result.terms[term]
+		if !found do continue
+		definition.protected = true
 		result.terms[term] = definition
 	}
 	retain_context(state, result)
+	result_retained = true
 	return result, {}
 }
 

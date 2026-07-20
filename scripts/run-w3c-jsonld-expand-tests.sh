@@ -9,8 +9,8 @@ mkdir -p "$root/.cache"
 odin build "$root/tests/w3c/jsonld_expand_runner" -out:"$runner"
 
 # The document-level core targets aliases, scalar/value expansion, @set,
-# @list, language/type coercion, reverse properties, transparent nesting, and
-# graph expansion.
+# @list, language/type coercion, reverse properties, transparent nesting,
+# graph expansion, and sourced-context @import overrides.
 cases='
 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010
 0011 0012 0013 0014 0015 0016 0017 0018 0019 0020
@@ -20,6 +20,7 @@ cases='
 n001 n002 n003 n004 n005 n006 n007 n008
 0079 0080 0081 0082 0083 0085 0086 0093 0094 0095 0096 0099 0100
 m001 m002 m003 m004 m006 m007
+so08 so09
 '
 
 total=0
@@ -35,5 +36,5 @@ for case_id in $cases; do
 done
 
 printf 'W3C JSON-LD expansion core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 73
+test "$total" -eq 75
 test "$failures" -eq 0

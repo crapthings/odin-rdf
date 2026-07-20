@@ -97,9 +97,14 @@ compaction. The input processor accepts language and index containers,
 including their `@set` combinations; an
 ordinary `@index` is JSON-LD annotation rather than RDF data, so an RDF
 dataset cannot later reproduce its original keys. A custom `@index` property
-does become an RDF statement and is retained. A built-in HTTP loader,
-directional literals, scoped contexts, `@import`, protected terms, and the
-remaining Framing policy matrix remain separate conformance milestones.
+does become an RDF statement and is retained. Term- and type-scoped local
+contexts are supported, as are single-level `@import` source contexts through
+the same opt-in document loader. A built-in HTTP loader, directional literals,
+`@propagate`, and the remaining Framing policy matrix remain separate
+conformance milestones. `@protected` term definitions are retained across
+contexts and reject later incompatible redefinitions; definitions that share
+the importing context may still override its sourced terms before protection
+is applied.
 
 ## Conversion and CLI
 
@@ -138,6 +143,9 @@ all embed modes, defaults, `@requireAll`, JSON-LD 1.1 graph shape, and invalid
 frame paths. It structurally compares the context-directed result.
 The selected vectors are the executable boundary for the current framing
 profile, not a claim of full JSON-LD Framing conformance.
+
+The Expansion gate also includes two sourced-context `@import` override
+vectors, making its current total 75 cases.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future

@@ -2341,6 +2341,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	updated_context, type_context_err := apply_node_type_scoped_contexts(state, &active_context, object)
 	if type_context_err.code != .None do return {}, type_context_err
 	active_context = updated_context
+	identifier_members := 0
+	for key in object {
+		if keyword_for(&active_context, key) != "@id" do continue
+		identifier_members += 1
+		if identifier_members > 1 do return {}, Parse_Error{code = .Invalid_IRI}
+	}
 
 	subject: rdf.Term
 	if subject_override != nil {

@@ -1160,6 +1160,13 @@ test_rejects_keyword_as_a_property_valued_index :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_rejects_colliding_identifier_aliases_in_a_node :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"id":"@id","ID":"@id"},"id":"https://example.test/one","ID":"https://example.test/two"}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_IRI)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

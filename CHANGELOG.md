@@ -117,6 +117,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   `pr33`, raising that gate to 383 cases.
 - Reject JSON-LD's `@index` keyword as a property-valued index name. Cover
   W3C to-RDF negative vector `pi03`, raising that gate to 384 cases.
+- Reject a second `@id` member introduced through a colliding identifier
+  alias, while retaining multiple legal `@type` aliases. Cover W3C to-RDF
+  negative vector `er26`, raising that gate to 385 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

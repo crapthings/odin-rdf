@@ -475,6 +475,24 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return .None
 }
 
+// A reverse property may only point at node objects. Validate the fully
+// expanded values so @id/@vocab coercion remains valid while value and list
+// objects are rejected (JSON-LD expansion algorithm, reverse-property step).
+@(private) expand_validate_reverse_values :: proc(expanded: string) -> Expand_Error {
+	parsed, json_err := json.parse_string(expanded, .JSON, true)
+	if json_err != .None do return .Invalid_Reverse_Property
+	defer json.destroy_value(parsed)
+	values, valid := array_from_value(parsed)
+	if !valid do return .Invalid_Reverse_Property
+	for item in values {
+		object, is_object := object_from_value(item)
+		if !is_object do return .Invalid_Reverse_Property
+		if _, has_value := object_value(object, "@value"); has_value do return .Invalid_Reverse_Property
+		if _, has_list := object_value(object, "@list"); has_list do return .Invalid_Reverse_Property
+	}
+	return .None
+}
+
 @(private) expand_validate_included_values :: proc(ctx: ^Context, value: json.Value) -> Expand_Error {
 	if values, is_array := array_from_value(value); is_array {
 		for item in values {
@@ -1015,6 +1033,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		value_err = expand_write_values(&temporary, state, ctx, definition, value)
 	}
 	if value_err != .None { strings.builder_destroy(&temporary); return value_err }
+	if definition.reverse {
+		if reverse_err := expand_validate_reverse_values(strings.to_string(temporary)); reverse_err != .None {
+			strings.builder_destroy(&temporary)
+			return reverse_err
+		}
+	}
 	drop_property := expand_is_null(value) && definition.type != "@json"
 	if value_object, is_object := object_from_value(value); is_object {
 		if expand_is_null_value_object(value_object, ctx) && !expand_is_json_value_object(value_object, ctx) do drop_property = true
@@ -1252,6 +1276,10 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 					delete(reverse_keys)
 					return false, expand_from_parse_error(err)
 				}
+				if is_keyword(expanded_key) {
+					delete(reverse_keys)
+					return false, .Invalid_Reverse_Property
+				}
 				if !has_iri_scheme(expanded_key) do continue
 				temporary := strings.builder_make()
 				value_err := expand_write_values(&temporary, state, &ctx, definition, reverse[reverse_key])
@@ -1259,6 +1287,11 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 					strings.builder_destroy(&temporary)
 					delete(reverse_keys)
 					return false, value_err
+				}
+				if reverse_err := expand_validate_reverse_values(strings.to_string(temporary)); reverse_err != .None {
+					strings.builder_destroy(&temporary)
+					delete(reverse_keys)
+					return false, reverse_err
 				}
 				target := &reverse_properties
 				if definition.reverse do target = &properties

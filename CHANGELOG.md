@@ -4,6 +4,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.29.0 - 2026-07-21
+
+- Complete the pinned W3C JSON-LD API evaluation manifests for JSON-LD-to-RDF,
+  Expansion, Flattening, Framing, RDF-to-JSON-LD, and Compaction. Expansion
+  now covers all 385 unique vectors (398 gate executions), while Flattening
+  covers all 58 vectors.
+- Strengthen JSON-LD validation around value/list objects, reverse properties,
+  scoped contexts, identifier aliases, `@included`, container combinations,
+  property-valued index maps, and conflicting flattened indexes. Frame value
+  patterns remain available to the Framing algorithm without weakening ordinary
+  Expansion validation.
+
 - Preserve term-coerced `@json` values as deterministically ordered RDF JSON
   literals, including arrays, `null`, and empty object member names;
   source-aware Compaction restores a uniquely associated source numeric shape.

@@ -22,10 +22,11 @@ graph store or SPARQL engine.
 
 ## Status and scope
 
-**Current release: `0.30.0`** — adds explicit local context maps to the CLI,
-so bounded JSON-LD conversion can use approved remote-context documents without
-network access. The public API may still evolve, so applications should pin a
-release and retain integration tests for their own JSON-LD documents.
+**Current release: `0.30.1`** — the 0.30 line adds explicit local context maps
+to the CLI, so bounded JSON-LD conversion can use approved remote-context
+documents without network access. The public API may still evolve, so
+applications should pin a release and retain integration tests for their own
+JSON-LD documents.
 
 | Area | Use it for | Important boundary |
 | --- | --- | --- |

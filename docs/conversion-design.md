@@ -27,7 +27,7 @@ The conversion matrix is therefore intentionally asymmetric:
 | Turtle | N-Triples, Turtle | Stream triples directly. |
 | Turtle | N-Quads, TriG | Emit each triple in the default graph. |
 | Graph syntax default graph | RDF/XML | Collect up to a required `max_records` bound, then write one RDF/XML document. |
-| Any graph or dataset syntax | JSON-LD | Collect up to a required `max_records` bound, then write deterministic expanded JSON-LD; CLI `--context PATH` selects atomic context-directed compaction. |
+| Any graph or dataset syntax | JSON-LD | Collect up to a required `max_records` bound, then write deterministic expanded JSON-LD; CLI `--context PATH` selects atomic context-directed compaction. `--context-map URL=PATH` supplies explicitly mapped local remote contexts. |
 | Dataset default graph | N-Triples, Turtle, N-Quads, TriG | Preserve the triple or default-graph quad. |
 | Dataset default graph | RDF/XML | Collect up to a required `max_records` bound, then write one RDF/XML document. |
 | Dataset named graph | N-Quads, TriG, JSON-LD | Preserve the quad. |
@@ -36,6 +36,12 @@ The conversion matrix is therefore intentionally asymmetric:
 
 The last row is a data-integrity boundary. The adapter never silently removes a
 graph name to make a conversion appear successful.
+
+For JSON-LD input and context-directed compaction, the CLI never opens a URL.
+Users may repeat `--context-map URL=PATH` to bind an exact resolved context URL
+to a local document. It reads every mapped document before parsing, applies the
+same `max_document_bytes` admission limit to each, and rejects duplicate URLs,
+standard input, or an output-file path as a map target.
 
 ## Error and output semantics
 

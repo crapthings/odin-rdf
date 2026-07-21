@@ -273,6 +273,8 @@ odin build cmd/odin-rdf -out:odin-rdf
   --prefix ex=https://example.com/ --output output.ttl
 ./odin-rdf convert input.trig --to jsonld --max-records 100000 --output output.jsonld
 ./odin-rdf convert input.nt --to jsonld --context context.jsonld --max-records 100000 --output compact.jsonld
+./odin-rdf convert input.jsonld --to nquads \
+  --context-map https://example.test/context=contexts/example.jsonld --output output.nq
 cat input.nq | ./odin-rdf convert - --from nquads --to nquads > output.nq
 ./odin-rdf format input.ttl --output formatted.ttl
 ./odin-rdf format input.trig --output formatted.trig --max-quads 100000
@@ -297,8 +299,11 @@ input error can leave earlier valid records on the pipe. RDF/XML and expanded
 JSON-LD are the explicit batch exceptions: standard output remains empty until
 their bounded dataset parses and serializes successfully. Add `--context PATH`
 to a JSON-LD conversion for context-directed compaction; it requires a positive
-`--max-records` bound and does not fetch remote contexts. Turtle and TriG prefixes are always explicit and repeatable;
-use `--prefix =https://example.com/` for the default prefix.
+`--max-records` bound. Repeat `--context-map URL=PATH` to supply a local,
+byte-limited document for an exact resolved remote-context URL in JSON-LD input
+or in the compaction context; the command never fetches a URL. Turtle and TriG
+prefixes are always explicit and repeatable; use
+`--prefix =https://example.com/` for the default prefix.
 
 N-Quads default-graph records convert to every available target, including
 bounded RDF/XML and JSON-LD. Named graphs can target N-Quads, TriG, or JSON-LD;

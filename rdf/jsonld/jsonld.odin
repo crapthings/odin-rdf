@@ -1620,6 +1620,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 @(private) value_object_term :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
 	value, found := has_keyword(object, ctx, "@value")
 	if !found do return {}, Parse_Error{code = .Invalid_Value_Object}
+	for key in object {
+		keyword := keyword_for(ctx, key)
+		if keyword != "@value" && keyword != "@type" && keyword != "@language" && keyword != "@direction" && keyword != "@index" do return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
+	_, has_explicit_type := has_keyword(object, ctx, "@type")
+	_, has_explicit_language := has_keyword(object, ctx, "@language")
+	if has_explicit_type && has_explicit_language do return {}, Parse_Error{code = .Invalid_Value_Object}
 	direction := ""
 	has_direction := false
 	if direction_value, direction_found := has_keyword(object, ctx, "@direction"); direction_found {
@@ -1640,7 +1647,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	case json.Null:
 		return {}, Parse_Error{code = .Invalid_Value_Object}
 	case json.Boolean, json.Integer, json.Float:
-		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
+		if has_direction || has_explicit_language do return {}, Parse_Error{code = .Invalid_Value_Object}
 		return primitive_literal(state, ctx, {}, value, graph)
 	case json.String:
 		text := string(actual)
@@ -2618,7 +2625,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			_ = value_object
 			return value_object_term(state, &active_context, object, graph)
 		}
-		if list, has_list := has_keyword(object, &active_context, "@list"); has_list do return process_list(state, &active_context, definition, list, graph)
+		if list, has_list := has_keyword(object, &active_context, "@list"); has_list {
+			for key in object {
+				keyword := keyword_for(&active_context, key)
+				if keyword != "@list" && keyword != "@index" do return {}, Parse_Error{code = .Invalid_List_Object}
+			}
+			return process_list(state, &active_context, definition, list, graph)
+		}
 		return process_node(state, &active_context, object, graph)
 	}
 	if _, is_array := array_from_value(value); is_array do return {}, Parse_Error{code = .Invalid_Value_Object}

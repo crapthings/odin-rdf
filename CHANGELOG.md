@@ -95,6 +95,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Reject value and list objects under `@included` and `@nest`, and reject
   reverse term definitions that declare `@nest`. Cover W3C to-RDF negative
   vectors `en04`, `en06`, `in08`, and `in09`, raising that gate to 361 cases.
+- Enforce value-object keyword, type/language, and scalar-language invariants,
+  and reject extra members on list objects. Cover W3C to-RDF negative vectors
+  `er37`, `er38`, `er39`, and `er41`, raising that gate to 365 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Add repeatable CLI `--context-map URL=PATH` mappings for JSON-LD input and
+  context-directed output. Each mapped remote context is explicitly read from
+  a local file, bounded by `--max-document-bytes`, and never fetched over the
+  network.
+
 ## 0.29.0 - 2026-07-21
 
 - Complete the pinned W3C JSON-LD API evaluation manifests for JSON-LD-to-RDF,

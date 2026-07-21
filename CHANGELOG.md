@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.28.0 - 2026-07-21
+
 - Restore the direct JSON shape of an anonymous JSON-LD 1.1 `@graph`
   container when its original source document is supplied to Compaction,
   including `@included` for multiple graph nodes. Add unit coverage and

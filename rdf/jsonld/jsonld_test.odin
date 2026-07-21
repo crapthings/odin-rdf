@@ -1181,6 +1181,23 @@ test_rejects_inconsistent_relative_and_compact_iri_terms :: proc(t: ^testing.T) 
 }
 
 @(test)
+test_accepts_a_terminal_colon_context_term :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "compact-iris:": "https://example.test/compact-iris-",
+    "property": "https://example.test/property"
+  },
+  "property": {
+    "@id": "https://example.test/compact-iris-are-considered",
+    "property": "Prefix terms must end in a gen-delim"
+  }
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/compact-iris-are-considered> <https://example.test/property> "Prefix terms must end in a gen-delim" .`))
+}
+
+@(test)
 test_rejects_an_empty_context_term :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{"@context":{"":{"@id":"https://example.test/empty"}},"@id":"https://example.test/node"}`)
 	defer delete(actual)

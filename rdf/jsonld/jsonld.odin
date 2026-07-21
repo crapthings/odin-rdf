@@ -677,10 +677,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	compact_separator := strings.index_byte(term, ':')
 	if !relative_term {
 		if compact_separator < 0 do return {}
-		// A colon alone does not make a term a Compact IRI. A term such as
-		// `compact-iris:` without a defined prefix is legal but is not used for
-		// IRI compaction (W3C compact-p003). Absolute IRIs and terms whose prefix
-		// is defined remain subject to mapping consistency (to-RDF er43/er44).
+		// A terminal colon has no compact-IRI suffix. It is therefore a legal
+		// term spelling rather than an absolute or compact IRI (W3C compact-p003).
+		// Absolute IRIs and terms with a non-empty compact-IRI suffix remain
+		// subject to mapping consistency (to-RDF er43/er44).
+		if compact_separator == len(term) - 1 do return {}
 		if !has_iri_scheme(term) {
 			prefix, found := ctx.terms[term[:compact_separator]]
 			if !found || !prefix.prefix do return {}

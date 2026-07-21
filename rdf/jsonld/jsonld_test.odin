@@ -518,6 +518,145 @@ test_compacts_a_dataset_with_a_local_context_and_round_trips :: proc(t: ^testing
 }
 
 @(test)
+test_compaction_preserves_type_set_containers_without_generated_blank_ids :: proc(t: ^testing.T) {
+	quad := rdf.default_graph_quad(rdf.Triple{
+		subject = rdf.blank_node("type-set", 1),
+		predicate = rdf.iri(RDF_TYPE),
+		object = rdf.iri("https://example.test/Type"),
+	})
+	contexts := []string{
+		`{"@type":{"@container":"@set"}}`,
+		`{"type":{"@id":"@type","@container":"@set"}}`,
+	}
+	for context_text in contexts {
+		builder := strings.builder_make()
+		defer strings.builder_destroy(&builder)
+		testing.expect_value(t, compact(&builder, []rdf.Quad{quad}, context_text), Compact_Error.None)
+		output := strings.to_string(builder)
+		testing.expect(t, strings.contains(output, `["https://example.test/Type"]`))
+		testing.expect(t, !strings.contains(output, `"@id": "_:`))
+	}
+}
+
+@(test)
+test_compaction_restores_source_type_order_for_named_nodes :: proc(t: ^testing.T) {
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = rdf.iri("https://example.test/node"), predicate = rdf.iri(RDF_TYPE), object = rdf.iri("https://example.test/Type1")}),
+		rdf.default_graph_quad(rdf.Triple{subject = rdf.iri("https://example.test/node"), predicate = rdf.iri(RDF_TYPE), object = rdf.iri("https://example.test/Type2")}),
+	}
+	context_text := `{"ex":"https://example.test/"}`
+	source := `{"@id":"https://example.test/node","@type":["https://example.test/Type1","https://example.test/Type2"]}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, compact(&builder, quads, context_text, Compact_Options{source_document = source, array_policy = .Preserve}), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"@type": ["ex:Type1", "ex:Type2"]`))
+}
+
+@(test)
+test_compaction_restores_anonymous_graph_container_from_source :: proc(t: ^testing.T) {
+	scope := rdf.Blank_Node_Scope(1)
+	root := rdf.blank_node("root", scope)
+	graph := rdf.blank_node("graph", scope)
+	item := rdf.blank_node("item", scope)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = root, predicate = rdf.iri("foo:input"), object = graph}),
+		rdf.named_graph_quad(rdf.Triple{subject = item, predicate = rdf.iri("foo:value"), object = rdf.literal("x")}, graph),
+	}
+	context_text := `{"@version":1.1,"input":{"@id":"foo:input","@container":"@graph"},"value":"foo:value"}`
+	source := `{"@context":{"@version":1.1,"input":{"@id":"foo:input","@container":"@graph"},"value":"foo:value"},"input":{"value":"x"}}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	options := Compact_Options{source_document = source}
+	testing.expect_value(t, compact(&builder, quads, context_text, options), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"input": {"value": "x"}`))
+	testing.expect(t, !strings.contains(output, `"@graph": [`))
+	testing.expect(t, !strings.contains(output, `"@id": "_:`))
+}
+
+@(test)
+test_compaction_wraps_multiple_source_graph_nodes_in_included :: proc(t: ^testing.T) {
+	scope := rdf.Blank_Node_Scope(1)
+	root := rdf.blank_node("root", scope)
+	graph := rdf.blank_node("graph", scope)
+	first := rdf.blank_node("first", scope)
+	second := rdf.blank_node("second", scope)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = root, predicate = rdf.iri("foo:input"), object = graph}),
+		rdf.named_graph_quad(rdf.Triple{subject = first, predicate = rdf.iri("foo:value"), object = rdf.literal("x")}, graph),
+		rdf.named_graph_quad(rdf.Triple{subject = second, predicate = rdf.iri("foo:value"), object = rdf.literal("y")}, graph),
+	}
+	context_text := `{"input":{"@id":"foo:input","@container":"@graph"},"value":"foo:value"}`
+	source := `[{"foo:input":[{"@graph":[{"foo:value":"x"},{"foo:value":"y"}]}]}]`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, compact(&builder, quads, context_text, Compact_Options{source_document = source}), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"input": {"@included": [{"value": "x"}, {"value": "y"}]}`))
+	testing.expect(t, !strings.contains(output, `"@graph": [`))
+}
+
+@(test)
+test_compaction_restores_anonymous_graph_index_from_source :: proc(t: ^testing.T) {
+	scope := rdf.Blank_Node_Scope(1)
+	root := rdf.blank_node("root", scope)
+	graph := rdf.blank_node("graph", scope)
+	item := rdf.blank_node("item", scope)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = root, predicate = rdf.iri("http://example.org/input"), object = graph}),
+		rdf.named_graph_quad(rdf.Triple{subject = item, predicate = rdf.iri("http://example.org/value"), object = rdf.literal("x")}, graph),
+	}
+	context_text := `{"@vocab":"http://example.org/","input":{"@container":["@graph","@index"]}}`
+	source := `[{"http://example.org/input":[{"@index":"g1","@graph":[{"http://example.org/value":[{"@value":"x"}]}]}]}]`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, compact(&builder, quads, context_text, Compact_Options{source_document = source}), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"input": {"g1": {"value": "x"}}`))
+	testing.expect(t, !strings.contains(output, `"@graph": [`))
+}
+
+@(test)
+test_compaction_restores_anonymous_graph_id_map_none_key :: proc(t: ^testing.T) {
+	scope := rdf.Blank_Node_Scope(1)
+	root := rdf.blank_node("root", scope)
+	graph := rdf.blank_node("graph", scope)
+	item := rdf.blank_node("item", scope)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = root, predicate = rdf.iri("http://example.org/input"), object = graph}),
+		rdf.named_graph_quad(rdf.Triple{subject = item, predicate = rdf.iri("http://example.org/value"), object = rdf.literal("x")}, graph),
+	}
+	context_text := `{"@vocab":"http://example.org/","input":{"@container":["@graph","@id"]},"none":"@none"}`
+	source := `[{"http://example.org/input":[{"@graph":[{"http://example.org/value":[{"@value":"x"}]}]}]}]`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, compact(&builder, quads, context_text, Compact_Options{source_document = source}), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"input": {"none": {"value": "x"}}`))
+	testing.expect(t, !strings.contains(output, `"@graph": [`))
+}
+
+@(test)
+test_compaction_preserves_set_for_anonymous_graph_id_map :: proc(t: ^testing.T) {
+	scope := rdf.Blank_Node_Scope(1)
+	root := rdf.blank_node("root", scope)
+	graph := rdf.blank_node("graph", scope)
+	item := rdf.blank_node("item", scope)
+	quads := []rdf.Quad{
+		rdf.default_graph_quad(rdf.Triple{subject = root, predicate = rdf.iri("http://example.org/input"), object = graph}),
+		rdf.named_graph_quad(rdf.Triple{subject = item, predicate = rdf.iri("http://example.org/value"), object = rdf.literal("x")}, graph),
+	}
+	context_text := `{"@vocab":"http://example.org/","input":{"@container":["@graph","@id","@set"]}}`
+	source := `[{"http://example.org/input":[{"@graph":[{"http://example.org/value":[{"@value":"x"}]}]}]}]`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, compact(&builder, quads, context_text, Compact_Options{source_document = source}), Compact_Error.None)
+	output := strings.to_string(builder)
+	testing.expect(t, strings.contains(output, `"input": {"@none": [{"value": "x"}]}`))
+}
+
+@(test)
 test_compaction_uses_an_imported_context :: proc(t: ^testing.T) {
 	quads := []rdf.Quad{rdf.default_graph_quad(rdf.Triple{
 		subject = rdf.iri("https://example.test/resource"),

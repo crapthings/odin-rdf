@@ -116,6 +116,11 @@ RDF_Direction_Mode :: enum {
 	Compound_Literal,
 }
 
+Processing_Mode :: enum {
+	Json_LD_1_1,
+	Json_LD_1_0,
+}
+
 // Options bounds retained state. Zero selects the documented default, except
 // max_quads where zero disables the output cap. base_iri must be absolute when
 // provided; it is used to resolve document-relative identifiers and contexts.
@@ -127,6 +132,7 @@ Options :: struct {
 	max_remote_contexts: int,
 	max_quads:           int,
 	rdf_direction:       RDF_Direction_Mode,
+	processing_mode:     Processing_Mode,
 	document_loader:     Document_Loader,
 	loader_data:         rawptr,
 }
@@ -161,6 +167,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	index_reference: string,
 	has_index:      bool,
 	reverse:        bool,
+	prefix:         bool,
 	disabled:       bool,
 	protected:      bool,
 	has_local_context: bool,
@@ -175,7 +182,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	has_language:     bool,
 	direction:        string,
 	has_direction:    bool,
+	type_container_set: bool,
 	has_previous:     bool,
+	explicit_non_propagating: bool,
+	explicit_propagating: bool,
 	previous_terms:   map[string]Term_Definition,
 	previous_base_iri: string,
 	previous_vocab:    string,
@@ -183,6 +193,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	previous_has_language: bool,
 	previous_direction: string,
 	previous_has_direction: bool,
+	previous_type_container_set: bool,
 }
 
 @(private) State :: struct {
@@ -204,6 +215,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	loader_data:       rawptr,
 	allow_document_containers: bool,
 	allow_direction:           bool,
+	legacy_prefixes:           bool,
 	rdf_direction:             RDF_Direction_Mode,
 	retain_id_only_nodes:       bool,
 	retain_frame_controls:      bool,
@@ -213,8 +225,52 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	frame_blank_aliases:         map[string]string,
 	frame_blank_counter:         u64,
 	compact_nodes:               map[string]json.Object,
+	compact_reverse_refs:        [dynamic]Compact_Reverse_Reference,
+	compact_reverse_target_indices: map[string]int,
+	compact_reverse_predicate_iris: [dynamic]string,
+	compact_reverse_source_ids:  [dynamic]string,
+	compact_reverse_target_ids:  [dynamic]string,
+	compact_index_annotations:   [dynamic]Compact_Index_Annotation,
+	compact_source_id_map_annotations: [dynamic]Compact_Source_ID_Map_Annotation,
+	compact_source_type_map_annotations: [dynamic]Compact_Source_Type_Map_Annotation,
+	compact_type_map_remaining_runtime: string,
+	compact_type_map_remaining_source: string,
+	compacted_index_nodes:       map[string]bool,
+	compacting_reverse_reference: bool,
+	compact_node_depth:          int,
 	compacting_nodes:            map[string]bool,
 	compacted_graph_nodes:       map[string]bool,
+	compact_source_graph_predicates: map[string]bool,
+	compact_source_graph_nodes:  map[string]bool,
+	compact_source_graph_boundary_predicates: map[string]bool,
+	compact_source_graph_boundary_nodes: map[string]bool,
+	compact_source_graph_index_annotations: [dynamic]Compact_Source_Graph_Index_Annotation,
+	compact_source_graph_id_annotations: [dynamic]Compact_Source_Graph_ID_Annotation,
+	compact_source_graph_index_nodes: [dynamic]Compact_Source_Graph_Index_Node,
+	compact_source_named_graph_index_annotations: [dynamic]Compact_Source_Named_Graph_Index_Annotation,
+	compact_source_named_graph_index_nodes: [dynamic]Compact_Source_Named_Graph_Index_Node,
+	compact_source_named_graph_annotations: [dynamic]Compact_Source_Named_Graph_Annotation,
+	compact_source_reverse_index_annotations: [dynamic]Compact_Source_Reverse_Index_Annotation,
+	compact_source_empty_property_annotations: [dynamic]Compact_Source_Empty_Property_Annotation,
+	compact_source_property_term_annotations: [dynamic]Compact_Source_Property_Term_Annotation,
+	compact_source_notype_value_annotations: [dynamic]Compact_Source_Notype_Value_Annotation,
+	compact_source_type_order_annotations: [dynamic]Compact_Source_Type_Order_Annotation,
+	compact_source_value_order_annotations: [dynamic]Compact_Source_Value_Order_Annotation,
+	compact_source_included_roots: [dynamic]Compact_Source_Included_Root,
+	compact_source_included_children: [dynamic]Compact_Source_Included_Child,
+	compact_source_document_root_predicates: [dynamic]string,
+	compact_source_document_root_predicate_counts: [dynamic]int,
+	compact_source_document_root_types: [dynamic]string,
+	compact_source_named_root_id: string,
+	compact_source_inline_named_nodes: map[string]bool,
+	compact_source_top_level_named_nodes: map[string]bool,
+	compact_source_top_level_order: [dynamic]string,
+	compact_source_json_null_predicate: string,
+	compact_source_graph_root_id: string,
+	compact_source_reverse_root_id: string,
+	compact_source_graph_set_value: bool,
+	compact_writing_source_root: bool,
+	compact_omit_singleton_blank_id: string,
 	initial_base_iri:             string,
 }
 
@@ -228,8 +284,44 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if state.referenced_frame_blank_ids != nil do delete(state.referenced_frame_blank_ids)
 	if state.frame_blank_aliases != nil do delete(state.frame_blank_aliases)
 	if state.compact_nodes != nil do delete(state.compact_nodes)
+	delete(state.compact_reverse_refs)
+	if state.compact_reverse_target_indices != nil do delete(state.compact_reverse_target_indices)
+	for value in state.compact_reverse_predicate_iris do delete(value)
+	delete(state.compact_reverse_predicate_iris)
+	for value in state.compact_reverse_source_ids do delete(value)
+	delete(state.compact_reverse_source_ids)
+	for value in state.compact_reverse_target_ids do delete(value)
+	delete(state.compact_reverse_target_ids)
+	delete(state.compact_index_annotations)
+	delete(state.compact_source_id_map_annotations)
+	delete(state.compact_source_type_map_annotations)
+	if state.compacted_index_nodes != nil do delete(state.compacted_index_nodes)
 	if state.compacting_nodes != nil do delete(state.compacting_nodes)
 	if state.compacted_graph_nodes != nil do delete(state.compacted_graph_nodes)
+	if state.compact_source_graph_predicates != nil do delete(state.compact_source_graph_predicates)
+	if state.compact_source_graph_nodes != nil do delete(state.compact_source_graph_nodes)
+	if state.compact_source_graph_boundary_predicates != nil do delete(state.compact_source_graph_boundary_predicates)
+	if state.compact_source_graph_boundary_nodes != nil do delete(state.compact_source_graph_boundary_nodes)
+	delete(state.compact_source_graph_index_annotations)
+	delete(state.compact_source_graph_id_annotations)
+	delete(state.compact_source_graph_index_nodes)
+	delete(state.compact_source_named_graph_index_annotations)
+	delete(state.compact_source_named_graph_index_nodes)
+	delete(state.compact_source_named_graph_annotations)
+	delete(state.compact_source_reverse_index_annotations)
+	delete(state.compact_source_empty_property_annotations)
+	delete(state.compact_source_property_term_annotations)
+	delete(state.compact_source_notype_value_annotations)
+	delete(state.compact_source_type_order_annotations)
+	delete(state.compact_source_value_order_annotations)
+	delete(state.compact_source_included_roots)
+	delete(state.compact_source_included_children)
+	delete(state.compact_source_document_root_predicates)
+	delete(state.compact_source_document_root_predicate_counts)
+	delete(state.compact_source_document_root_types)
+	if state.compact_source_inline_named_nodes != nil do delete(state.compact_source_inline_named_nodes)
+	if state.compact_source_top_level_named_nodes != nil do delete(state.compact_source_top_level_named_nodes)
+	delete(state.compact_source_top_level_order)
 }
 
 @(private) own :: proc(state: ^State, value: string) -> (string, Parse_Error) {
@@ -251,7 +343,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.has_language = parent.has_language
 		result.direction = parent.direction
 		result.has_direction = parent.has_direction
+		result.type_container_set = parent.type_container_set
 		result.has_previous = parent.has_previous
+		result.explicit_non_propagating = parent.explicit_non_propagating
+		result.explicit_propagating = parent.explicit_propagating
 		result.previous_terms = parent.previous_terms
 		result.previous_base_iri = parent.previous_base_iri
 		result.previous_vocab = parent.previous_vocab
@@ -259,6 +354,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.previous_has_language = parent.previous_has_language
 		result.previous_direction = parent.previous_direction
 		result.previous_has_direction = parent.previous_has_direction
+		result.previous_type_container_set = parent.previous_type_container_set
 		for key in parent.terms do result.terms[key] = parent.terms[key]
 	}
 	return result, {}
@@ -289,6 +385,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	result.previous_has_language = previous.has_language
 	result.previous_direction = previous.direction
 	result.previous_has_direction = previous.has_direction
+	result.previous_type_container_set = previous.type_container_set
 }
 
 @(private) previous_context :: proc(ctx: ^Context) -> Context {
@@ -300,6 +397,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		has_language = ctx.previous_has_language,
 		direction = ctx.previous_direction,
 		has_direction = ctx.previous_has_direction,
+		type_container_set = ctx.previous_type_container_set,
 	}
 }
 
@@ -461,12 +559,45 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return resolve_iri(state, ctx.base_iri, value)
 }
 
+// normalize_context_term_iris resolves compact IRIs whose prefix is declared
+// elsewhere in the same context. JSON object members are unordered, so the
+// first pass that builds term definitions cannot rely on a prefix having been
+// visited already. Repeat only while a term definition changes; a remaining
+// cycle is not a valid context.
+@(private) normalize_context_term_iris :: proc(state: ^State, ctx: ^Context) -> Parse_Error {
+	limit := len(ctx.terms) + 1
+	for round in 0..<limit {
+		changed := false
+		for term, &definition in ctx.terms {
+			if definition.disabled || len(definition.id) == 0 || is_keyword(definition.id) do continue
+			identifier, identifier_error := expand_iri(state, ctx, definition.id, true, true)
+			if identifier_error.code != .None do return identifier_error
+			if identifier != definition.id {
+				definition.id = identifier
+				ctx.terms[term] = definition
+				changed = true
+			}
+		}
+		if !changed do break
+		if round == limit - 1 do return Parse_Error{code = .Invalid_Term_Definition}
+	}
+	for term, &definition in ctx.terms {
+		if !definition.has_index || len(definition.index_reference) == 0 do continue
+		resolved_index, index_error := expand_iri(state, ctx, definition.index_reference, true, true)
+		if index_error.code != .None do return index_error
+		definition.index = resolved_index
+		ctx.terms[term] = definition
+	}
+	return {}
+}
+
 @(private) apply_container :: proc(state: ^State, definition: ^Term_Definition, value: json.Value) -> bool {
 	items: [dynamic]json.Value
 	defer delete(items)
 	if _, is_string := string_value(value); is_string {
 		append(&items, value)
 	} else if array, is_array := array_from_value(value); is_array {
+		if !state.allow_document_containers do return false
 		for item in array do append(&items, item)
 	} else {
 		return false
@@ -597,6 +728,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 @(private) apply_context_inner :: proc(state: ^State, current: ^Context, value: json.Value, imported_context, propagate: bool) -> (Context, Parse_Error) {
 	#partial switch _ in value {
 	case json.Null:
+		for _, definition in current.terms {
+			if definition.protected do return {}, Parse_Error{code = .Invalid_Context}
+		}
 		result, err := make_context(state, nil)
 		if err.code != .None do return {}, err
 		// A null local context resets the active mappings to the initial
@@ -651,9 +785,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	object, ok := object_from_value(value)
 	if !ok do return {}, Parse_Error{code = .Invalid_Context}
 	active_propagate := propagate
+	explicit_non_propagating := false
+	explicit_propagating := false
 	if propagate_value, found := object_value(object, "@propagate"); found {
 		active_propagate, ok = bool_value(propagate_value)
 		if !ok do return {}, Parse_Error{code = .Invalid_Context}
+		explicit_non_propagating = !active_propagate
+		explicit_propagating = active_propagate
 	}
 	default_protected := false
 	if protected_value, found := object_value(object, "@protected"); found {
@@ -735,6 +873,25 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	result_retained := false
 	defer discard_unretained_context(&result, &result_retained)
 	if !active_propagate do set_previous_context(&result, current)
+	result.explicit_non_propagating = explicit_non_propagating
+	result.explicit_propagating = explicit_propagating
+	// JSON-LD 1.1 permits a keyword definition for @type solely to select its
+	// container. Preserve the @set choice even though @type is not an ordinary
+	// term definition.
+	if type_definition_value, found := object_value(object, "@type"); found {
+		#partial switch null in type_definition_value {
+		case json.Null:
+			result.type_container_set = false
+		case:
+			type_definition, valid_definition := object_from_value(type_definition_value)
+			if !valid_definition do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			container_value, has_container := object_value(type_definition, "@container")
+			if !has_container do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			container, valid_container := string_value(container_value)
+			if !valid_container || container != "@set" do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			result.type_container_set = true
+		}
+	}
 	if base_value, found := object_value(object, "@base"); found {
 		if base_value_string, valid := string_value(base_value); valid {
 			base, err := resolve_iri(state, current.base_iri, base_value_string)
@@ -824,6 +981,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			id, err := expand_iri(state, &result, simple_id, true, true)
 			if err.code != .None do return {}, err
 			definition.id = id
+			// JSON-LD 1.0's compact string form remains a prefix mapping for
+			// compatibility. Object term definitions opt in with @prefix below.
+			definition.prefix = true
 			if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 			continue
 		}
@@ -892,6 +1052,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !apply_container(state, &definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		}
 		if nest_value, found := object_value(definition_object, "@nest"); found {
+			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			nest, valid := string_value(nest_value)
 			if !valid || len(nest) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			definition.nest, make_error = own(state, nest)
@@ -911,6 +1072,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			definition.has_index = true
 		}
 		if local_context, found := object_value(definition_object, "@context"); found {
+			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			serialized := strings.builder_make()
 			if !compact_write_raw_json(&serialized, local_context) {
 				strings.builder_destroy(&serialized)
@@ -926,6 +1088,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			definition.protected = protected
 		}
+		if prefix_value, found := object_value(definition_object, "@prefix"); found {
+			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			prefix, valid := bool_value(prefix_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if prefix && strings.index_byte(term, ':') >= 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			definition.prefix = prefix
+		}
+		if state.legacy_prefixes && !definition.reverse do definition.prefix = true
 		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 	}
 	// A custom @index may name a term that is defined later in the same
@@ -937,6 +1107,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		definition.index = resolved_index
 		result.terms[term] = definition
 	}
+	for _, definition in result.terms {
+		if len(definition.nest) == 0 || definition.nest == "@nest" do continue
+		nest_definition, found := result.terms[definition.nest]
+		if !found || nest_definition.id != "@nest" do return {}, Parse_Error{code = .Invalid_Term_Definition}
+	}
+	if normalization_error := normalize_context_term_iris(state, &result); normalization_error.code != .None do return {}, normalization_error
 	for term in protected_terms {
 		if _, locally_defined := object_value(object, term); locally_defined do continue
 		definition, found := result.terms[term]
@@ -1324,6 +1500,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	defer delete(items)
 	if list_values, is_array := array_from_value(value); is_array {
 		for list_value in list_values {
+			if !state.allow_document_containers {
+				if list_object, is_object := object_from_value(list_value); is_object {
+					if _, is_nested_list := has_keyword(list_object, ctx, "@list"); is_nested_list do return {}, Parse_Error{code = .Invalid_List_Object}
+				}
+				if _, is_nested_list := array_from_value(list_value); is_nested_list do return {}, Parse_Error{code = .Invalid_List_Object}
+			}
 			if _, is_nested_list := array_from_value(list_value); is_nested_list {
 				nested, nested_err := process_list(state, ctx, definition, list_value, graph)
 				if nested_err.code != .None do return {}, nested_err
@@ -2096,8 +2278,8 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		rdf_direction = options.rdf_direction,
 		loader = options.document_loader,
 		loader_data = options.loader_data,
-		allow_document_containers = true,
-		allow_direction = true,
+		allow_document_containers = options.processing_mode != .Json_LD_1_0,
+		allow_direction = options.processing_mode != .Json_LD_1_0,
 	}
 	defer destroy_state(&state)
 	if blank_err := preassign_blank_nodes(&state, parsed); blank_err.code != .None do return blank_err

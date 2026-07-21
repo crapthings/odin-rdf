@@ -500,10 +500,11 @@ test_parses_integrity_commands_with_bounded_reader_options :: proc(t: ^testing.T
 	testing.expect_value(t, hash_options.command, Integrity_Command.Hash)
 	testing.expect_value(t, hash_options.max_quads, canon.DEFAULT_MAX_QUADS)
 
-	compare_options, compare_err := parse_integrity_command_args([]string{"compare", "left.ttl", "right.trig"})
+	compare_options, compare_err := parse_integrity_command_args([]string{"compare", "left.ttl", "right.trig", "--base", "https://example.com/base/"})
 	testing.expect_value(t, compare_err.code, Command_Error_Code.None)
 	testing.expect_value(t, compare_options.input_format, convert.Format.Turtle)
 	testing.expect_value(t, compare_options.other_format, convert.Format.TriG)
+	testing.expect_value(t, compare_options.base_iri, "https://example.com/base/")
 
 	diff_options, diff_err := parse_integrity_command_args([]string{"diff", "before.ttl", "after.trig", "--output", "changes.nqdiff"})
 	testing.expect_value(t, diff_err.code, Command_Error_Code.None)

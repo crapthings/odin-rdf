@@ -85,6 +85,10 @@ context URLs remain opt-in through `Compact_Options.context_options`.
 non-container value. `Preserve` retains arrays. Native booleans, integers, and
 finite doubles are on by default for compaction; select
 `Compact_Native_Type_Policy.Lexical` for explicit lexical value objects.
+Ordinary `@index` keys are not RDF statements, so a dataset-only call cannot
+recover them. Set `Compact_Options.source_document` to the original JSON-LD
+document when preserving those annotations is required; its RDF meaning is
+validated against the supplied dataset during compaction.
 
 `Options` bounds document bytes, JSON nesting, processed contexts, remote
 contexts, and emitted quads. Its `Document_Loader` is opt-in. The package never
@@ -150,18 +154,30 @@ It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs 162 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 126 semantic compaction
+output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 151 semantic compaction
 vectors, including graph/index and graph/id map keys with `@none` aliases plus
 document-base relative identifiers, parent paths, query/fragment references,
 and keyword-like path segments. The broader 1.1 suite remains the gate for
 graph-container and generalized RDF work.
 
-`scripts/run-w3c-jsonld-compact-tests.sh` runs 126 local-context compaction
+`scripts/run-w3c-jsonld-compact-tests.sh` runs 151 local-context compaction
 vectors from the same pinned corpus, including property-valued index maps,
 scoped nested nodes, default, term, list, and language-container direction
 handling. It parses both generated and expected
-documents and compares their RDFC-1.0 canonical RDF datasets, so the gate
-checks compaction semantics without requiring meaningless object-key ordering.
+documents and compares their RDFC-1.0 canonical RDF datasets. Shape-sensitive
+vectors additionally compare parsed JSON values with object-key order ignored,
+so the gate catches container/array regressions without requiring meaningless
+object-key ordering. This includes direct/aliased `@type` `@set` forms and
+selected compact-IRI output cases. It also structurally verifies the direct
+anonymous `@graph` container form (including multi-node `@included`) when
+source annotations make the otherwise RDF-invisible association unambiguous;
+this includes the single anonymous `[@graph, @index]` form. Other graph map
+forms remain semantic-only coverage for now, except for the corresponding
+anonymous `[@graph, @id]` `@none` key (and its term alias), with or without
+`@set`, and for an explicit source graph ID; the same is covered for explicit and `@none` anonymous
+`[@graph, @index, @set]` keys. A named graph inside an anonymous
+`[@graph, @index]` container also retains its source `@index` member beside
+`@id` and `@graph` when the association is unique.
 
 `scripts/run-w3c-jsonld-framing-tests.sh` runs 87 pinned Framing vectors for
 nested and deep-node embedding, type and `@id` selection, value/list patterns,

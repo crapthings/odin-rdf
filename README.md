@@ -11,7 +11,7 @@
 ![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
 ![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-87%2F87-0f766e)
 ![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-30%2F30-0f766e)
-![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-66%2F66-0f766e)
+![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-151%2F151-0f766e)
 ![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
 ![W3C TriG tests](https://img.shields.io/badge/W3C_TriG-355%2F355-15803d)
 ![W3C RDFC-1.0](https://img.shields.io/badge/W3C_RDFC--1.0-65%2F65-7c3aed)
@@ -32,7 +32,7 @@ standard JSON-LD 1.1 RDF direction mappings: `i18n-datatype` and
 It also supports sourced-context `@import` and enforced `@protected` terms
 through the existing explicit document loader. JSON-LD direction mapping is
 opt-in; the default RDF conversion deliberately omits `@direction`. Its gates
-run 106 Expansion, 162 to-RDF, 46 RDF-to-JSON-LD, and 126 compaction vectors.
+run 106 Expansion, 162 to-RDF, 46 RDF-to-JSON-LD, and 151 compaction vectors.
 
 | Area | Available now | Important boundary |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ The project is tested with Odin `dev-2026-07` and CI tracks the current Odin too
 
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 106 Expansion, 35 Flattening, 162 to-RDF, 46 RDF-to-JSON-LD, and 126 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
+- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 106 Expansion, 35 Flattening, 162 to-RDF, 46 RDF-to-JSON-LD, and 151 compaction core vectors; RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
 - **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
 - **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
 - **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.
@@ -323,6 +323,8 @@ or canonicalization failure. `canon` writes canonical N-Quads, while `hash`
 writes its lowercase hexadecimal SHA-256 digest by default (or SHA-384 with
 `--algorithm sha384`). `compare` accepts two file paths, prints `equal` or
 `different`, and exits 0, 1, or 2 for equality, difference, or an error.
+Pass `--base IRI` to `compare` when relative JSON-LD identifiers need a shared
+resolution base.
 `diff` accepts two file paths and emits a deterministic canonical N-Quads line
 diff (`- ` for removed, `+ ` for added), returning 0 when equal, 1 when changed,
 or 2 on error. It is not a minimum blank-node edit script: a structural change

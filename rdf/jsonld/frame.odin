@@ -1494,7 +1494,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 			array, valid := array_from_value(value)
 			if !valid do return .Invalid_Expanded_JSON
 			if has_definition && definition.container_language {
-				if err := compact_write_language_map(builder, state, ctx, array, policy); err != .None do return err
+				if err := compact_write_language_map(builder, state, ctx, object, key, array, policy); err != .None do return err
 			} else if has_definition && definition.container_list && len(array) == 1 {
 				item, item_valid := object_from_value(array[0])
 				list, has_list := object_value(item, "@list")

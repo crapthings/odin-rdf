@@ -144,6 +144,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Validate reverse-property names and expanded values during Expansion. Cover
   W3C negative vectors `er25`, `er34`, and `er36`, raising the gate to 393
   cases.
+- Enforce JSON-LD 1.0 list-of-lists restrictions and list-object member
+  validation during Expansion. Cover W3C negative vectors `er24`, `er32`, and
+  `er41`, raising the gate to 396 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

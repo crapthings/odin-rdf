@@ -386,9 +386,38 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return true, .None
 }
 
+@(private) expand_validate_list_values :: proc(state: ^State, expanded: string) -> Expand_Error {
+	// JSON-LD 1.1 permits a list to contain another list; 1.0 does not.
+	if state.allow_document_containers do return .None
+	parsed, json_err := json.parse_string(expanded, .JSON, true)
+	if json_err != .None do return .Invalid_List_Object
+	defer json.destroy_value(parsed)
+	values, valid := array_from_value(parsed)
+	if !valid do return .Invalid_List_Object
+	for item in values {
+		object, is_object := object_from_value(item)
+		if !is_object do continue
+		if _, has_list := object_value(object, "@list"); has_list do return .Invalid_List_Object
+	}
+	return .None
+}
+
+@(private) expand_validate_list_object :: proc(ctx: ^Context, object: json.Object) -> Expand_Error {
+	for key in object {
+		if key == "@context" do continue
+		keyword := keyword_for(ctx, key)
+		if keyword != "@list" && keyword != "@index" do return .Invalid_List_Object
+	}
+	return .None
+}
+
 @(private) expand_write_list :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> Expand_Error {
+	temporary := strings.builder_make()
+	defer strings.builder_destroy(&temporary)
+	if err := expand_write_values(&temporary, state, ctx, definition, value); err != .None do return err
+	if err := expand_validate_list_values(state, strings.to_string(temporary)); err != .None do return err
 	strings.write_string(builder, `{"@list": `)
-	if err := expand_write_values(builder, state, ctx, definition, value); err != .None do return err
+	strings.write_string(builder, strings.to_string(temporary))
 	strings.write_byte(builder, '}')
 	return .None
 }
@@ -420,6 +449,20 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		}
 	} else if err := expand_write_list_container_item(builder, state, ctx, definition, value, &first); err != .None do return err
 	strings.write_byte(builder, ']')
+	return .None
+}
+
+@(private) expand_validate_list_container_values :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value) -> Expand_Error {
+	if state.allow_document_containers || definition.type == "@json" do return .None
+	if values, is_array := array_from_value(value); is_array {
+		for item in values {
+			if err := expand_validate_list_container_values(state, ctx, definition, item); err != .None do return err
+		}
+		return .None
+	}
+	object, is_object := object_from_value(value)
+	if !is_object do return .None
+	if _, has_list := has_keyword(object, ctx, "@list"); has_list do return .Invalid_List_Object
 	return .None
 }
 
@@ -1024,6 +1067,10 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		if already_list {
 			value_err = expand_write_values(&temporary, state, ctx, definition, value)
 		} else {
+			if list_err := expand_validate_list_container_values(state, ctx, definition, value); list_err != .None {
+				strings.builder_destroy(&temporary)
+				return list_err
+			}
 			strings.write_byte(&temporary, '[')
 			strings.write_string(&temporary, `{"@list": `)
 			value_err = expand_write_list_container_values(&temporary, state, ctx, definition, value)
@@ -1130,6 +1177,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	if _, has_value := has_keyword(object, &ctx, "@value"); has_value do return expand_write_value_object(builder, state, &ctx, object)
 	if _, has_language := has_keyword(object, &ctx, "@language"); has_language do return false, .None
 	if list_value, has_list := has_keyword(object, &ctx, "@list"); has_list {
+		if err := expand_validate_list_object(&ctx, object); err != .None do return false, err
 		if err := expand_write_list(builder, state, &ctx, {}, list_value); err != .None do return false, err
 		return true, .None
 	}
@@ -1356,6 +1404,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	object, is_object := object_from_value(value)
 	if !is_object do return false, .Invalid_Value_Object
 	if list_value, has_list := has_keyword(object, ctx, "@list"); has_list {
+		if err := expand_validate_list_object(ctx, object); err != .None do return false, err
 		if err := expand_write_list(builder, state, ctx, definition, list_value); err != .None do return false, err
 		return true, .None
 	}

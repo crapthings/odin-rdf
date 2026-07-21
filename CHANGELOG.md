@@ -76,6 +76,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   Expansion expectations now use parsed JSON-value comparison, as required by
   the W3C object-comparison harness, so equivalent JSON number representations
   cover `js12` without conflating source spelling with JSON value semantics.
+- Add the already-supported W3C Framing `0021` and `ra03` vectors, covering
+  JSON-LD 1.0 blank-node types and `@requireAll` matching of both type and
+  properties; the Framing gate now has 89 cases.
 - Reorganize the README around supported workflows, production boundaries,
   and task-oriented entry points; consolidate conformance indicators while
   retaining the full W3C gate breakdown on demand.

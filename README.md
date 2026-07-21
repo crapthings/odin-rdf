@@ -3,7 +3,7 @@
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
-![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C198%2F2%2C198-0f766e)
+![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C200%2F2%2C200-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
@@ -47,12 +47,12 @@ and the remaining Framing policy matrix are outside the current scope. See the
 limits.
 
 <details>
-<summary>Conformance breakdown — 2,198 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,200 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
-| JSON-LD to-RDF / Expansion / Flattening / Framing | 376 / 308 / 57 / 92 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 378 / 308 / 57 / 92 |
 | JSON-LD RDF-to-JSON-LD / Compaction | 54 / 246 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 

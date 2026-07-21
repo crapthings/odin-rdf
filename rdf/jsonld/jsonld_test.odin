@@ -1167,6 +1167,20 @@ test_rejects_colliding_identifier_aliases_in_a_node :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_rejects_inconsistent_relative_and_compact_iri_terms :: proc(t: ^testing.T) {
+	invalid_contexts := []string{
+		`{"@context":{"./something":"https://example.test/other"}}`,
+		`{"@context":{"v":"https://example.test/vocab#","v:term":"v:other"}}`,
+		`{"@context":{"@vocab":"https://example.test/","./something":{"@type":"@id","@prefix":true}}}`,
+	}
+	for input in invalid_contexts {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+	}
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

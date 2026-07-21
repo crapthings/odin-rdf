@@ -670,6 +670,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return apply_context_inner(state, current, value, false, propagate)
 }
 
+@(private) validate_term_iri_mapping :: proc(state: ^State, ctx: ^Context, term: string, definition: Term_Definition) -> Parse_Error {
+	if !state.allow_document_containers do return {}
+	relative_term := strings.has_prefix(term, "./") || strings.has_prefix(term, "../") || strings.has_prefix(term, "/")
+	if definition.prefix && relative_term do return Parse_Error{code = .Invalid_Term_Definition}
+	compact_term := strings.index_byte(term, ':') >= 0
+	if !relative_term && !compact_term do return {}
+	expanded_term, expansion_error := expand_iri(state, ctx, term, true, true)
+	if expansion_error.code != .None do return expansion_error
+	if definition.id != expanded_term do return Parse_Error{code = .Invalid_Term_Definition}
+	return {}
+}
+
 @(private) term_definitions_match :: proc(a, b: Term_Definition) -> bool {
 	// An omitted @prefix retains compatibility behaviour and is not part of a
 	// protected definition's public meaning. An explicit declaration is.
@@ -1022,6 +1034,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			// JSON-LD 1.0's compact string form remains a prefix mapping for
 			// compatibility. Object term definitions opt in with @prefix below.
 			definition.prefix = true
+			if mapping_error := validate_term_iri_mapping(state, &result, term, definition); mapping_error.code != .None do return {}, mapping_error
 			if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 			continue
 		}
@@ -1159,6 +1172,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if state.legacy_prefixes && !definition.reverse do definition.prefix = true
 		if definition.id == "@context" do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if implicit_id && len(result.vocab) == 0 && !has_iri_scheme(term) && strings.index_byte(term, ':') < 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		if mapping_error := validate_term_iri_mapping(state, &result, term, definition); mapping_error.code != .None do return {}, mapping_error
 		// JSON-LD 1.1 keyword aliases may not carry an IRI coercion or become a
 		// compact-IRI prefix. JSON-LD 1.0 keeps its legacy @type mapping form.
 		if state.allow_document_containers && is_keyword(definition.id) && (len(definition.type) > 0 || definition.prefix) do return {}, Parse_Error{code = .Invalid_Term_Definition}

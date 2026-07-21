@@ -120,6 +120,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Reject a second `@id` member introduced through a colliding identifier
   alias, while retaining multiple legal `@type` aliases. Cover W3C to-RDF
   negative vector `er26`, raising that gate to 385 cases.
+- Require JSON-LD 1.1 relative and compact IRI-looking terms to retain their
+  own expansion, and prohibit a relative term from becoming an `@prefix`.
+  Cover W3C to-RDF negative vectors `er44`, `er48`, and `er49`, raising that
+  gate to 388 cases. The runner now explicitly executes `e071` in its W3C
+  JSON-LD 1.0 mode.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

@@ -1119,7 +1119,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			index_name, valid := string_value(index_value)
 			if !valid || !definition.container_index do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if index_name == "@index" {
-				definition.index = "@index"
+				// An omitted @index uses the JSON-LD keyword annotation. Once the
+				// member is present it names a property-valued index and therefore
+				// must expand to an IRI rather than another keyword.
+				return {}, Parse_Error{code = .Invalid_Term_Definition}
 			} else {
 				definition.index_reference, make_error = own(state, index_name)
 				if make_error.code != .None do return {}, make_error

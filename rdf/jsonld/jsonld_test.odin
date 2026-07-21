@@ -1153,6 +1153,13 @@ test_rejects_invalid_context_keyword_and_iri_term_mappings :: proc(t: ^testing.T
 }
 
 @(test)
+test_rejects_keyword_as_a_property_valued_index :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"@version":1.1,"container":{"@id":"https://example.test/container","@container":"@index","@index":"@index"}}}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

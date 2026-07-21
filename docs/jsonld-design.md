@@ -152,12 +152,16 @@ JSON-LD through `--to jsonld`; unlike record targets, it requires a positive
 `--max-records N` and writes only after the complete dataset succeeds.
 Pass `--context context.jsonld` to `odin-rdf convert` to compact that same
 bounded dataset with a local context file. The command keeps expanded JSON-LD
-as the default because no context has to be guessed; it never fetches a remote
-context.
+as the default because no context has to be guessed. Repeat
+`--context-map URL=PATH` to bind an exact resolved remote-context URL to a
+local document for JSON-LD input or for a remote context named by `--context`.
+Each mapped document is admitted before processing and is bounded by
+`--max-document-bytes`; the command never fetches a URL.
 `odin-rdf convert` recognizes `jsonld`, `json-ld`, and `json`, and infers
 `.jsonld` and `.json`. `--max-document-bytes N` sets the retained JSON-LD
-document limit. CLI conversion intentionally has no document loader, so remote
-contexts fail explicitly instead of causing implicit network access.
+document limit. CLI conversion has no built-in network loader: a remote
+context succeeds only through the explicit local mapping above, so applications
+retain full control of context admission and network policy.
 
 ## Conformance discipline
 

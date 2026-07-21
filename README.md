@@ -22,7 +22,7 @@ graph store or SPARQL engine.
 
 ## Status and scope
 
-**Current release: `0.28.1`** — ready for production use within the documented
+**Current release: `0.28.2`** — ready for production use within the documented
 profile. The public API may still evolve, so applications should pin a release
 and retain integration tests for their own JSON-LD documents.
 

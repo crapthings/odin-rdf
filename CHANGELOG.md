@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Reorganize the README around supported workflows, production boundaries,
+  and task-oriented entry points; consolidate conformance indicators while
+  retaining the full W3C gate breakdown on demand.
 - Synchronize JSON-LD W3C gate counts, supported Framing and scoped-context
   capabilities, Compaction exact-output coverage, and the landing-page total
   with the pinned runners used by CI.

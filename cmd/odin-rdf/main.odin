@@ -119,6 +119,7 @@ Integrity_Command_Options :: struct {
 	output_path:   string,
 	input_format:  convert.Format,
 	other_format:  convert.Format,
+	base_iri:       string,
 	reader_limits: convert.Reader_Limits,
 	max_quads:     int,
 	hash_algorithm: canon.Hash_Algorithm,
@@ -423,7 +424,7 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--from" || arg == "--output" || arg == "-o" || arg == "--algorithm" || arg == "--max-quads" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
+		if !positional_only && (arg == "--from" || arg == "--output" || arg == "-o" || arg == "--algorithm" || arg == "--base" || arg == "--max-quads" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -449,6 +450,12 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 			algorithm, ok := parse_hash_algorithm(value)
 			if !ok do return options, Command_Error{code = .Invalid_Hash_Algorithm, value = value}
 			options.hash_algorithm = algorithm
+			continue
+		}
+		if !positional_only && (arg == "--base" || strings.has_prefix(arg, "--base=")) {
+			if !needs_value do value = arg[len("--base="):]
+			if len(value) == 0 do return options, Command_Error{code = .Missing_Option_Value, value = "--base"}
+			options.base_iri = value
 			continue
 		}
 		if !positional_only && (arg == "--max-quads" || strings.has_prefix(arg, "--max-quads=")) {
@@ -533,7 +540,7 @@ print_help :: proc() {
 	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
 	  odin-rdf canon INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf hash INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
-	  odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf compare LEFT RIGHT [--from FORMAT] [--base IRI] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf diff BEFORE AFTER [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 
 Formats: ntriples (nt), nquads (nq), turtle (ttl), trig, jsonld (json-ld, json; bounded batch output), rdfxml (rdf-xml, rdf, xml; bounded batch output)
@@ -923,7 +930,7 @@ set_integrity_collection_error :: proc(result: ^convert.Result, collector: ^data
 	}
 }
 
-collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, limits: convert.Reader_Limits, collector: ^dataset.Collector) -> convert.Result {
+collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, limits: convert.Reader_Limits, base_iri: string, collector: ^dataset.Collector) -> convert.Result {
 	result: convert.Result
 	#partial switch format {
 	case .N_Triples:
@@ -944,7 +951,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, nquads.parse_error_message(parsed.error.code), parsed.reader_error)
 	case .Turtle:
 		parsed := turtle.parse_reader(reader, dataset.triple_sink, turtle.Reader_Options{
-			parse = turtle.Parse_Options{max_triples = limits.max_records},
+			parse = turtle.Parse_Options{base_iri = base_iri, max_triples = limits.max_records},
 			chunk_size = limits.chunk_size,
 			max_statement_bytes = limits.max_statement_bytes,
 		}, collector)
@@ -954,7 +961,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 		parsed := jsonld.parse_reader(reader, dataset.sink, jsonld.Reader_Options{
 			chunk_size = limits.chunk_size,
 			max_document_bytes = limits.max_document_bytes,
-			parse = jsonld.Options{max_quads = limits.max_records},
+			parse = jsonld.Options{base_iri = base_iri, max_quads = limits.max_records},
 		}, collector)
 		result.bytes_read = parsed.bytes_read
 		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -962,7 +969,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 		parsed := rdfxml.parse_reader(reader, dataset.sink, rdfxml.Reader_Options{
 			chunk_size = limits.chunk_size,
 			max_document_bytes = limits.max_document_bytes,
-			parse = rdfxml.Options{max_quads = limits.max_records},
+			parse = rdfxml.Options{base_iri = base_iri, max_quads = limits.max_records},
 		}, collector)
 		result.bytes_read = parsed.bytes_read
 		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, rdfxml.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -970,7 +977,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 		parsed := trig.parse_reader(reader, dataset.sink, trig.Reader_Options{
 			chunk_size = limits.chunk_size,
 			max_document_bytes = limits.max_document_bytes,
-			parse = trig.Parse_Options{max_quads = limits.max_records},
+			parse = trig.Parse_Options{base_iri = base_iri, max_quads = limits.max_records},
 		}, collector)
 		result.bytes_read = parsed.bytes_read
 		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, trig.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -981,7 +988,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 	return result
 }
 
-load_integrity_dataset :: proc(path: string, format: convert.Format, limits: convert.Reader_Limits, max_quads: int, collector: ^dataset.Collector) -> convert.Error {
+load_integrity_dataset :: proc(path: string, format: convert.Format, limits: convert.Reader_Limits, max_quads: int, collector: ^dataset.Collector, base_iri := "") -> convert.Error {
 	if init_err := dataset.init(collector, dataset.Options{max_quads = max_quads}); init_err != .None do return convert.Error{code = .Graph_Collection_Error, detail = dataset.error_message(init_err)}
 	input_file := os.stdin
 	close_input := false
@@ -992,7 +999,7 @@ load_integrity_dataset :: proc(path: string, format: convert.Format, limits: con
 		close_input = true
 	}
 	defer if close_input do _ = os.close(input_file)
-	return collect_integrity_dataset(os.to_reader(input_file), format, limits, collector).error
+	return collect_integrity_dataset(os.to_reader(input_file), format, limits, base_iri, collector).error
 }
 
 report_integrity_error :: proc(format: convert.Format, path: string, err: convert.Error) {
@@ -1072,7 +1079,7 @@ write_canonical_diff :: proc(builder: ^strings.Builder, before, after: string) -
 
 run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 	left: dataset.Collector
-	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left)
+	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left, options.base_iri)
 	defer dataset.destroy(&left)
 	if left_error.code != .None {
 		report_integrity_error(options.input_format, options.input_path, left_error)
@@ -1082,7 +1089,7 @@ run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 
 	if options.command == .Compare || options.command == .Diff {
 		right: dataset.Collector
-		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right)
+		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right, options.base_iri)
 		defer dataset.destroy(&right)
 		if right_error.code != .None {
 			report_integrity_error(options.other_format, options.other_path, right_error)

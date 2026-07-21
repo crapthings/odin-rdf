@@ -4,6 +4,128 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Restore the direct JSON shape of an anonymous JSON-LD 1.1 `@graph`
+  container when its original source document is supplied to Compaction,
+  including `@included` for multiple graph nodes. Add unit coverage and
+  structural W3C `0077`/`0081`/`0109` assertions. The single anonymous
+  `[@graph, @index]` form now restores its source index key, and the matching
+  `[@graph, @id]` form restores `@none` (including its term alias). `@set`
+  is preserved for the single anonymous `[@graph, @id, @set]` form; other
+  graph-map combinations remain independently handled. The same unique
+  source association restores both explicit and `@none` keys for
+  `[@graph, @index, @set]`, and restores explicit source graph IDs as keys
+  for `[@graph, @id]` with and without `@set`.
+- Restore the source `@index` member on a named graph inside an anonymous
+  `[@graph, @index]` container, retaining its `@id`/`@index`/`@graph` object
+  form and adding a structural W3C `0083` assertion.
+- Preserve the `@none` key for an anonymous `[@graph, @id]` container even
+  when its source graph object has an unrelated ordinary `@index` annotation;
+  add the structural W3C `0088` assertion.
+- Preserve the array shape for a direct anonymous `[@graph, @set]` container
+  restored from source metadata; add the structural W3C `0078` assertion.
+- Restore a direct anonymous `@graph` container even when its source graph
+  object carries an unrelated ordinary `@index`; add the structural W3C
+  `0079` assertion.
+- Restore a direct named `@graph` container from its unique source graph ID;
+  add the structural W3C `0080` assertion.
+- Preserve a source graph boundary as an explicit `@graph` wrapper when the
+  compaction context defines an ordinary property rather than a graph
+  container; add the structural W3C `0090` assertion.
+- Extend source graph-boundary recovery to multiple values of one ordinary
+  property, adding the structural W3C `0092` assertion.
+- Cover the equivalent single-boundary W3C `0094` output shape.
+- Map W3C `compactArrays: false` to `Compact_Array_Policy.Preserve` in the
+  Compaction runner. Preserve the top-level `@graph` document shape for
+  source-recovered graph boundaries, adding structural `0091`/`0093`
+  assertions.
+- Restore multiple graph values from one source `@graph` container, retaining
+  `@set` at the property level rather than around each graph; add structural
+  `0096`/`0097` assertions.
+- Restore multiple anonymous `[@graph, @index]` values as one source-indexed
+  map, with and without `@set`; add structural W3C `0098`/`0099` assertions.
+- Restore multiple explicit source graph IDs as `[@graph, @id]` map keys,
+  with and without `@set`; add structural W3C `0100`/`0101` assertions.
+- Preserve repeated source keys as arrays in an anonymous `[@graph, @index]`
+  map; add the structural W3C `0102` assertion.
+- Recover repeated explicit graph-ID occurrences only when source fragment
+  signatures exactly partition the merged RDF named graph; add the structural
+  W3C `0103` assertion.
+- Preserve the outer `@set` array around a source-recovered multi-node graph
+  container; add the structural W3C `0110` assertion.
+- Recover the uniquely identifiable anonymous source root of a custom-index
+  map after RDF serialization; add structural assertions for W3C `0112`/`0113`.
+- Recover a source-confirmed reverse custom-index map whose root is present
+  only as an RDF object; add the structural W3C `0114` assertion.
+- Preserve an `@json` array as one `@set` value rather than nesting it;
+  extend the W3C JSON literal Compaction gate through `js01`–`js11` and
+  add structural assertions for all eleven vectors. Restore a source-proven
+  lone JSON `null` value when its RDF dataset is empty.
+- Recover a source-signature-verified, single-layer `@included` boundary
+  with aliased, keyword, and source-only-root forms; add structural W3C
+  `in01`–`in03` assertions.
+- Extend source-signature recovery to nested `@included` boundaries; add
+  the structural W3C `in04` assertion.
+- Recover a source-confirmed ordinary parent edge that RDF later presents as
+  a reverse relation, completing the structural W3C `in05` assertion.
+- Add exact structural W3C coverage for list-container vectors
+  `li01`–`li05`.
+- Add parsed JSON structural assertions to the W3C Compaction runner for
+  shape-sensitive vectors. Cover relative property IRIs and JavaScript object
+  property names, extending the semantic Compaction gate to 151 vectors.
+- Honor `@set` on direct and aliased `@type` definitions during compaction,
+  and omit RDF-generated blank-node IDs from an anonymous singleton result.
+  Add direct output-shape regression coverage for both forms.
+- Cover an aliased JSON-LD 1.1 `@type` with an `@set` container in the
+  semantic Compaction gate, raising it to 149 vectors.
+- Cover JSON-LD 1.1 `@type` with an `@set` container in the semantic
+  Compaction gate, raising it to 148 vectors.
+- Cover shared ID keys for multiple graphs in a JSON-LD 1.1 `[@graph, @id]`
+  container in the semantic Compaction gate, raising it to 147 vectors.
+- Cover shared index keys for multiple graphs in a JSON-LD 1.1
+  `[@graph, @index]` container in the semantic Compaction gate, raising it to
+  146 vectors.
+- Cover multiple graphs in a JSON-LD 1.1 `[@graph, @id, @set]` container in
+  the semantic Compaction gate, raising it to 145 vectors.
+- Cover multiple graphs in a JSON-LD 1.1 `[@graph, @id]` container in the
+  semantic Compaction gate, raising it to 144 vectors.
+- Cover multiple indexed graphs in a JSON-LD 1.1 `[@graph, @index, @set]`
+  container in the semantic Compaction gate, raising it to 143 vectors.
+- Cover multiple indexed graphs in a JSON-LD 1.1 `[@graph, @index]` container
+  in the semantic Compaction gate, raising it to 142 vectors.
+- Cover multiple graphs in a JSON-LD 1.1 `[@graph, @set]` container in the
+  semantic Compaction gate, raising it to 141 vectors.
+- Cover multiple graphs in a JSON-LD 1.1 `@graph` container in the semantic
+  Compaction gate, raising it to 140 vectors.
+- Cover a graph `@index` annotation with a JSON-LD 1.1 `[@graph, @id]`
+  container in the semantic Compaction gate, raising it to 139 vectors.
+- Cover the named JSON-LD 1.1 `[@graph, @id, @set]` container form in the
+  semantic Compaction gate, raising it to 138 vectors.
+- Cover the anonymous JSON-LD 1.1 `[@graph, @id, @set]` container form in the
+  semantic Compaction gate, raising it to 137 vectors.
+- Cover the named JSON-LD 1.1 `[@graph, @id]` container form in the semantic
+  Compaction gate, raising it to 136 vectors.
+- Cover the anonymous JSON-LD 1.1 `[@graph, @id]` container form in the
+  semantic Compaction gate, raising it to 135 vectors.
+- Cover the anonymous JSON-LD 1.1 `[@graph, @index, @set]` container form in
+  the semantic Compaction gate, raising it to 134 vectors.
+- Cover the anonymous JSON-LD 1.1 `[@graph, @index]` container form in the
+  semantic Compaction gate, raising it to 133 vectors.
+- Cover an ordinary `@index` annotation on a JSON-LD 1.1 `@graph` container
+  in the semantic Compaction gate, raising it to 132 vectors.
+- Cover the JSON-LD 1.1 `[@graph, @set]` container in the semantic Compaction
+  gate, raising it to 131 vectors.
+- Cover the basic JSON-LD 1.1 `@graph` container in the semantic Compaction
+  gate, raising it to 130 vectors.
+- Normalize compact-IRI term dependencies after a local context is fully
+  constructed, so sibling prefix declarations are independent of JSON object
+  iteration order. Preserve ordinary `@index` keys when their source document
+  is explicitly supplied to compaction. Extend the semantic Compaction gate to
+  129 vectors.
+- Keep type-scoped contexts from leaking into inline referenced nodes.
+  Extend the semantic Compaction gate to 128 vectors.
+- Reconstruct safe RDF reverse links as compact `@reverse` entries and extend
+  dataset comparison with `--base IRI` for relative JSON-LD identifiers.
+  Extend the semantic Compaction gate to 127 vectors.
 - Avoid compact IRI spellings that collide with a same-named coercing term
   when that term cannot represent the property's values. Extend the semantic
   Compaction gate to 126 vectors.

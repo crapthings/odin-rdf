@@ -288,8 +288,18 @@ single ordinary value to a scalar and preserves `@list`/`@set` containers;
 values are emitted by default; `native_type_policy = .Lexical` retains lexical
 value objects. Language containers compact retained RDF language literals as
 language maps. Index containers are accepted on input; ordinary `@index`
-annotations cannot be reconstructed after RDF conversion, while custom index
-properties remain RDF statements. When a base IRI is supplied, document-relative
+annotations cannot be reconstructed from a dataset alone, while custom index
+properties remain RDF statements. To preserve ordinary index keys, set
+`Compact_Options.source_document` to the original JSON-LD input; compaction
+uses it only to associate RDF-invisible annotations with the supplied dataset.
+It also restores the direct form of one unadorned anonymous `@graph` container
+when the source has one anonymous root and one unambiguous graph edge, using
+`@included` for multiple graph nodes; graph `@index`, `@id`, and `@set` map
+forms are not inferred by that recovery except for one anonymous
+`[@graph, @index]` container with one source index key and one anonymous
+`[@graph, @id]` or `[@graph, @index]` container's `@none` key, including
+`@set`, plus an explicit source ID for `[@graph, @id]` and a named graph's
+source `@index` member. When a base IRI is supplied, document-relative
 node identifiers and `@id`-coerced values use RFC 3986 relative references;
 keyword-like path segments retain an explicit `./` prefix. The CLI exposes the
 same operation through
@@ -441,7 +451,7 @@ odin-rdf canon INPUT [--from FORMAT] [--output PATH] \
   [--algorithm sha256|sha384] [--max-quads N] [reader limits]
 odin-rdf hash INPUT [--from FORMAT] [--output PATH] \
   [--algorithm sha256|sha384] [--max-quads N] [reader limits]
-odin-rdf compare LEFT RIGHT [--from FORMAT] [--algorithm sha256|sha384] \
+odin-rdf compare LEFT RIGHT [--from FORMAT] [--base IRI] [--algorithm sha256|sha384] \
   [--max-quads N] [reader limits]
 odin-rdf diff BEFORE AFTER [--from FORMAT] [--output PATH] \
   [--algorithm sha256|sha384] [--max-quads N] [reader limits]
@@ -490,7 +500,9 @@ one complete, owned dataset before calling `rdf/canon`. Their default
 reader-limit options have the same syntax-specific behavior as `convert`.
 `canon` writes atomic canonical N-Quads and `hash` writes a lowercase
 hexadecimal SHA-256 digest by default (SHA-384 with `--algorithm sha384`).
-`compare` accepts two file paths, may infer a different format for each, prints
+`compare` accepts two file paths, may infer a different format for each, and
+accepts `--base IRI` when relative identifiers in a base-aware syntax (including
+JSON-LD) must resolve consistently. It prints
 `equal` or `different`, and returns exit status 0, 1, or 2 for equal,
 different, or an error. `diff` accepts two file paths, may also infer each format
 independently, and atomically writes canonical N-Quads lines prefixed with `- `

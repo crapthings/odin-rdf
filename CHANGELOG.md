@@ -66,13 +66,16 @@ This project follows [Semantic Versioning](https://semver.org/).
   remain present when a local context clears the document base. Direct `@id`
   members inside `@nest` now identify the enclosing expanded node.
   The Expansion gate includes the matching JSON:API nested-identity and JSON
-  value vectors, increasing from 299 to 307 cases. Type identifiers now expand
+  value vectors, increasing from 299 to 308 cases. Type identifiers now expand
   against the context preceding their type-scoped contexts, and property-scoped
   contexts now govern scalar coercion as well as object values.
   The W3C Expansion runner also covers its `expandContext` fixture without
   broadening the public Expansion options.
   Type-map-selected scoped contexts now remain active while expanding nested
   index-map values, covering the W3C `c013` composition vector.
+  Expansion expectations now use parsed JSON-value comparison, as required by
+  the W3C object-comparison harness, so equivalent JSON number representations
+  cover `js12` without conflating source spelling with JSON value semantics.
 - Reorganize the README around supported workflows, production boundaries,
   and task-oriented entry points; consolidate conformance indicators while
   retaining the full W3C gate breakdown on demand.

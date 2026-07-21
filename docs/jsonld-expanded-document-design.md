@@ -70,7 +70,7 @@ renamed or treated as a JSON-LD `expand` implementation.
 
 1. Expansion core: implemented for aliases, `@id`, `@type`, scalar and value
    expansion, lists, `@set`, `@nest`, language and index maps, `@reverse`, and `@graph`.
-2. A 307-case pinned W3C Expand core selection with structural JSON comparison.
+2. A 308-case pinned W3C Expand core selection with parsed JSON-value comparison.
 3. Default-graph Flatten node-map generation: implemented.
 4. A 56-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.

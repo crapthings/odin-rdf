@@ -165,7 +165,7 @@ It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs 355 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 307 Expansion vectors,
+output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 308 Expansion vectors,
 including document-scope free-value removal, `@id` IRI processing, and null
 local-context restoration to the document base.
 `scripts/run-w3c-jsonld-flatten-tests.sh` runs 56 Flattening vectors, covering

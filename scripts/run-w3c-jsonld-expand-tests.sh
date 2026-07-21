@@ -4,9 +4,11 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite=$("$root/scripts/fetch-w3c-jsonld-tests.sh")
 runner="$root/.cache/odin-rdf-w3c-jsonld-expand-runner"
+compare_runner="$root/.cache/odin-rdf-w3c-json-compare-runner"
 mkdir -p "$root/.cache"
 
 odin build "$root/tests/w3c/jsonld_expand_runner" -out:"$runner"
+odin build "$root/tests/w3c/json_compare_runner" -out:"$compare_runner"
 
 # The document-level core targets aliases, scalar/value expansion, @set,
 # @list, language/type coercion, reverse properties, transparent nesting,
@@ -30,7 +32,7 @@ li01 li02 li03 li04 li05 li06 li07 li08 li09 li10
 c031 c034 c035 c036 c037 c038
 in01 in02 in03 in04 in05
 in06
-js01 js02 js03 js04 js05 js06 js07 js08 js09 js10 js11 js13 js14 js15 js16 js17 js18 js19 js20 js22 js23
+js01 js02 js03 js04 js05 js06 js07 js08 js09 js10 js11 js12 js13 js14 js15 js16 js17 js18 js19 js20 js22 js23
 js21
 l001
 p001 p002 p003 p004
@@ -59,7 +61,7 @@ for case_id in $cases; do
   mode=''
   case "$case_id" in 0076) base="http://example/base/" ;; 0089|0090) base="http://example/base/" ;; m005) base="http://example.org/" ;; esac
   case "$case_id" in 0077) mode=expand-context-0077 ;; esac
-  if ! "$runner" "$input" "$base" "$suite" $mode > "$actual" || ! jq -S -c . "$actual" > "$actual.canonical" || ! jq -S -c . "$expected" > "$expected.canonical" || ! diff -u "$expected.canonical" "$actual.canonical"; then
+  if ! "$runner" "$input" "$base" "$suite" $mode > "$actual" || ! "$compare_runner" "$expected" "$actual"; then
     failures=$((failures + 1))
   fi
   total=$((total + 1))
@@ -76,5 +78,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD expansion core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 307
+test "$total" -eq 308
 test "$failures" -eq 0

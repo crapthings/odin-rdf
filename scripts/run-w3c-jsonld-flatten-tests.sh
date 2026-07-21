@@ -46,6 +46,11 @@ for case_id in $cases; do
   total=$((total + 1))
 done
 
+if "$runner" "$suite/flatten/e001-in.jsonld" "https://w3c.github.io/json-ld-api/tests/flatten/e001-in.jsonld" "$suite" >/dev/null 2>&1; then
+  failures=$((failures + 1))
+fi
+total=$((total + 1))
+
 printf 'W3C JSON-LD flattening core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 57
+test "$total" -eq 58
 test "$failures" -eq 0

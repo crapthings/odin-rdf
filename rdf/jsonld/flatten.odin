@@ -265,10 +265,10 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	node := &state.nodes[node_index]
 	for &property in node.properties {
 		if property.key != key do continue
-		copy, clone_error := strings.clone(value)
-		if clone_error != nil do return .Out_Of_Memory
-		delete(property.value)
-		property.value = copy
+		// Node-map merging permits one @index for an identifier. A second,
+		// different index is an expansion error rather than a last-write-wins
+		// update (W3C flatten-e001).
+		if property.value != value do return .Invalid_Value_Object
 		return .None
 	}
 	key_copy, key_error := strings.clone(key)

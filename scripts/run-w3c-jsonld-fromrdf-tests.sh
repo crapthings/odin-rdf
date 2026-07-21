@@ -18,7 +18,7 @@ odin build "$root/cmd/odin-rdf" -out:"$cli"
 cases='
 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014
 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024 0025 0026 0027 0028
-di05 di06 di11 di12
+di01 di02 di05 di06 di09 di10 di11 di12
 js01 js02 js03 js04 js05 js06 js07 js10 js11 li01 li02 li03
 '
 
@@ -33,6 +33,7 @@ for case_id in $cases; do
     0018|0027|0028) flags='--use-native-types' ;;
     0019) flags='--use-rdf-type' ;;
     di05|di06) flags='--rdf-direction-i18n'; directional=true ;;
+    di09|di10) flags='--rdf-direction-compound'; directional=true ;;
     di11|di12) flags='--rdf-direction-compound'; directional=true ;;
   esac
   input="$suite/fromRdf/$case_id-in.nq"
@@ -63,5 +64,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD RDF-to-JSON-LD core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 46
+test "$total" -eq 50
 test "$failures" -eq 0

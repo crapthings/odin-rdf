@@ -1188,6 +1188,13 @@ test_rejects_an_empty_context_term :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_rejects_an_unused_scoped_context_with_an_implicit_term_without_vocab :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"@version":1.1,"t1":{"@id":"ex:t1","@context":{"t2":{"@context":{"type":null}}}}}}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

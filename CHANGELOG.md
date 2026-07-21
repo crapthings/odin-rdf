@@ -128,6 +128,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Reject an empty context term while retaining the internal empty-object-key
   sentinel exclusively for opaque `@json` values. Cover W3C to-RDF negative
   vector `er52`, raising that gate to 389 cases.
+- Statically validate an unused scoped context's implicit terms without
+  constructing that context or altering protected-term ordering. Cover W3C
+  to-RDF negative vector `c033`, raising that gate to 390 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

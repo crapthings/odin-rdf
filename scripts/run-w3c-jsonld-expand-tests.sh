@@ -60,7 +60,7 @@ for case_id in $cases; do
   base="https://w3c.github.io/json-ld-api/tests/expand/$case_id-in.jsonld"
   mode=''
   case "$case_id" in 0076) base="http://example/base/" ;; 0089|0090) base="http://example/base/" ;; m005) base="http://example.org/" ;; esac
-  case "$case_id" in 0077) mode=expand-context-0077 ;; esac
+  case "$case_id" in 0026|0071) mode=json-ld-1.0 ;; 0077) mode=expand-context-0077 ;; esac
   if ! "$runner" "$input" "$base" "$suite" $mode > "$actual" || ! "$compare_runner" "$expected" "$actual"; then
     failures=$((failures + 1))
   fi

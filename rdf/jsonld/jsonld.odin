@@ -682,6 +682,43 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return {}
 }
 
+// Scoped contexts are parsed lazily for property/type processing, but an
+// unused scope must still reject an implicit term that has no vocabulary from
+// which an IRI can be formed. This is structural validation only: it does not
+// construct a Context, consume limits, or alter protected-term ordering.
+@(private) validate_scoped_context_implicit_terms :: proc(value: json.Value, inherited_vocab: bool) -> Parse_Error {
+	if values, is_array := array_from_value(value); is_array {
+		has_vocab := inherited_vocab
+		for item in values {
+			if validation_error := validate_scoped_context_implicit_terms(item, has_vocab); validation_error.code != .None do return validation_error
+			object, is_object := object_from_value(item)
+			if !is_object do continue
+			if vocab_value, found := object_value(object, "@vocab"); found {
+				if _, is_string := string_value(vocab_value); is_string { has_vocab = true } else { #partial switch _ in vocab_value { case json.Null: has_vocab = false } }
+			}
+		}
+		return {}
+	}
+	object, is_object := object_from_value(value)
+	if !is_object do return {}
+	has_vocab := inherited_vocab
+	if vocab_value, found := object_value(object, "@vocab"); found {
+		if _, is_string := string_value(vocab_value); is_string { has_vocab = true } else { #partial switch _ in vocab_value { case json.Null: has_vocab = false } }
+	}
+	for term, definition_value in object {
+		if is_keyword(term) || has_keyword_form(term) do continue
+		definition, is_definition := object_from_value(definition_value)
+		if !is_definition do continue
+		_, has_identifier := object_value(definition, "@id")
+		_, has_reverse := object_value(definition, "@reverse")
+		if !has_identifier && !has_reverse && !has_vocab && !has_iri_scheme(term) && strings.index_byte(term, ':') < 0 do return Parse_Error{code = .Invalid_Term_Definition}
+		if local_context, found := object_value(definition, "@context"); found {
+			if validation_error := validate_scoped_context_implicit_terms(local_context, has_vocab); validation_error.code != .None do return validation_error
+		}
+	}
+	return {}
+}
+
 @(private) term_definitions_match :: proc(a, b: Term_Definition) -> bool {
 	// An omitted @prefix retains compatibility behaviour and is not part of a
 	// protected definition's public meaning. An explicit declaration is.
@@ -1146,6 +1183,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if local_context, found := object_value(definition_object, "@context"); found {
 			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if validation_error := validate_scoped_context_implicit_terms(local_context, len(result.vocab) > 0); validation_error.code != .None do return {}, validation_error
 			serialized := strings.builder_make()
 			if !compact_write_raw_json(&serialized, local_context) {
 				strings.builder_destroy(&serialized)

@@ -8,12 +8,11 @@ mkdir -p "$root/.cache"
 
 odin build "$root/tests/w3c/jsonld_frame_runner" -out:"$runner"
 
-# The initial Framing gate covers nested library embedding, no-match, default
+# This complete pinned Framing manifest covers nested library embedding, no-match, default
 # recursive embedding, explicit filtering, boolean @embed control, defaults,
 # require-all matching, ID selection, multi-type matching, empty-frame
 # selection, @set containers, protected empty contexts, @included node
-# selection, and scoped named-graph / graph-container framing. The full policy
-# matrix remains outside this bounded profile.
+# selection, and scoped named-graph / graph-container framing.
 cases='
 0001 0002 0003 0004 0005 0006 0007 0008
 0009 0010 0011 0012 0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024 0025 0026 0027

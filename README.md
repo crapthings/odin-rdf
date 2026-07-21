@@ -42,9 +42,9 @@ directional RDF round trips require opt-in `i18n-datatype` or
 Framing includes recursive embedding, standard embed modes, defaults,
 `@requireAll`, value/list patterns, basic reverse framing, bounded `@included`
 selection, and bounded named-graph subframes. Scoped graph storage, SPARQL,
-and the remaining Framing policy matrix are outside the current scope. See the
-[JSON-LD processing profile](docs/jsonld-design.md) for exact behavior and
-limits.
+and other application-level query features are outside the current scope. The
+full pinned W3C Framing manifest is gated; see the [JSON-LD processing
+profile](docs/jsonld-design.md) for exact behavior and limits.
 
 <details>
 <summary>Conformance breakdown — 2,364 passing pinned W3C gate cases</summary>
@@ -400,7 +400,8 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Complete the remaining JSON-LD Framing policy matrix and broaden JSON-LD 1.1 conformance; keep graph storage and SPARQL as separate product directions.
+1. Broaden JSON-LD 1.1 interoperability beyond the pinned W3C API manifests;
+   keep graph storage and SPARQL as separate product directions.
 
 ## License
 

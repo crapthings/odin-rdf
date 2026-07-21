@@ -17,7 +17,7 @@ matches frame subjects, applies the supported embedding policy, and compacts
 the result using the frame's context. It atomically appends the compacted
 result only after all steps succeed.
 
-## Initial profile
+## Implemented profile
 
 The implemented first profile is intentionally small and testable:
 
@@ -29,7 +29,8 @@ The implemented first profile is intentionally small and testable:
 - emit scalar `@default` values (or `null`) for missing framed properties and
   honor `@omitDefault: true`;
 - apply boolean `@requireAll` to ordinary property matching;
-- produce the frame context plus an `@graph` result;
+- emit JSON-LD 1.1 or legacy JSON-LD 1.0 result shape as selected by the
+  processing and graph-shape options;
 - bound nodes, embedding depth, and output bytes; detect recursive embeds.
 
 Value and list patterns, all standard `@embed` modes, basic reverse framing,

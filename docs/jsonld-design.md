@@ -22,15 +22,16 @@ valid for the callback only. The reader retains at most `max_document_bytes`
 `expand` is separate from `serialize`: it takes a JSON-LD document and emits
 the JSON-LD Expansion form before an RDF conversion could discard ordinary
 `@index` annotations. It is atomic, deterministic, and independently bounds
-the expanded output at 32 MiB by default. Its first W3C-gated core includes
+the expanded output at 32 MiB by default. Its full pinned W3C Expansion
+manifest includes
 aliases, value/type/language expansion, `@list`, nested `@set`, `@nest`, language and
 index containers, reverse maps, default/named graph expansion, and document-level
 `@graph`, `@id`, and `@type` containers including `@graph` composites.
 
 `flatten` consumes that expanded-document boundary and emits a deterministic,
-bounded node-map. It does not accept an output context or perform
-context-driven result compaction; use the separate `compact` API for that
-workflow. It merges embedded nodes by identifier, preserves lists and
+bounded node-map. An optional `output_context` compacts that result with the
+same bounded compaction policy; use `compact` directly when the starting point
+is an RDF dataset. It merges embedded nodes by identifier, preserves lists and
 ordinary `@index`, applies reverse relationships to their referenced nodes,
 and retains nested graph objects.
 
@@ -44,8 +45,8 @@ standard embed modes, ordinary-property `@requireAll`, and basic reverse
 framing, bounded `@included` selection, and bounded named-graph subframes.
 Graph subframes resolve references against a graph-local node view and
 graph-container terms compact selected graph members without a synthetic
-`@graph` wrapper. Scoped graph storage and the remaining Framing policy matrix
-remain later work.
+`@graph` wrapper. The full pinned W3C Framing manifest is covered; general
+purpose graph storage and SPARQL remain separate product directions.
 
 ```odin
 serialize(builder: ^strings.Builder, quads: []rdf.Quad,
@@ -134,8 +135,8 @@ the same opt-in document loader. Expansion and Flattening preserve JSON-LD 1.1
 base and term `@direction` mappings on expanded value objects. Its opt-in
 `.I18n_Datatype` mode maps those values through RDF and restores them in
 serialization and compaction; `.Compound_Literal` supplies the standard RDF
-blank-node alternative. A built-in HTTP loader and the remaining Framing policy
-matrix remain separate conformance milestones.
+blank-node alternative. A built-in HTTP loader remains a separate conformance
+milestone.
 Document Expansion, Flattening, and Framing honor `@propagate: false` by
 rolling back to the previous context for nested node objects; type-scoped
 contexts are non-propagating unless they set `@propagate: true`. `@protected`
@@ -170,7 +171,7 @@ JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs all 451 JSON-LD-to-RDF
 evaluation vectors: 345 positive and 106 negative,
 including default direction omission, `i18n-datatype`, compound-literal, and
-explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 398 Expansion vectors,
+explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 398 executions covering all 385 unique Expansion evaluation vectors,
 including document-scope free-value removal, `@id` IRI processing, and null
 local-context restoration to the document base.
 `scripts/run-w3c-jsonld-flatten-tests.sh` runs all 58 Flattening evaluation vectors, covering

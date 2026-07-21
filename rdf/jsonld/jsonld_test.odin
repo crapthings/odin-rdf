@@ -1326,6 +1326,19 @@ test_frame_accepts_explicit_control :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_frame_type_map_default_is_expanded_and_compacted :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	input := `{"@context":{"ex":"http://example.org/"},"@id":"ex:Sub1","ex:foo":"bar"}`
+	frame_document := `{"@context":{"ex":"http://example.org/"},"@type":{"@default":"ex:Foo"},"ex:foo":"bar"}`
+	testing.expect_value(t, expand_frame(&builder, frame_document), Expand_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"http://example.org/Foo"`))
+	strings.builder_reset(&builder)
+	testing.expect_value(t, frame(&builder, input, frame_document), Frame_Error.None)
+	testing.expect(t, strings.contains(strings.to_string(builder), `"@type": "ex:Foo"`))
+}
+
+@(test)
 test_frame_embeds_library_children_and_preserves_context :: proc(t: ^testing.T) {
 	input := `{
   "@context": {"dcterms":"http://purl.org/dc/terms/", "ex":"http://example.org/vocab#", "ex:contains":{"@type":"@id"}},

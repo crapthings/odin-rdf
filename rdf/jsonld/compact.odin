@@ -1040,15 +1040,15 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			if used[value_index] do continue
 			matches := false
 			if matching_by_signature {
-				signature, signature_error := compact_value_order_match_signature(state, value)
-				if signature_error != .None { delete(indices); return {}, signature_error }
-				matches = signature == annotation.signature
-				delete(signature)
+				match_signature, match_signature_error := compact_value_order_match_signature(state, value)
+				if match_signature_error != .None { delete(indices); return {}, match_signature_error }
+				matches = match_signature == annotation.signature
+				delete(match_signature)
 			} else {
-				signature, signature_error := compact_value_order_signature(value)
-				if signature_error != .None { delete(indices); return {}, signature_error }
-				matches = signature == annotation.signature
-				delete(signature)
+				value_signature, value_signature_error := compact_value_order_signature(value)
+				if value_signature_error != .None { delete(indices); return {}, value_signature_error }
+				matches = value_signature == annotation.signature
+				delete(value_signature)
 			}
 			if !matches do continue
 			append(&indices, value_index)
@@ -1350,6 +1350,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			subject_value, has_subject := object_value(object, "@id")
 			subject_id, subject_valid := string_value(subject_value)
 			if has_subject && !subject_valid do return .Invalid_Expanded_JSON
+			if !has_subject do subject_id = ""
 			if has_subject {
 				matches := 0
 				for annotation in state.compact_source_property_term_annotations {
@@ -1373,10 +1374,6 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 				item, item_valid := object_from_value(array[0])
 				_, has_list := object_value(item, "@list")
 				if item_valid && has_list {
-					subject_value, has_subject := object_value(object, "@id")
-					subject_id, subject_valid := string_value(subject_value)
-					if !has_subject do subject_id = ""
-					if has_subject && !subject_valid do return .Invalid_Expanded_JSON
 					index, found_index, index_error := compact_index_annotation(state, ctx, subject_id, key, key, definition.id, "", item)
 					if index_error != .None do return index_error
 					if !found_index do index, found_index = compact_raw_list_index_annotation(state, subject_id, key, key, definition.id)
@@ -1392,10 +1389,6 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 				}
 			}
 			if has_definition && definition.container_language {
-				subject_value, has_subject := object_value(object, "@id")
-				subject_id, subject_valid := string_value(subject_value)
-				if !has_subject do subject_id = ""
-				if has_subject && !subject_valid do return .Invalid_Expanded_JSON
 				raw_index_count := compact_raw_index_annotation_count(state, subject_id, key, key, definition.id)
 				if raw_index_count == len(array) && raw_index_count > 0 {
 					raw_index_subject = subject_id
@@ -2312,7 +2305,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 					for parent_value in nodes {
 						parent, valid_parent := object_from_value(parent_value)
 						parent_id_value, has_parent_id := object_value(parent, "@id")
-						parent_id, valid_parent_id := string_value(parent_id_value)
+						candidate_id, valid_parent_id := string_value(parent_id_value)
 						parent_values_value, has_parent_values := object_value(parent, root.parent_predicate)
 						parent_values, valid_parent_values := array_from_value(parent_values_value)
 						if !valid_parent || !has_parent_id || !valid_parent_id || !has_parent_values || !valid_parent_values || len(parent_values) != 1 do continue
@@ -2324,7 +2317,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 							candidate_parent_id = ""
 							break
 						}
-						candidate_parent_id = parent_id
+						candidate_parent_id = candidate_id
 					}
 					if len(candidate_parent_id) == 0 do continue
 				}
@@ -2819,7 +2812,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	}
 	append(&state.compact_source_included_roots, Compact_Source_Included_Root{root_signature = owned_root_signature, parent_predicate = owned_parent_predicate, container_set = container_set, root_empty = len(node) == 1, top_level = top_level})
 	for item in included {
-		child, valid_child := object_from_value(item)
+		_, valid_child := object_from_value(item)
 		if !valid_child do return .Invalid_Expanded_JSON
 		child_signature, child_signature_error := compact_included_node_signature(item)
 		if child_signature_error != .None do return child_signature_error
@@ -3248,7 +3241,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 					if !valid_target do continue
 					index_value, has_index := object_value(target, "@index")
 					index, valid_index := string_value(index_value)
-					target_id_value, has_target_id := object_value(target, "@id")
+					target_id_value, _ := object_value(target, "@id")
 					target_id, valid_target_id := string_value(target_id_value)
 					if has_subject && valid_subject && has_index && valid_index {
 						signature, signature_error := compact_index_target_signature(ctx, target)
@@ -3294,7 +3287,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			if !valid_target do continue
 			index_value, has_index := object_value(target, "@index")
 			index, valid_index := string_value(index_value)
-			target_id_value, has_target_id := object_value(target, "@id")
+			target_id_value, _ := object_value(target, "@id")
 			target_id, valid_target_id := string_value(target_id_value)
 			if has_subject && valid_subject && has_index && valid_index {
 				signature, signature_error := compact_index_target_signature(ctx, target)
@@ -3602,8 +3595,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			if type_value, has_type := object_value(node, "@type"); has_type {
 				types, valid_types := array_from_value(type_value)
 				if !valid_types { valid_root = false } else {
-					for type_value in types {
-						type_id, valid_type := string_value(type_value)
+					for source_type_value in types {
+						type_id, valid_type := string_value(source_type_value)
 						if !valid_type { valid_root = false; break }
 						owned_type, type_error := own(state, type_id)
 						if type_error.code != .None do return .Out_Of_Memory
@@ -3903,8 +3896,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 						// Keep both forms because the serializer uses expanded
 						// predicates while the context may choose the compact term.
 						state.compact_source_graph_predicates[predicate] = true
-						for term, definition in ctx.terms {
-							if definition.id == predicate do state.compact_source_graph_predicates[term] = true
+						for term, term_definition in ctx.terms {
+							if term_definition.id == predicate do state.compact_source_graph_predicates[term] = true
 						}
 					}
 				}
@@ -4034,8 +4027,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			types, valid_types := array_from_value(type_value)
 			if !has_type || !valid_types || len(types) != len(state.compact_source_document_root_types) do continue
 			matched_types := 0
-			for type_value in types {
-				type_id, valid_type := string_value(type_value)
+			for source_type_value in types {
+				type_id, valid_type := string_value(source_type_value)
 				if !valid_type { matched_types = -1; break }
 				for source_type in state.compact_source_document_root_types {
 					if source_type == type_id { matched_types += 1; break }
@@ -4592,7 +4585,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		// only the identifier would lose those properties; retain the node form.
 		if definition.type == "@id" {
 			identifier_value, has_identifier := object_value(entry.object, "@id")
-			identifier, valid_identifier := string_value(identifier_value)
+			_, valid_identifier := string_value(identifier_value)
 			if has_identifier && valid_identifier && len(entry.object) > 1 do return compact_write_referenced_node(builder, state, ctx, entry.object, policy)
 		}
 		return compact_write_value(builder, state, ctx, entry.source, definition, true, policy)
@@ -5012,7 +5005,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		if has_target {
 			if indexed, found := state.compact_nodes[target_id]; found do target = indexed
 		}
-		index, found_index, index_error := compact_index_annotation(state, ctx, subject_id, predicate, expanded_predicate, definition_id, target_id, target)
+		_, found_index, index_error := compact_index_annotation(state, ctx, subject_id, predicate, expanded_predicate, definition_id, target_id, target)
 		if index_error != .None do return false, index_error
 		if !found_index do return false, .None
 	}

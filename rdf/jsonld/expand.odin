@@ -300,10 +300,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	}
 	type_value, has_type := has_keyword(object, ctx, "@type")
 	language_value, has_language := has_keyword(object, ctx, "@language")
-	if has_type && has_language do return false, .Invalid_Value_Object
-	if _, value_is_array := array_from_value(value); value_is_array {
-		type_name, type_is_string := string_value(type_value)
-		if !has_type || !type_is_string || (type_name != "@json" && keyword_for(ctx, type_name) != "@json") do return false, .Invalid_Value_Object
+	if !state.retain_frame_controls {
+		if has_type && has_language do return false, .Invalid_Value_Object
+		if _, value_is_array := array_from_value(value); value_is_array {
+			type_name, type_is_string := string_value(type_value)
+			if !has_type || !type_is_string || (type_name != "@json" && keyword_for(ctx, type_name) != "@json") do return false, .Invalid_Value_Object
+		}
 	}
 	#partial switch _ in value {
 	case json.Null:
@@ -317,12 +319,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		return false, .None
 	}
 	direction_value, has_direction := has_keyword(object, ctx, "@direction")
-	if has_direction {
+	if has_direction && !state.retain_frame_controls {
 		if has_type do return false, .Invalid_Value_Object
 		direction, valid := string_value(direction_value)
 		if !valid || (direction != "ltr" && direction != "rtl") do return false, .Invalid_Value_Object
 	}
-	if has_language {
+	if has_language && !state.retain_frame_controls {
 		if _, value_is_string := string_value(value); !value_is_string do return false, .Invalid_Value_Object
 	}
 	strings.write_string(builder, `{"@value": `)

@@ -3,64 +3,78 @@
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
-![W3C syntax tests](https://img.shields.io/badge/W3C_syntax_tests-72%2F72-16a34a)
-![W3C N-Quads tests](https://img.shields.io/badge/W3C_N--Quads-87%2F87-65a30d)
-![W3C Turtle tests](https://img.shields.io/badge/W3C_Turtle-313%2F313-4d7c0f)
-![W3C JSON-LD core](https://img.shields.io/badge/W3C_JSON--LD_to--RDF_core-162%2F162-0f766e)
-![W3C JSON-LD expansion core](https://img.shields.io/badge/W3C_JSON--LD_expansion_core-106%2F106-0f766e)
-![W3C JSON-LD flattening core](https://img.shields.io/badge/W3C_JSON--LD_flattening_core-35%2F35-0f766e)
-![W3C JSON-LD framing core](https://img.shields.io/badge/W3C_JSON--LD_framing_core-87%2F87-0f766e)
-![W3C JSON-LD FromRDF core](https://img.shields.io/badge/W3C_JSON--LD_RDF--to--JSON--LD_core-46%2F46-0f766e)
-![W3C JSON-LD compaction core](https://img.shields.io/badge/W3C_JSON--LD_compaction_core-246%2F246-0f766e)
-![W3C RDF/XML core](https://img.shields.io/badge/W3C_RDF%2FXML_core-173%2F173-b45309)
-![W3C TriG tests](https://img.shields.io/badge/W3C_TriG-355%2F355-15803d)
-![W3C RDFC-1.0](https://img.shields.io/badge/W3C_RDFC--1.0-65%2F65-7c3aed)
+![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-1%2C747%2F1%2C747-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
-A small, streaming-first RDF toolkit for Odin, built around standards compliance and explicit memory ownership.
+A bounded, streaming-first RDF toolkit for Odin. Parse or convert RDF without
+requiring a graph store; use complete-dataset operations only with an explicit
+admission limit.
 
-> The API may still evolve. The RDF 1.1 N-Triples, N-Quads, Turtle, and TriG parsers pass the pinned W3C suites used by this repository; JSON-LD has documented Expansion, Flattening, to-RDF, expanded RDF-to-JSON-LD, and context-driven compaction cores, while RDF/XML has a documented to-RDF core profile.
+Use `odin-rdf` for bounded RDF syntax pipelines, deterministic JSON-LD document
+processing, and RDFC-1.0 dataset integrity work. It is a library and CLI, not a
+graph store or SPARQL engine.
+
+**Start here:** [streaming library example](examples/basic/main.odin) ·
+[command-line conversion](#command-line-conversion) ·
+[API reference](docs/api-reference.md) ·
+[JSON-LD profile](docs/jsonld-design.md)
 
 ## Status and scope
 
-**Current release: `0.28.0`** — bounded, deterministic JSON-LD Expansion,
-Flattening, Framing, and source-aware context compaction, each backed by
-pinned W3C core gates. Compaction now exactly reproduces all 229 supported
-positive W3C vectors under their declared contexts and options.
+**Current release: `0.28.1`** — ready for production use within the documented
+profile. The public API may still evolve, so applications should pin a release
+and retain integration tests for their own JSON-LD documents.
 
-It also supports sourced-context `@import` and enforced `@protected` terms
-through the existing explicit document loader. JSON-LD direction mapping is
-opt-in; the default RDF conversion deliberately omits `@direction`. Its gates
-run 106 Expansion, 162 to-RDF, 46 RDF-to-JSON-LD, and 246 compaction cases
-(229 exact-output positive vectors plus 17 negative cases).
-
-| Area | Available now | Important boundary |
+| Area | Use it for | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, context compaction, and Framing | Directional RDF round trips use opt-in `i18n-datatype` or `compound-literal`; the rest of the API remains out of scope. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
-JSON-LD Framing supports recursive embedding, standard embed modes, defaults,
-`@requireAll`, value/list patterns, basic reverse framing, bounded
-`@included` selection, and bounded named-graph subframes / `@graph`
-containers. Scoped graph storage, SPARQL, and the remaining Framing policy
-matrix are outside the current scope. See the [JSON-LD processing profile](docs/jsonld-design.md)
-for exact limits and supported behavior.
+Compaction structurally matches all 229 supported positive W3C vectors and
+rejects 17 pinned negative cases. It reconstructs RDF-invisible source details
+only when the supplied source document establishes a unique association. JSON-LD
+directional RDF round trips require opt-in `i18n-datatype` or
+`compound-literal`; remote contexts require an explicit loader callback.
+
+Framing includes recursive embedding, standard embed modes, defaults,
+`@requireAll`, value/list patterns, basic reverse framing, bounded `@included`
+selection, and bounded named-graph subframes. Scoped graph storage, SPARQL,
+and the remaining Framing policy matrix are outside the current scope. See the
+[JSON-LD processing profile](docs/jsonld-design.md) for exact behavior and
+limits.
+
+<details>
+<summary>Conformance breakdown — 1,747 passing pinned W3C gate cases</summary>
+
+| Suite | Cases |
+| --- | ---: |
+| N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 162 / 106 / 35 / 87 |
+| JSON-LD RDF-to-JSON-LD / Compaction | 46 / 246 |
+| RDF/XML / RDFC-1.0 | 173 / 65 |
+
+</details>
+
+The project is tested with Odin `dev-2026-07`; CI runs Linux, macOS, Windows,
+strict compiler vetting, sanitizers, fuzzing, and the pinned W3C gates.
 
 For version-by-version changes, see the [changelog](CHANGELOG.md).
 
-The project is tested with Odin `dev-2026-07` and CI tracks the current Odin toolchain on Linux, macOS, and Windows.
-
 ## Why odin-rdf?
 
-- **Verified syntax compliance.** The pinned W3C RDF 1.1 suites cover all 72 N-Triples, 87 N-Quads, 313 Turtle, and 355 TriG cases through memory and streaming entry points. JSON-LD runs 106 Expansion, 35 Flattening, 162 to-RDF, 46 RDF-to-JSON-LD, and 246 Compaction cases (229 exact-output positive vectors); RDF/XML runs 173 core cases. RDFC-1.0 runs all 65 official canonicalization and resource-limit cases.
-- **Predictable memory use.** `io.Reader` parsing is bounded by configurable chunk and line limits; callers can also cap emitted triples.
-- **Bounded documents.** JSON-LD, RDF/XML, and TriG retain one explicitly limited document; neither performs implicit network I/O.
-- **Designed for pipelines.** Sink callbacks let converters, database importers, and command-line tools process triples without materializing a graph.
-- **Explicit lifetimes.** Public APIs document exactly how long input-backed and decoded strings remain valid.
-- **Release gates that match library risk.** CI covers three operating systems, compiler vetting, memory tracking, and AddressSanitizer.
+- **Pipeline-first.** Sink callbacks keep syntax conversion and database import
+  paths streaming; a graph store is never implicit.
+- **Explicit resource policy.** Reader, document, nesting, output, and
+  complete-dataset limits are configurable rather than hidden.
+- **Deterministic batch tools.** Formatting, JSON-LD output, and RDFC-1.0
+  canonicalization produce stable results after bounded admission.
+- **No implicit network I/O.** Applications choose remote-context loading,
+  caching, authentication, and redirect policy.
+- **Clear ownership.** Public APIs state when parsed strings expire and when a
+  collector takes ownership.
 
 ## How it fits
 
@@ -112,31 +126,25 @@ benchmarks/          Reproducible parser and formatter benchmarks
 
 ## API overview
 
-The complete public surface, defaults, ownership rules, error conventions, and
-reader behavior are collected in the [API reference](docs/api-reference.md).
+The [API reference](docs/api-reference.md) is the source of truth for complete
+signatures, defaults, ownership, and error conventions. The main entry points
+are grouped by job:
 
-- `ntriples.parse(input, sink)` parses a complete UTF-8 document already held in memory.
-- `ntriples.parse_scoped(input, sink, scope)` is an advanced syntax-integration adapter. Callers must provide a non-zero scope when parsed blank nodes need document identity.
-- `ntriples.parse_reader(reader, sink, options)` parses incrementally with bounded memory. Defaults are a 64 KiB read buffer and a 16 MiB maximum line length.
-- `ntriples.write_triple(builder, triple)` validates a triple and atomically appends canonical-layout N-Triples.
-- `nquads.parse`, `nquads.parse_reader`, and `nquads.write_quad` provide the corresponding RDF dataset pipeline.
-- `turtle.parse(input, sink, options)` covers RDF 1.1 Turtle directives, relative IRIs, compact predicate/object lists, literal shorthands, property lists, and collections.
-- `turtle.parse_reader(reader, sink, options)` preserves document state across bounded chunks with configurable statement, token, prefix-count/bytes, nesting, pending-triple, and emitted-triple limits.
-- `jsonld.expand(builder, input, options)` atomically writes deterministic expanded JSON-LD before RDF conversion can discard document metadata such as ordinary `@index`; `jsonld.flatten(builder, input, options)` builds a bounded node-map from that expansion; and `jsonld.frame(builder, input, frame, options)` selects `@id`/`@type`/property matches and recursively embeds nested property frames into a context-directed result (a single node is direct in JSON-LD 1.1 mode; legacy mode can retain `@graph`). `jsonld.parse(input, sink, options)` and `jsonld.parse_reader(reader, sink, options)` transform a bounded JSON-LD document into RDF quads. It accepts `@language` and `@index` containers, including their `@set` combinations; ordinary `@index` annotations are intentionally discarded by RDF conversion, while custom index properties remain RDF statements. `jsonld.serialize(builder, quads, options)` atomically writes deterministic expanded JSON-LD for a complete bounded dataset, including named graphs, safe RDF list collapse, `rdf:JSON`, and optional native scalar output. `jsonld.compact(builder, quads, context, options)` produces deterministic, context-directed JSON-LD with language maps, round-trip-safe arrays, and native JSON scalar defaults. Remote contexts require an explicit loader callback.
-- `rdfxml.parse(input, sink, options)` and `rdfxml.parse_reader(reader, sink, options)` transform a bounded RDF/XML document into default-graph RDF quads. They do not fetch external resources and preserve markup-bearing `rdf:parseType="Literal"` content as `rdf:XMLLiteral`.
-- `rdfxml.write_triples(builder, triples)` atomically appends a deterministic RDF/XML document for a complete default graph. `rdfxml.init_document_writer`, `write_document_triple`, and `finish_document_writer` provide the separate stateful path for large streams with explicit root-level namespaces and a bounded blank-node map.
-- `trig.parse(input, sink, options)` and `trig.parse_reader(reader, sink, options)` transform bounded RDF 1.1 TriG into default- and named-graph quads. They support directives, graph blocks, collections, and property lists.
-- `trig.write_prefixes` and `trig.write_quad` atomically serialize explicit prefixes and individual dataset quads. Each named graph quad is emitted as an independent graph block, so output preserves order and stays streaming-safe without retaining a dataset.
-- `trig.format_quads(builder, quads, options)` is the explicit batch path: it groups a complete dataset by graph, sorts and deduplicates quads, and can infer safe prefixes for terms and graph names.
-- `canon.canonicalize(builder, quads, options)` atomically writes the W3C RDFC-1.0 canonical N-Quads form of a complete dataset. `canon.canonical_hash` produces its SHA-256 or SHA-384 hexadecimal digest, and `canon.isomorphic` compares canonical forms without relying on a digest. All three remove exact duplicate quads and enforce resource limits on input size, recursive work, and permutations.
-- `dataset.Collector` copies transient quads and term strings into caller-owned storage with an optional quad admission limit. `dataset.triple_sink` adapts N-Triples and Turtle output to default-graph quads. It preserves order and duplicates; it is not a graph store.
-- `turtle.write_prefixes`, `turtle.write_term`, and `turtle.write_triple` provide stable, atomic Turtle serialization with explicit prefix selection and IRIREF fallback.
-- `turtle.format_triples(builder, triples, options)` produces a deterministic, grouped Turtle document from a complete triple collection. Its default policy infers safe prefixes; use `Prefix_Policy.Explicit_Only` when declarations must be caller-controlled.
-- `convert.convert(reader, output, options)` connects the bounded readers and writers without retaining a graph; it rejects a named N-Quads graph when the selected output cannot represent it.
-- `convert.Reader_Limits` provides one explicit source-resource policy across all conversions: record count for every syntax, physical-line bytes for N-Triples/N-Quads, top-level statement bytes for Turtle, and retained document bytes for JSON-LD/RDF/XML/TriG.
-- `rdf.literal`, `rdf.language_literal`, and `rdf.typed_literal` construct literals without ambiguous language/datatype combinations.
-- `rdf.validate_term_structure` and `rdf.validate_triple_structure` check syntax-independent RDF data-model invariants.
-- Every public error enum has a matching stable, allocation-free message function across `rdf` and all syntax packages.
+- **Streaming syntax pipelines:** each syntax package exposes `parse` for an
+  in-memory document, `parse_reader` for a bounded `io.Reader`, and atomic
+  writer helpers. Use `ntriples`/`nquads` for line-oriented RDF,
+  `turtle`/`trig` for compact RDF 1.1, and `rdfxml` for bounded RDF/XML.
+- **JSON-LD documents and datasets:** `jsonld.parse` emits quads;
+  `expand`, `flatten`, and `frame` work on bounded documents; `serialize` and
+  `compact` produce deterministic JSON-LD from a complete bounded dataset.
+- **Dataset ownership and integrity:** `dataset.Collector` retains owned quads
+  under an admission limit. `canon.canonicalize`, `canonical_hash`, and
+  `isomorphic` provide RDFC-1.0 canonicalization, hashes, and comparison.
+- **Conversion and formatting:** `convert.convert` connects compatible bounded
+  readers and writers without retaining a graph. Turtle and TriG formatters,
+  plus the `odin-rdf` CLI, are explicit complete-dataset paths.
+- **Core values and diagnostics:** `rdf` supplies validated terms, triples,
+  quads, literal constructors, and stable allocation-free error messages.
 
 Strings passed to a sink may point into the caller's input or a temporary parser buffer. They are valid only for the duration of that callback. Copy values or encode them into application-owned IDs before returning if they need to outlive the callback.
 

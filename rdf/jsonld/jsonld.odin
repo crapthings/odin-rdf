@@ -813,6 +813,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	object, ok := object_from_value(value)
 	if !ok do return {}, Parse_Error{code = .Invalid_Context}
+	// A context value is already selected by its enclosing @context member;
+	// redefining that keyword inside the context is never a term definition.
+	if _, redefines_context := object_value(object, "@context"); redefines_context do return {}, Parse_Error{code = .Invalid_Context}
 	active_propagate := propagate
 	explicit_non_propagating := false
 	explicit_propagating := false
@@ -981,6 +984,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// prefix mappings first so a later compact IRI such as ex:friend does not
 	// depend on map iteration order.
 	for term, definition_value in object {
+		if len(term) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if is_keyword(term) || has_keyword_form(term) do continue
 		id, simple := string_value(definition_value)
 		if !simple {
@@ -998,11 +1002,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.terms[owned_term] = Term_Definition{id = identifier}
 	}
 	for term, definition_value in object {
+		if len(term) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if is_keyword(term) || has_keyword_form(term) do continue
 		// A redefinition must not resolve its own identifier through a previous
 		// context definition. Other local prefix mappings remain available.
 		delete_key(&result.terms, term)
 		definition := Term_Definition{protected = default_protected}
+		implicit_id := false
 		is_null := false
 		#partial switch _ in definition_value { case json.Null: is_null = true }
 		if is_null {
@@ -1054,6 +1060,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		} else {
 			definition.id, make_error = expand_iri(state, &result, term, true, false)
 			if make_error.code != .None do return {}, make_error
+			implicit_id = true
 		}
 		if type_value, found := object_value(definition_object, "@type"); found {
 			type_name, valid := string_value(type_value)
@@ -1147,6 +1154,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			definition.prefix_explicit = true
 		}
 		if state.legacy_prefixes && !definition.reverse do definition.prefix = true
+		if definition.id == "@context" do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		if implicit_id && len(result.vocab) == 0 && !has_iri_scheme(term) && strings.index_byte(term, ':') < 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		// JSON-LD 1.1 keyword aliases may not carry an IRI coercion or become a
+		// compact-IRI prefix. JSON-LD 1.0 keeps its legacy @type mapping form.
+		if state.allow_document_containers && is_keyword(definition.id) && (len(definition.type) > 0 || definition.prefix) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 	}
 	// A custom @index may name a term that is defined later in the same

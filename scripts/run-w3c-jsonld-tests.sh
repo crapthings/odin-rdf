@@ -63,7 +63,7 @@ tn02
 wf01 wf02 wf03 wf04 wf05 wf07
 '
 
-negative_cases='di08 e123 m020 so01 so02 so03 c029 pi01 tn01 ep02 er21 er42 en04 en06 in08 in09 er13 er23 er37 er38 er39 er41 er14 er17 er25 er36 er50 er24 er31 er32 er35 e115 e116'
+negative_cases='di08 e123 m020 so01 so02 so03 c029 pi01 tn01 ep02 er21 er42 en04 en06 in08 in09 er13 er23 er37 er38 er39 er41 er14 er17 er25 er36 er50 er24 er31 er32 er35 e115 e116 er19 er20 er43 er56 pr33'
 
 total=0
 failures=0
@@ -83,6 +83,7 @@ for case_id in $cases; do
     di09|di10) direction=i18n-datatype ;;
     di11|di12) direction=compound-literal ;;
     0118|e075) direction=generalized-rdf ; generalized=true ;;
+    e026) direction=json-ld-1.0 ;;
     e077) direction=expand-context-e077 ;;
     c001|c002|c003|c005|c006|c007|c008|c009|c010|c011|c012|c013|c015|c016|c017|c019|c020|c021|c022|c023|c025|c026|c027|c028|c034|c035|c036|c038|n001|n002|n003|n004|n005|n006|n007|n008|li01|li02|li03|li04|li05|li06|li07|li08|li09|li10|in01|in02|in03|in04|in05|in06|tn02|js01|js02|js03|js04|js05|js06|js07|js08|js09|js10|js11|js12|js13|js14|js15|js16|js17|js18|js19|js20|js21|js22|js23|di*|e001|e002|e003|e004|e005|e006|e007|e008|e009|e010|e011|e012|e013|e014|e015|e016|e017|e018|e019|e020|e021|e022|e023|e024|e025|e026|e027|e028|e029|e030|e031|e032|e033|e034|e035|e036|e037|e038|e039|e040|e041|e042|e043|e044|e045|e046|e047|e048|e049|e050|e051|e052|e053|e054|e055|e056|e057|e058|e059|e060|e061|e062|e063|e064|e065|e066|e067|e068|e069|e070|e071|e072|e073|e074|e078|e079|e080|e081|e082|e083|e084|e085|e086|e087|e088|e091|e092|e093|e094|e095|e096|e097|e098|e099|e100|e101|e102|e103|e104|e105|e106|e107|e108|e109|e110|e113|e114|e117|e118|e119|e120|e121|e122|e124|e125|e126|e127|e128|e129|e130|m001|m002|m003|m004|m006|m007|m008|m009|m010|m011|m012|m013|m014|m015|m016|m017|m018|m019|so05|so06|so08|so09|so11|pr02|pr06|pr10|pr13|pr14|pr15|pr16|pr19|pr22|pr23|pr24|pr25|pr27|pr29|pr30|pr34|pr35|pr36|pr37|pr38|pr39|pr40|pr41|pr43|pi06|pi07|pi08|pi09|pi10|pi11|p001|p002|p003|p004) semantic_compare=true ;;
   esac
@@ -115,5 +116,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD to-RDF core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 378
+test "$total" -eq 383
 test "$failures" -eq 0

@@ -1135,6 +1135,24 @@ test_rejects_invalid_value_indexes_nested_lists_and_language_maps :: proc(t: ^te
 }
 
 @(test)
+test_rejects_invalid_context_keyword_and_iri_term_mappings :: proc(t: ^testing.T) {
+	invalid_contexts := []string{
+		`{"@context":{"term":{"@id":"@context"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@container":"@set"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"@context":{"p":"https://example.test/p"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"@version":1.1,"foo":{"@id":"@type","@prefix":true}},"foo:bar":"https://example.test/value"}`,
+	}
+	for input in invalid_contexts {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect(t, err.code == Error_Code.Invalid_Context || err.code == Error_Code.Invalid_Term_Definition)
+	}
+	invalid_type_alias, type_alias_err := parse_to_nquads(`{"@context":{"http://www.w3.org/1999/02/22-rdf-syntax-ns#type":{"@id":"@type","@type":"@id"}}}`, Options{processing_mode = .Json_LD_1_1})
+	defer delete(invalid_type_alias)
+	testing.expect_value(t, type_alias_err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

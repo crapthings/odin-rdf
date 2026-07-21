@@ -111,6 +111,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Pin the existing JSON-LD 1.0 rejection of empty and relative `@vocab`
   mappings with W3C to-RDF negative vectors `e115` and `e116`, raising that
   gate to 378 cases.
+- Reject invalid `@context` aliases, implicit relative mappings without a
+  vocabulary, and JSON-LD 1.1 keyword aliases with coercion or prefix flags.
+  Cover W3C to-RDF negative vectors `er19`, `er20`, `er43`, `er56`, and
+  `pr33`, raising that gate to 383 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

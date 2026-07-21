@@ -28,7 +28,9 @@ index containers, reverse maps, default/named graph expansion, and document-leve
 `@graph`, `@id`, and `@type` containers including `@graph` composites.
 
 `flatten` consumes that expanded-document boundary and emits a deterministic,
-bounded node-map. It merges embedded nodes by identifier, preserves lists and
+bounded node-map. It does not accept an output context or perform
+context-driven result compaction; use the separate `compact` API for that
+workflow. It merges embedded nodes by identifier, preserves lists and
 ordinary `@index`, applies reverse relationships to their referenced nodes,
 and retains nested graph objects.
 
@@ -100,10 +102,19 @@ and network policy explicitly.
 The processor accepts strict JSON and handles local contexts, `@base`,
 `@vocab`, prefixes, term aliases, `@id`, `@type`, value objects, language and
 datatype coercion, arrays, nested `@set`, and `@list`, reverse properties, `@graph`,
-`@included`, `@nest`, and `@json` value objects. It emits default and named graph quads and keeps
-explicit blank-node identifiers document-local.
+`@included`, `@nest`, and `@json` value objects. Term-coerced and direct
+`@json` values become deterministically ordered RDF JSON literals. It emits
+default and named graph quads and keeps explicit blank-node identifiers
+document-local.
+
+When `Compact_Options.source_document` uniquely associates an RDF JSON numeric
+literal with its source value, Compaction also restores whether that source was
+written as a JSON integer or floating value. Without that source association,
+the RDF dataset alone cannot retain the distinction.
 
 The input processor remains a deliberately bounded JSON-LD 1.1 to-RDF profile.
+It emits standard RDF only: generalized RDF statements, including blank-node
+predicates, are intentionally excluded.
 The serializer supplies the interoperable expanded RDF-to-JSON-LD form: it
 handles complete and partial RDF list collapse, shared blank nodes across named
 graphs, native scalar options, and graph-node merging. It does not compact IRIs
@@ -152,9 +163,14 @@ JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
 directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
-differences. `scripts/run-w3c-jsonld-tests.sh` runs 162 to-RDF vectors,
+differences. `scripts/run-w3c-jsonld-tests.sh` runs 355 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 246 Compaction cases:
+output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 307 Expansion vectors,
+including document-scope free-value removal, `@id` IRI processing, and null
+local-context restoration to the document base.
+`scripts/run-w3c-jsonld-flatten-tests.sh` runs 56 Flattening vectors, covering
+node maps, nested graph objects, lists, and blank-node allocation.
+`scripts/run-w3c-jsonld-compact-tests.sh` runs 246 Compaction cases:
 229 positive vectors whose compacted JSON is compared structurally with the
 pinned expected output, plus 17 negative cases. The positive gate includes
 graph/index and graph/id map keys with `@none` aliases, document-base relative

@@ -3,7 +3,7 @@
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
-![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-1%2C747%2F1%2C747-0f766e)
+![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C162%2F2%2C162-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
@@ -29,7 +29,7 @@ and retain integration tests for their own JSON-LD documents.
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation; generalized RDF (such as blank-node predicates) is excluded. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
@@ -47,12 +47,12 @@ and the remaining Framing policy matrix are outside the current scope. See the
 limits.
 
 <details>
-<summary>Conformance breakdown — 1,747 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,162 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
-| JSON-LD to-RDF / Expansion / Flattening / Framing | 162 / 106 / 35 / 87 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 355 / 307 / 56 / 87 |
 | JSON-LD RDF-to-JSON-LD / Compaction | 46 / 246 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 

@@ -77,12 +77,14 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 }
 
 @(private) Flatten_State :: struct {
-	nodes:     [dynamic]Flatten_Node,
-	by_id:     map[string]int,
-	generated: u64,
-	max_nodes: int,
+	nodes:           [dynamic]Flatten_Node,
+	by_id:           map[string]int,
+	blank_ids:       map[string]string,
+	blank_id_values: [dynamic]string,
+	generated:       u64,
+	max_nodes:       int,
 	retain_reference_nodes: bool,
-	outer:     ^Flatten_State,
+	outer:           ^Flatten_State,
 }
 
 @(private) flatten_destroy_state :: proc(state: ^Flatten_State) {
@@ -92,6 +94,9 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	}
 	delete(state.nodes)
 	delete(state.by_id)
+	for value in state.blank_id_values do delete(value)
+	delete(state.blank_id_values)
+	delete(state.blank_ids)
 }
 
 @(private) flatten_from_expand_error :: proc(code: Expand_Error) -> Flatten_Error {
@@ -140,6 +145,20 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	strings.write_u64(&builder, state.generated)
 	state.generated += 1
 	return flatten_clone_builder(&builder)
+}
+
+// flatten_blank_identifier maps source blank-node labels to the issued
+// identifiers used by the node-map algorithm. Source labels are document
+// syntax, not output identifiers: explicit labels and anonymous nodes share a
+// single sequential issuer (W3C 0038/0045).
+@(private) flatten_blank_identifier :: proc(state: ^Flatten_State, id: string) -> (string, Flatten_Error) {
+	if !strings.has_prefix(id, "_:") do return id, .None
+	if issued, found := state.blank_ids[id]; found do return issued, .None
+	issued, err := flatten_generated_id(state)
+	if err != .None do return "", err
+	append(&state.blank_id_values, issued)
+	state.blank_ids[id] = issued
+	return issued, .None
 }
 
 @(private) flatten_get_or_create_node :: proc(state: ^Flatten_State, id: string, owned: bool) -> (int, Flatten_Error) {
@@ -247,11 +266,33 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	if id_value, has_id := object_value(object, "@id"); has_id {
 		id, valid := string_value(id_value)
 		if !valid do return -1, .Invalid_IRI
+		if strings.has_prefix(id, "_:") {
+			issued, issued_err := flatten_blank_identifier(state, id)
+			if issued_err != .None do return -1, issued_err
+			return flatten_get_or_create_node(state, issued, false)
+		}
 		return flatten_get_or_create_node(state, id, false)
 	}
 	id, err := flatten_generated_id(state)
 	if err != .None do return -1, err
 	return flatten_get_or_create_node(state, id, true)
+}
+
+@(private) flatten_visit_types :: proc(builder: ^strings.Builder, state: ^Flatten_State, value: json.Value) -> Flatten_Error {
+	strings.write_byte(builder, '[')
+	values, array := array_from_value(value)
+	count := array ? len(values) : 1
+	for index in 0..<count {
+		if index > 0 do strings.write_string(builder, ", ")
+		item := array ? values[index] : value
+		if type_id, is_string := string_value(item); is_string && strings.has_prefix(type_id, "_:") {
+			issued, issued_err := flatten_blank_identifier(state, type_id)
+			if issued_err != .None do return issued_err
+			write_json_string(builder, issued)
+		} else if !compact_write_raw_json(builder, item) do return .Invalid_Value_Object
+	}
+	strings.write_byte(builder, ']')
+	return .None
 }
 
 @(private) flatten_write_reference :: proc(builder: ^strings.Builder, id: string) {
@@ -351,6 +392,12 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	keys := expand_sorted_keys(reverse)
 	defer delete(keys)
 	for key in keys {
+		output_key := key
+		if strings.has_prefix(key, "_:") {
+			issued, issued_err := flatten_blank_identifier(state, key)
+			if issued_err != .None do return issued_err
+			output_key = issued
+		}
 		values, is_array := array_from_value(reverse[key])
 		count := is_array ? len(values) : 1
 		for index in 0..<count {
@@ -364,7 +411,7 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 			strings.write_byte(&reference, '[')
 			flatten_write_reference(&reference, state.nodes[node_index].id)
 			strings.write_byte(&reference, ']')
-			add_err := flatten_add_property(state, target, key, strings.to_string(reference))
+			add_err := flatten_add_property(state, target, output_key, strings.to_string(reference))
 			strings.builder_destroy(&reference)
 			if add_err != .None do return add_err
 		}
@@ -373,7 +420,7 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 }
 
 @(private) flatten_write_graph :: proc(builder: ^strings.Builder, parent: ^Flatten_State, value: json.Value) -> Flatten_Error {
-	graph := Flatten_State{nodes = make([dynamic]Flatten_Node), by_id = make(map[string]int), generated = parent.generated, max_nodes = parent.max_nodes, outer = parent}
+	graph := Flatten_State{nodes = make([dynamic]Flatten_Node), by_id = make(map[string]int), blank_ids = make(map[string]string), generated = parent.generated, max_nodes = parent.max_nodes, outer = parent}
 	defer flatten_destroy_state(&graph)
 	values, is_array := array_from_value(value)
 	count := is_array ? len(values) : 1
@@ -414,6 +461,12 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	for key in keys {
 		if key == "@id" do continue
 		value := object[key]
+		output_key := key
+		if strings.has_prefix(key, "_:") {
+			issued, issued_err := flatten_blank_identifier(state, key)
+			if issued_err != .None do return issued_err
+			output_key = issued
+		}
 		if key == "@reverse" {
 			if err := flatten_process_reverse(state, node_index, value); err != .None do return err
 			continue
@@ -429,14 +482,32 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 		if key == "@graph" {
 			temporary := strings.builder_make()
 			err := flatten_write_graph(&temporary, state, value)
-			if err == .None do err = flatten_add_property(state, node_index, key, strings.to_string(temporary))
+			if err == .None do err = flatten_add_property(state, node_index, output_key, strings.to_string(temporary))
+			strings.builder_destroy(&temporary)
+			if err != .None do return err
+			continue
+		}
+		if key == "@included" {
+			// Included nodes are merged into the active node map but @included is
+			// not retained as a property in flattened JSON-LD. Visiting the values
+			// recursively also handles included blocks inside included nodes.
+			temporary := strings.builder_make()
+			err := flatten_visit_values(&temporary, state, value)
+			strings.builder_destroy(&temporary)
+			if err != .None do return err
+			continue
+		}
+		if key == "@type" {
+			temporary := strings.builder_make()
+			err := flatten_visit_types(&temporary, state, value)
+			if err == .None do err = flatten_add_property(state, node_index, output_key, strings.to_string(temporary))
 			strings.builder_destroy(&temporary)
 			if err != .None do return err
 			continue
 		}
 		temporary := strings.builder_make()
 		err := flatten_visit_values(&temporary, state, value)
-		if err == .None do err = flatten_add_property(state, node_index, key, strings.to_string(temporary), key != "@index")
+		if err == .None do err = flatten_add_property(state, node_index, output_key, strings.to_string(temporary), key != "@index")
 		strings.builder_destroy(&temporary)
 		if err != .None do return err
 	}
@@ -500,7 +571,7 @@ flatten :: proc(builder: ^strings.Builder, input: string, options: Flatten_Optio
 	defer json.destroy_value(parsed)
 	root, valid := array_from_value(parsed)
 	if !valid do return .Invalid_JSON
-	state := Flatten_State{nodes = make([dynamic]Flatten_Node), by_id = make(map[string]int), max_nodes = max_nodes, retain_reference_nodes = options.retain_reference_nodes}
+	state := Flatten_State{nodes = make([dynamic]Flatten_Node), by_id = make(map[string]int), blank_ids = make(map[string]string), max_nodes = max_nodes, retain_reference_nodes = options.retain_reference_nodes}
 	defer flatten_destroy_state(&state)
 	for item in root {
 		object, is_node := object_from_value(item)

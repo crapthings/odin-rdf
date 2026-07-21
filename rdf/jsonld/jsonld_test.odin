@@ -76,6 +76,30 @@ test_basic_context_and_typed_values :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_json_type_coercion_preserves_complete_json_values :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "ex": "https://example.test/",
+    "payload": {"@id":"ex:payload", "@type":"@json"}
+  },
+  "@id": "ex:subject",
+  "payload": [true, {"z":"last", "":"empty", "a":"first"}, null]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/subject> <https://example.test/payload> "[true,{\"\":\"empty\",\"a\":\"first\",\"z\":\"last\"},null]"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON> .`))
+
+	null_actual, null_err := parse_to_nquads(`{
+  "@context": {"payload": {"@id":"https://example.test/payload", "@type":"@json"}},
+  "payload": null
+}`)
+	defer delete(null_actual)
+	testing.expect_value(t, null_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(null_actual, `<https://example.test/payload> "null"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON> .`))
+
+}
+
+@(test)
 test_list_reverse_named_graph_and_remote_context :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`
 {
@@ -1017,6 +1041,24 @@ test_object_term_definitions_expand_same_context_compact_iris :: proc(t: ^testin
 }
 
 @(test)
+test_explicit_false_prefix_does_not_expand_compact_iris :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	err := expand(&builder, `{
+  "@context": {
+    "@version": 1.1,
+    "tag": {"@id": "https://example.test/tag/", "@prefix": false}
+  },
+  "tag:champin.net,2019:prop": "literal",
+  "tag": "value"
+}`)
+	testing.expect_value(t, err, Expand_Error.None)
+	actual := strings.to_string(builder)
+	testing.expect(t, strings.contains(actual, `"tag:champin.net,2019:prop"`))
+	testing.expect(t, !strings.contains(actual, `https://example.test/tag/champin.net,2019:prop`))
+}
+
+@(test)
 test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context":{"knows":"https://example.test/knows"},
@@ -1135,7 +1177,7 @@ test_base_null_drops_nodes_with_relative_identifiers :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context":{"child":"https://example.test/child","name":"https://example.test/name"},
   "child":{"@context":{"@base":null},"@id":"relative","name":"dropped"}
-}`, Options{base_iri = "https://example.test/document"})
+	}`, Options{base_iri = "https://example.test/document"})
 	defer delete(actual)
 	testing.expect_value(t, err.code, Error_Code.None)
 	testing.expect_value(t, actual, "")
@@ -1161,6 +1203,67 @@ test_empty_prefix_compact_iris_use_the_vocabulary_mapping :: proc(t: ^testing.T)
 	defer delete(actual)
 	testing.expect_value(t, err.code, Error_Code.None)
 	testing.expect(t, strings.contains(actual, `<https://example.test/vocab:term> "value" .`))
+}
+
+@(test)
+test_invalid_expanded_predicates_are_dropped :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/vocab#"},
+  "valid":"kept",
+  "#fragment":"dropped"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab#valid> "kept" .`))
+	testing.expect(t, !strings.contains(actual, "dropped"))
+}
+
+@(test)
+test_non_absolute_id_coerced_list_values_are_dropped :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "@base": null,
+    "list":{"@id":"https://example.test/list","@container":"@list","@type":"@id"}
+  },
+  "list":["relative"]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/list> _:`))
+	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .`))
+	testing.expect(t, !strings.contains(actual, "relative"))
+}
+
+@(test)
+test_nest_identifiers_select_the_enclosing_node_subject :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"data":"@nest","id":"@id","name":"https://example.test/name"},
+  "data":{"id":"https://example.test/resource","name":"nested"}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/resource> <https://example.test/name> "nested" .`))
+}
+
+@(test)
+test_negative_zero_uses_the_jsonld_native_integer_form :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"https://example.test/number":-0e0}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `"0"^^<http://www.w3.org/2001/XMLSchema#integer>`))
+}
+
+@(test)
+test_none_type_preserves_native_jsonld_value_types :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@version":1.1,"value":{"@id":"https://example.test/value","@type":"@none"}},
+  "value":["text",true,10.0]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "text" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "10"^^<http://www.w3.org/2001/XMLSchema#integer> .`))
 }
 
 @(test)

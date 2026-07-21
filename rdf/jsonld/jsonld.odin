@@ -26,6 +26,12 @@ XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
 XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
 XSD_DOUBLE  :: "http://www.w3.org/2001/XMLSchema#double"
 
+// core:encoding/json currently drops empty object member names. JSON-LD only
+// needs to retain one in an opaque @json value, where this marker is restored
+// during deterministic RDF JSON serialization.
+EMPTY_JSON_OBJECT_KEY_SENTINEL :: "\x00odin-rdf-empty-json-object-key"
+EMPTY_JSON_OBJECT_KEY_SENTINEL_JSON :: `"\u0000odin-rdf-empty-json-object-key"`
+
 // Error_Code identifies JSON syntax, JSON-LD processing, resource-limit, and
 // sink outcomes. JSON-LD errors are intentionally stable API diagnostics;
 // callers should not depend on the implementation details of core:encoding/json.
@@ -168,6 +174,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	has_index:      bool,
 	reverse:        bool,
 	prefix:         bool,
+	// prefix_explicit distinguishes an omitted @prefix from an explicit false.
+	// The former keeps the package's legacy object-term compatibility, while
+	// the latter must not be used to expand Compact IRIs.
+	prefix_explicit: bool,
 	disabled:       bool,
 	protected:      bool,
 	has_local_context: bool,
@@ -256,6 +266,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	compact_source_notype_value_annotations: [dynamic]Compact_Source_Notype_Value_Annotation,
 	compact_source_type_order_annotations: [dynamic]Compact_Source_Type_Order_Annotation,
 	compact_source_value_order_annotations: [dynamic]Compact_Source_Value_Order_Annotation,
+	compact_source_json_value_annotations: [dynamic]Compact_Source_Json_Value_Annotation,
 	compact_source_included_roots: [dynamic]Compact_Source_Included_Root,
 	compact_source_included_children: [dynamic]Compact_Source_Included_Child,
 	compact_source_document_root_predicates: [dynamic]string,
@@ -314,6 +325,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	delete(state.compact_source_notype_value_annotations)
 	delete(state.compact_source_type_order_annotations)
 	delete(state.compact_source_value_order_annotations)
+	delete(state.compact_source_json_value_annotations)
 	delete(state.compact_source_included_roots)
 	delete(state.compact_source_included_children)
 	delete(state.compact_source_document_root_predicates)
@@ -473,7 +485,16 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 // itself must reject a raw invalid datatype IRI such as one containing space.
 @(private) valid_absolute_iri :: proc(value: string) -> bool {
 	if !has_iri_scheme(value) || !utf8.valid_string(value) do return false
+	seen_fragment := false
 	for character in value {
+		if character == '#' {
+			// An IRI-reference has at most one fragment delimiter. A second raw
+			// hash is not part of an RFC 3987 IRI and must not become an RDF
+			// predicate after JSON-LD vocabulary expansion.
+			if seen_fragment do return false
+			seen_fragment = true
+			continue
+		}
 		if character <= ' ' || character == '<' || character == '>' || character == '"' || character == '{' || character == '}' || character == '|' || character == '^' || character == '`' || character == '\\' do return false
 	}
 	return true
@@ -511,7 +532,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if prefix == "_" do return own(state, value)
 		if !strings.has_prefix(suffix, "//") {
-			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
+			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 && (!definition.prefix_explicit || definition.prefix) {
 				builder := strings.builder_make()
 				defer strings.builder_destroy(&builder)
 				strings.write_string(&builder, definition.id)
@@ -546,7 +567,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		prefix, suffix := value[:colon], value[colon + 1:]
 		if prefix == "_" do return own(state, value)
 		if !strings.has_prefix(suffix, "//") {
-			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 {
+			if definition, ok := ctx.terms[prefix]; ok && len(definition.id) > 0 && (!definition.prefix_explicit || definition.prefix) {
 				builder := strings.builder_make()
 				defer strings.builder_destroy(&builder)
 				strings.write_string(&builder, definition.id)
@@ -646,6 +667,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) term_definitions_match :: proc(a, b: Term_Definition) -> bool {
+	// An omitted @prefix retains compatibility behaviour and is not part of a
+	// protected definition's public meaning. An explicit declaration is.
+	if a.prefix_explicit != b.prefix_explicit do return false
+	if a.prefix_explicit && a.prefix != b.prefix do return false
 	return a.id == b.id &&
 		a.type == b.type &&
 		a.language == b.language &&
@@ -788,6 +813,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	explicit_non_propagating := false
 	explicit_propagating := false
 	if propagate_value, found := object_value(object, "@propagate"); found {
+		if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Context}
 		active_propagate, ok = bool_value(propagate_value)
 		if !ok do return {}, Parse_Error{code = .Invalid_Context}
 		explicit_non_propagating = !active_propagate
@@ -879,6 +905,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// container. Preserve the @set choice even though @type is not an ordinary
 	// term definition.
 	if type_definition_value, found := object_value(object, "@type"); found {
+		if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		#partial switch null in type_definition_value {
 		case json.Null:
 			result.type_container_set = false
@@ -903,6 +930,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	if vocab_value, found := object_value(object, "@vocab"); found {
 		if vocab_value_string, valid := string_value(vocab_value); valid {
+			if !state.allow_document_containers && !valid_absolute_iri(vocab_value_string) do return {}, Parse_Error{code = .Invalid_Context}
 			vocab, err := expand_iri(state, &result, vocab_value_string, true, true)
 			if err.code != .None do return {}, err
 			result.vocab = vocab
@@ -992,9 +1020,20 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if reverse_value, found := object_value(definition_object, "@reverse"); found {
 			reverse, valid := string_value(reverse_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
-			definition.id, make_error = expand_iri(state, &result, reverse, true, true)
+			// A keyword-shaped value that is not a JSON-LD keyword is ignored as
+			// a term mapping. Fall back to the term itself so @vocab can still
+			// provide an ordinary property IRI; notably, do not mark it reverse.
+			// Without a vocabulary (or another absolute mapping), that fallback
+			// is not an RDF predicate and the term must be ignored rather than
+			// handed to the to-RDF sink (W3C pr38).
+			if has_keyword_form(reverse) {
+				definition.id, make_error = expand_iri(state, &result, term, true, false)
+				if len(result.vocab) == 0 && !has_iri_scheme(definition.id) do definition.disabled = true
+			} else {
+				definition.id, make_error = expand_iri(state, &result, reverse, true, true)
+				definition.reverse = true
+			}
 			if make_error.code != .None do return {}, make_error
-			definition.reverse = true
 		} else if id_value, has_identifier := object_value(definition_object, "@id"); has_identifier {
 			#partial switch null in id_value {
 			case json.Null:
@@ -1017,6 +1056,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				definition.type, make_error = expand_iri(state, &result, type_name, true, true)
 				if make_error.code != .None do return {}, make_error
 			}
+			if definition.type == "@none" && !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		}
 		if language_value, found := object_value(definition_object, "@language"); found {
 			#partial switch null in language_value {
@@ -1059,6 +1099,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if make_error.code != .None do return {}, make_error
 		}
 		if index_value, found := object_value(definition_object, "@index"); found {
+			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			index_name, valid := string_value(index_value)
 			if !valid || !definition.container_index do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if index_name == "@index" {
@@ -1094,6 +1135,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if prefix && strings.index_byte(term, ':') >= 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			definition.prefix = prefix
+			definition.prefix_explicit = true
 		}
 		if state.legacy_prefixes && !definition.reverse do definition.prefix = true
 		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
@@ -1126,16 +1168,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 // Term-scoped contexts apply to values of a term and to nodes whose type is
-// represented by that term. They are non-propagating by default; an explicit
-// @propagate: true in the scoped context opts into propagation. Keeping the
-// parsed form as owned JSON text makes contexts safe to retain after their
+// represented by that term. Type scopes are non-propagating by default, while
+// property scopes pass propagate=true so they govern the property's nested
+// value unless their local context explicitly sets @propagate: false. Keeping
+// the parsed form as owned JSON text makes contexts safe to retain after their
 // source document has been released.
-@(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, allow_protected_override := false) -> (Context, Parse_Error) {
+@(private) apply_term_scoped_context :: proc(state: ^State, current: ^Context, definition: Term_Definition, allow_protected_override := false, propagate := false) -> (Context, Parse_Error) {
 	if !definition.has_local_context do return current^, {}
 	value, json_error := json.parse_string(definition.local_context, .JSON, true)
 	if json_error != .None do return {}, Parse_Error{code = .Invalid_Context}
 	defer json.destroy_value(value)
-	if !allow_protected_override do return apply_context(state, current, value, false)
+	if !allow_protected_override do return apply_context(state, current, value, propagate)
 	// A property-scoped context may locally refine a protected outer term. Keep
 	// a retained copy of the inherited mappings for rollback, but clear only
 	// their protection marker while the scoped context is being constructed.
@@ -1147,7 +1190,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		scoped_base.terms[term] = inherited
 	}
 	retain_context(state, scoped_base)
-	return apply_context(state, &scoped_base, value, false)
+	return apply_context(state, &scoped_base, value, propagate)
 }
 
 @(private) blank_node :: proc(state: ^State) -> (rdf.Term, Parse_Error) {
@@ -1224,7 +1267,47 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return {}
 }
 
+// valid_language_tag accepts the well-formed BCP 47 shape relevant to RDF
+// language literals. JSON-LD input has already been decoded as UTF-8; RDF
+// output additionally requires non-empty ASCII subtags separated by single
+// hyphens and an alphabetic primary subtag.
+@(private) valid_language_tag :: proc(value: string) -> bool {
+	if len(value) == 0 || !((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) do return false
+	previous_hyphen := false
+	for character in value {
+		if character == '-' {
+			if previous_hyphen do return false
+			previous_hyphen = true
+			continue
+		}
+		if !((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9')) do return false
+		previous_hyphen = false
+	}
+	return !previous_hyphen
+}
+
+// valid_rdf_object_term checks the portion of an RDF term that can be invalid
+// after JSON-LD expansion. Blank nodes were allocated internally; IRIs,
+// literal language tags, and literal datatypes must still be well-formed.
+@(private) valid_rdf_object_term :: proc(term: rdf.Term) -> bool {
+	if term.kind == .IRI do return valid_absolute_iri(term.value)
+	if term.kind != .Literal do return term.kind == .Blank_Node
+	if len(term.language) > 0 do return valid_language_tag(term.language)
+	return valid_absolute_iri(term.datatype)
+}
+
 @(private) emit :: proc(state: ^State, subject, predicate, object: rdf.Term, graph: rdf.Quad) -> Parse_Error {
+	// The JSON-LD to-RDF algorithm emits only well-formed RDF statements. Drop
+	// a complete statement when any participating IRI or language tag is
+	// invalid, rather than forwarding it to a serializer that must reject it
+	// (W3C wf01--wf05/wf07).
+	if subject.kind == .IRI && !valid_absolute_iri(subject.value) do return {}
+	if predicate.kind != .IRI || !valid_absolute_iri(predicate.value) do return {}
+	if !valid_rdf_object_term(object) do return {}
+	if graph.has_graph {
+		if graph.graph.kind == .IRI && !valid_absolute_iri(graph.graph.value) do return {}
+		if graph.graph.kind != .IRI && graph.graph.kind != .Blank_Node do return {}
+	}
 	if state.max_quads > 0 && state.emitted >= state.max_quads do return Parse_Error{code = .Quad_Limit}
 	quad := graph
 	quad.subject = subject
@@ -1247,6 +1330,26 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		output_datatype := len(datatype) == 0 ? XSD_INTEGER : datatype
 		return rdf.typed_literal(lexical, output_datatype), {}
 	case json.Float:
+		// JSON-LD native-number conversion treats negative zero as the integer
+		// zero when no explicit datatype coercion is present (W3C rt01).
+		if f64(actual) == 0 && len(datatype) == 0 do return rdf.typed_literal("0", XSD_INTEGER), {}
+		// Native JSON numbers that are mathematically integral below 1e21 use
+		// xsd:integer, independent of whether their source token used a decimal
+		// point. Larger values retain xsd:double to avoid a lossy integer form
+		// (W3C tn02/rt01).
+		if len(datatype) == 0 && f64(actual) > -1000000000000000000000.0 && f64(actual) < 1000000000000000000000.0 {
+			integer := strings.builder_make()
+			defer strings.builder_destroy(&integer)
+			strings.write_float(&integer, f64(actual), 'f', -1, 64)
+			integral := strings.to_string(integer)
+			decimal := strings.index_byte(integral, '.')
+			if decimal < 0 || (decimal + 2 == len(integral) && integral[decimal + 1] == '0') {
+				integer_text := decimal < 0 ? integral : integral[:decimal]
+				lexical, err := own(state, integer_text)
+				if err.code != .None do return {}, err
+				return rdf.typed_literal(lexical, XSD_INTEGER), {}
+			}
+		}
 		strings.write_float(&builder, f64(actual), 'E', -1, 64)
 		raw := strings.to_string(builder)
 		separator := strings.index_byte(raw, 'E')
@@ -1315,7 +1418,102 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return node, {}
 }
 
+@(private) write_json_canonical_float :: proc(builder: ^strings.Builder, value: f64) {
+	if value == 0 {
+		strings.write_byte(builder, '0')
+		return
+	}
+	if (value >= 0.000001 && value < 1000000000000000000000.0) || (value <= -0.000001 && value > -1000000000000000000000.0) {
+		strings.write_float(builder, value, 'f', -1, 64)
+		return
+	}
+	temporary := strings.builder_make()
+	defer strings.builder_destroy(&temporary)
+	strings.write_float(&temporary, value, 'g', -1, 64)
+	formatted := strings.to_string(temporary)
+	separator := strings.index_byte(formatted, 'e')
+	if separator < 0 do separator = strings.index_byte(formatted, 'E')
+	if separator < 0 {
+		strings.write_string(builder, formatted)
+		return
+	}
+	strings.write_string(builder, formatted[:separator])
+	strings.write_byte(builder, 'e')
+	exponent := formatted[separator + 1:]
+	if len(exponent) > 0 && (exponent[0] == '+' || exponent[0] == '-') {
+		strings.write_byte(builder, exponent[0])
+		exponent = exponent[1:]
+	}
+	for len(exponent) > 1 && exponent[0] == '0' do exponent = exponent[1:]
+	strings.write_string(builder, exponent)
+}
+
+@(private) write_sorted_json :: proc(builder: ^strings.Builder, value: json.Value) -> bool {
+	if array, is_array := array_from_value(value); is_array {
+		strings.write_byte(builder, '[')
+		for item, index in array {
+			if index > 0 do strings.write_byte(builder, ',')
+			if !write_sorted_json(builder, item) do return false
+		}
+		strings.write_byte(builder, ']')
+		return true
+	}
+	if object, is_object := object_from_value(value); is_object {
+		keys := make([dynamic]string)
+		defer delete(keys)
+		for key in object do append(&keys, key)
+		sort.sort(sort.Interface{
+			collection = rawptr(&keys),
+			len = proc(it: sort.Interface) -> int { return len((cast(^[dynamic]string)it.collection)^) },
+			less = proc(it: sort.Interface, i, j: int) -> bool {
+				keys := cast(^[dynamic]string)it.collection
+				return strings.compare(keys[i], keys[j]) < 0
+			},
+			swap = proc(it: sort.Interface, i, j: int) {
+				keys := cast(^[dynamic]string)it.collection
+				keys[i], keys[j] = keys[j], keys[i]
+			},
+		})
+		strings.write_byte(builder, '{')
+		for key, index in keys {
+			if index > 0 do strings.write_byte(builder, ',')
+			output_key := key == EMPTY_JSON_OBJECT_KEY_SENTINEL ? "" : key
+			write_json_string(builder, output_key)
+			strings.write_byte(builder, ':')
+			if !write_sorted_json(builder, object[key]) do return false
+		}
+		strings.write_byte(builder, '}')
+		return true
+	}
+	#partial switch number in value {
+	case json.Float:
+		write_json_canonical_float(builder, f64(number))
+		return true
+	case json.String:
+		write_json_string(builder, string(number))
+		return true
+	}
+	encoded, marshal_error := json.marshal(value)
+	if marshal_error != nil do return false
+	defer delete(encoded)
+	strings.write_string(builder, string(encoded))
+	return true
+}
+
+// json_literal preserves the complete JSON value as a deterministically
+// ordered RDF JSON literal. A term definition with @type: @json applies before
+// ordinary JSON-LD array expansion, null elision, or nested-context processing.
+@(private) json_literal :: proc(state: ^State, value: json.Value) -> (rdf.Term, Parse_Error) {
+	encoded := strings.builder_make()
+	defer strings.builder_destroy(&encoded)
+	if !write_sorted_json(&encoded, value) do return {}, Parse_Error{code = .Invalid_Value_Object}
+	lexical, own_error := own(state, strings.to_string(encoded))
+	if own_error.code != .None do return {}, own_error
+	return rdf.typed_literal(lexical, RDF_JSON), {}
+}
+
 @(private) primitive_literal :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	if definition.type == "@json" do return json_literal(state, value)
 	#partial switch actual in value {
 	case json.String:
 		text := string(actual)
@@ -1327,7 +1525,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if err.code != .None do return {}, err
 			return rdf.iri(id), {}
 		}
-		if len(definition.type) > 0 && definition.type != "@json" {
+		if len(definition.type) > 0 && definition.type != "@json" && definition.type != "@none" {
 			return rdf.typed_literal(text, definition.type), {}
 		}
 		language, has_language := language_for_value(ctx, definition)
@@ -1341,12 +1539,12 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	case json.Boolean:
 		lexical := bool(actual) ? "true" : "false"
 		type_iri := definition.type
-		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" do type_iri = ""
+		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" || type_iri == "@none" do type_iri = ""
 		if len(type_iri) > 0 do return rdf.typed_literal(lexical, type_iri), {}
 		return rdf.typed_literal(lexical, XSD_BOOLEAN), {}
 	case json.Integer, json.Float:
 		type_iri := definition.type
-		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" do type_iri = ""
+		if type_iri == "@id" || type_iri == "@vocab" || type_iri == "@json" || type_iri == "@none" do type_iri = ""
 		return numeric_literal(state, value, type_iri)
 	case json.Null:
 		return {}, Parse_Error{code = .Invalid_Value_Object}
@@ -1370,12 +1568,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
 		if has_direction do return {}, Parse_Error{code = .Invalid_Value_Object}
 		if type_name == "@json" || keyword_for(ctx, type_name) == "@json" {
-			encoded, marshal_error := json.marshal(value)
-			if marshal_error != nil do return {}, Parse_Error{code = .Invalid_Value_Object}
-			defer delete(encoded)
-			lexical, own_error := own(state, string(encoded))
-			if own_error.code != .None do return {}, own_error
-			return rdf.typed_literal(lexical, RDF_JSON), {}
+			return json_literal(state, value)
 		}
 	}
 	#partial switch actual in value {
@@ -1430,6 +1623,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 
 @(private) process_value_set_aware :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> ([dynamic]rdf.Term, Parse_Error) {
 	result := make([dynamic]rdf.Term)
+	// @json coerces the complete JSON value. In particular, null and arrays
+	// become one rdf:JSON literal rather than being discarded or expanded into
+	// multiple property values.
+	if definition.type == "@json" {
+		term, err := process_value(state, ctx, definition, value, graph)
+		if err.code != .None {
+			delete(result)
+			return {}, err
+		}
+		append(&result, term)
+		return result, {}
+	}
 	#partial switch _ in value {
 	case json.Null:
 		return result, {}
@@ -1449,8 +1654,20 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	if object, is_object := object_from_value(value); is_object {
 		active_context := ctx^
+		// Property-scoped contexts govern the complete value, including the
+		// value object's local context. Applying the object's @context first
+		// would make a protected outer mapping reject a legal redefinition
+		// after a scoped null context (W3C pr14--pr16/pr19).
+		if definition.has_local_context {
+			updated, context_err := apply_term_scoped_context(state, &active_context, definition, true, true)
+			if context_err.code != .None {
+				delete(result)
+				return {}, context_err
+			}
+			active_context = updated
+		}
 		if context_value, found := object_value(object, "@context"); found {
-			updated, context_err := apply_context(state, ctx, context_value)
+			updated, context_err := apply_context(state, &active_context, context_value)
 			if context_err.code != .None {
 				delete(result)
 				return {}, context_err
@@ -1460,7 +1677,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if value_value, has_value := has_keyword(object, &active_context, "@value"); has_value {
 			#partial switch _ in value_value {
 			case json.Null:
-				return result, {}
+				// @json is the exception to ordinary JSON-LD null elision: null
+				// itself is the JSON value carried by the RDF JSON literal.
+				if type_value, has_type := has_keyword(object, &active_context, "@type"); has_type {
+					type_name, valid_type := string_value(type_value)
+					if valid_type && (type_name == "@json" || keyword_for(&active_context, type_name) == "@json") {
+						// Continue into process_value below.
+					} else {
+						return result, {}
+					}
+				} else {
+					return result, {}
+				}
 			}
 		} else if _, has_language := has_keyword(object, &active_context, "@language"); has_language {
 			return result, {}
@@ -1489,17 +1717,38 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		delete(result)
 		return {}, err
 	}
-	// A node with an unresolved relative identifier is ignored by RDF
-	// conversion. Do not let that empty IRI reach a parent statement.
-	if term.kind != .IRI || len(term.value) > 0 do append(&result, term)
+	// Values coerced to identifiers become RDF resources only when they are
+	// blank nodes or valid absolute IRIs. JSON-LD-to-RDF drops relative and
+	// syntactically invalid IRI values instead of passing them to an RDF writer
+	// (W3C li12/li14).
+	if term.kind != .IRI || valid_absolute_iri(term.value) do append(&result, term)
 	return result, {}
+}
+
+// survives_list_null_elision distinguishes an RDF-elided JSON null from an
+// actual list member. A value object whose @value is null is elided by the
+// same rule as a direct null before RDF list construction.
+@(private) survives_list_null_elision :: proc(ctx: ^Context, value: json.Value) -> bool {
+	#partial switch _ in value {
+	case json.Null: return false
+	}
+	object, is_object := object_from_value(value)
+	if !is_object do return true
+	item, found := has_keyword(object, ctx, "@value")
+	if !found do return true
+	#partial switch _ in item {
+	case json.Null: return false
+	}
+	return true
 }
 
 @(private) process_list :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
 	items := make([dynamic]rdf.Term)
 	defer delete(items)
+	has_source_item := false
 	if list_values, is_array := array_from_value(value); is_array {
 		for list_value in list_values {
+			if survives_list_null_elision(ctx, list_value) do has_source_item = true
 			if !state.allow_document_containers {
 				if list_object, is_object := object_from_value(list_value); is_object {
 					if _, is_nested_list := has_keyword(list_object, ctx, "@list"); is_nested_list do return {}, Parse_Error{code = .Invalid_List_Object}
@@ -1521,6 +1770,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			delete(values)
 		}
 	} else {
+		if survives_list_null_elision(ctx, value) do has_source_item = true
 		values, values_err := process_value_set_aware(state, ctx, definition, value, graph)
 		if values_err.code != .None {
 			delete(values)
@@ -1529,7 +1779,17 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		for item in values do append(&items, item)
 		delete(values)
 	}
-	if len(items) == 0 do return rdf.iri(RDF_NIL), {}
+	if len(items) == 0 {
+		// An explicitly non-empty JSON-LD list keeps its list node even when
+		// every value is removed during RDF conversion (for example, an invalid
+		// @id-coerced IRI). It has rdf:rest rdf:nil and no rdf:first (W3C
+		// li12/li14). A source-empty list remains rdf:nil.
+		if !has_source_item do return rdf.iri(RDF_NIL), {}
+		empty, empty_err := blank_node(state)
+		if empty_err.code != .None do return {}, empty_err
+		if emit_err := emit(state, empty, rdf.iri(RDF_REST), rdf.iri(RDF_NIL), graph); emit_err.code != .None do return {}, emit_err
+		return empty, {}
+	}
 	first, err := blank_node(state)
 	if err.code != .None do return {}, err
 	current := first
@@ -1568,7 +1828,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		mapped_definition := definition
 		mapped_definition.has_language = false
 		mapped_definition.language_null = false
-		if language == "@none" {
+		if language == "@none" || keyword_for(ctx, language) == "@none" {
 			mapped_definition.language_null = true
 		} else {
 			lowercase := strings.to_lower(language)
@@ -1604,6 +1864,19 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return result, len(best) > 0
 }
 
+// emit_custom_index preserves a map key when a container selects an ordinary
+// property as its @index. Plain @index remains JSON-LD annotation, while a
+// custom index is RDF data for both ordinary and graph/index containers.
+@(private) emit_custom_index :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, subject: rdf.Term, index_key: string, graph: rdf.Quad) -> Parse_Error {
+	if !definition.has_index || definition.index == "@index" || index_key == "@none" do return {}
+	if subject.kind == .Literal do return Parse_Error{code = .Invalid_Value_Object}
+	index_definition, found_definition := context_definition_for_iri(ctx, definition.index)
+	if !found_definition do index_definition = Term_Definition{}
+	index_term, index_error := process_value(state, ctx, index_definition, json.String(index_key), graph)
+	if index_error.code != .None do return index_error
+	return emit(state, subject, rdf.iri(definition.index), index_term, graph)
+}
+
 // process_index_map deliberately treats ordinary @index entries as JSON-LD
 // annotation: RDF has no index slot. A custom @index property is data, and its
 // value still follows that property's coercion rules (@id, @vocab, language,
@@ -1623,25 +1896,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			return {}, err
 		}
 		for term in terms {
-			if definition.has_index && definition.index != "@index" && index_key != "@none" {
-				if term.kind == .Literal {
-					delete(terms)
-					delete(result)
-					return {}, Parse_Error{code = .Invalid_Value_Object}
-				}
-				index_definition, found_definition := context_definition_for_iri(ctx, definition.index)
-				if !found_definition do index_definition = Term_Definition{}
-				index_term, index_error := process_value(state, ctx, index_definition, json.String(index_key), graph)
-				if index_error.code != .None {
-					delete(terms)
-					delete(result)
-					return {}, index_error
-				}
-				if emit_err := emit(state, term, rdf.iri(definition.index), index_term, graph); emit_err.code != .None {
-					delete(terms)
-					delete(result)
-					return {}, emit_err
-				}
+			if index_error := emit_custom_index(state, ctx, definition, term, index_key, graph); index_error.code != .None {
+				delete(terms)
+				delete(result)
+				return {}, index_error
 			}
 			append(&result, term)
 		}
@@ -1886,6 +2144,52 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return emit(state, subject, rdf.iri(predicate), graph_name, graph)
 }
 
+// Type-scoped contexts govern a complete node, including its @id. Resolve
+// definitions from the pre-scope context so a preceding null scope cannot hide
+// a later type term; apply them in reverse type order as required by JSON-LD.
+@(private) apply_node_type_scoped_contexts :: proc(state: ^State, current: ^Context, object: json.Object) -> (Context, Parse_Error) {
+	result := current^
+	type_context := current^
+	for key, type_value in object {
+		if keyword_for(&type_context, key) != "@type" do continue
+		types, array := array_from_value(type_value)
+		count := array ? len(types) : 1
+		for index := count - 1; index >= 0; index -= 1 {
+			type_name, valid := string_value(array ? types[index] : type_value)
+			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
+			if definition, found := type_context.terms[type_name]; found && definition.has_local_context {
+				updated, context_err := apply_term_scoped_context(state, &result, definition)
+				if context_err.code != .None do return {}, context_err
+				result = updated
+			}
+		}
+	}
+	return result, {}
+}
+
+// nested_node_identifier finds an @id supplied through a direct @nest member.
+// @nest merges that member's properties into the enclosing node, so its
+// identifier must participate in subject selection before RDF statements are
+// emitted. The nested object is still processed normally afterwards, which
+// preserves the remaining property and type handling.
+@(private) nested_node_identifier :: proc(ctx: ^Context, object: json.Object) -> (string, bool) {
+	for key, nested_value in object {
+		if keyword_for(ctx, key) != "@nest" do continue
+		values, array := array_from_value(nested_value)
+		count := array ? len(values) : 1
+		for index in 0..<count {
+			nested := array ? values[index] : nested_value
+			nested_object, valid := object_from_value(nested)
+			if !valid do continue
+			id_value, found := has_keyword(nested_object, ctx, "@id")
+			if !found do continue
+			id, is_string := string_value(id_value)
+			if is_string do return id, true
+		}
+	}
+	return "", false
+}
+
 @(private) process_node :: proc(state: ^State, ctx: ^Context, object: json.Object, graph: rdf.Quad, top_level := false, subject_override: ^rdf.Term = nil) -> (rdf.Term, Parse_Error) {
 	active_context := ctx^
 	if context_value, found := object_value(object, "@context"); found {
@@ -1906,6 +2210,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if set_err.code != .None do return {}, set_err
 		return {}, {}
 	}
+	type_context := active_context
+	updated_context, type_context_err := apply_node_type_scoped_contexts(state, &active_context, object)
+	if type_context_err.code != .None do return {}, type_context_err
+	active_context = updated_context
 
 	subject: rdf.Term
 	if subject_override != nil {
@@ -1919,6 +2227,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		term, id_err := identifier_term(state, &active_context, id)
 		if id_err.code != .None do return {}, id_err
 		subject = term
+	} else if nested_id, nested_found := nested_node_identifier(&active_context, object); nested_found {
+		if len(active_context.base_iri) == 0 && !strings.has_prefix(nested_id, "_:") && !has_iri_scheme(nested_id) && strings.index_byte(nested_id, ':') < 0 {
+			if _, maps_identifier := active_context.terms[nested_id]; !maps_identifier do return {}, {}
+		}
+		term, id_err := identifier_term(state, &active_context, nested_id)
+		if id_err.code != .None do return {}, id_err
+		subject = term
 	} else {
 		term, node_err := blank_node(state)
 		if node_err.code != .None do return {}, node_err
@@ -1926,36 +2241,24 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 
 	for key, type_value in object {
-		if keyword_for(&active_context, key) != "@type" do continue
+		if keyword_for(&type_context, key) != "@type" do continue
 		types, array := array_from_value(type_value)
 		count := array ? len(types) : 1
-		type_context := active_context
 		for index in 0..<count {
 			type_item := array ? types[index] : type_value
 			type_name, valid := string_value(type_item)
 			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
-			type_iri, type_err := expand_iri(state, &active_context, type_name, true, true)
+			type_iri, type_err := expand_iri(state, &type_context, type_name, true, true)
 			if type_err.code != .None do return {}, type_err
 			if len(type_iri) == 0 do continue
 			type_term, term_err := expanded_identifier_term(state, type_iri)
 			if term_err.code != .None do return {}, term_err
 			if emit_err := emit(state, subject, rdf.iri(RDF_TYPE), type_term, graph); emit_err.code != .None do return {}, emit_err
 		}
-		// Apply scopes in reverse order, resolving each term from the pre-scope
-		// context so a preceding null scope cannot hide a later type definition.
-		for index := count - 1; index >= 0; index -= 1 {
-			type_item := array ? types[index] : type_value
-			type_name, valid := string_value(type_item)
-			if !valid do return {}, Parse_Error{code = .Invalid_IRI}
-			if definition, found := type_context.terms[type_name]; found && definition.has_local_context {
-				updated, context_err := apply_term_scoped_context(state, &active_context, definition)
-				if context_err.code != .None do return {}, context_err
-				active_context = updated
-			}
-		}
 	}
 
 	for key, property_value in object {
+		if keyword_for(&type_context, key) == "@type" do continue
 		keyword := keyword_for(&active_context, key)
 		if keyword == "@context" || keyword == "@id" || keyword == "@type" || keyword == "@value" || keyword == "@list" || keyword == "@index" do continue
 		if !is_keyword(key) && has_keyword_form(key) do continue
@@ -2020,15 +2323,22 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if keyword == "@nest" {
 			// @nest is syntactic sugar. Re-enter the normal node-property path with
-			// the same subject so containers, reverse terms, and nested @nest values
-			// retain exactly the semantics of their non-nested forms.
+			// the same subject. A nest alias may carry a property-scoped context,
+			// which governs every transparently nested member before its ordinary
+			// property processing resumes.
+			nest_context := active_context
+			if definition, found := active_context.terms[key]; found && definition.has_local_context {
+				updated, context_err := apply_term_scoped_context(state, &nest_context, definition, true, true)
+				if context_err.code != .None do return {}, context_err
+				nest_context = updated
+			}
 			nested_values, is_array := array_from_value(property_value)
 			count := is_array ? len(nested_values) : 1
 			for index in 0..<count {
 				nested_value := is_array ? nested_values[index] : property_value
 				nested, valid := object_from_value(nested_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
-				if _, nested_err := process_node(state, &active_context, nested, graph, false, &subject); nested_err.code != .None do return {}, nested_err
+				if _, nested_err := process_node(state, &nest_context, nested, graph, false, &subject); nested_err.code != .None do return {}, nested_err
 			}
 			continue
 		}
@@ -2039,9 +2349,21 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
 		// JSON-LD drops properties whose expanded predicate is a blank node;
-		// RDF predicates must be IRIs.
-		if strings.has_prefix(predicate_iri, "_:") do continue
+		// RDF predicates must be valid absolute IRIs. In particular, a
+		// vocabulary ending in '#' plus a fragment-shaped property name would
+		// otherwise create an invalid double-fragment IRI (W3C e111/e112).
+		if strings.has_prefix(predicate_iri, "_:") || !valid_absolute_iri(predicate_iri) do continue
 		if definition.container_graph {
+			// A graph container still expands values through its property-scoped
+			// context. In particular, a scoped null context must clear inherited
+			// protected mappings before a graph member's local context is applied
+			// (W3C pr43).
+			graph_context := active_context
+			if definition.has_local_context {
+				updated, context_err := apply_term_scoped_context(state, &graph_context, definition, true, true)
+				if context_err.code != .None do return {}, context_err
+				graph_context = updated
+			}
 			if definition.container_id && is_container_map(property_value) {
 				id_map, _ := object_from_value(property_value)
 				for graph_id, mapped_value in id_map {
@@ -2051,22 +2373,30 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 						graph_name, graph_name_err = blank_node(state)
 						if graph_name_err.code != .None do return {}, graph_name_err
 					} else {
-						graph_name, graph_name_err = identifier_term(state, &active_context, graph_id)
+						graph_name, graph_name_err = identifier_term(state, &graph_context, graph_id)
 						if graph_name_err.code != .None do return {}, graph_name_err
 					}
-					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, mapped_value, graph, true); graph_err.code != .None do return {}, graph_err
+					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate_iri, graph_name, mapped_value, graph, true); graph_err.code != .None do return {}, graph_err
 				}
 				continue
 			}
 			graph_values := make([dynamic]json.Value)
 			defer delete(graph_values)
+			graph_index_keys := make([dynamic]string)
+			defer delete(graph_index_keys)
 			if definition.container_index && is_container_map(property_value) {
 				index_map, _ := object_from_value(property_value)
-				for _, mapped_value in index_map do append(&graph_values, mapped_value)
+				for index_key, mapped_value in index_map {
+					append(&graph_values, mapped_value)
+					append(&graph_index_keys, index_key)
+				}
 			} else {
 				append(&graph_values, property_value)
+				append(&graph_index_keys, "@none")
 			}
-			for source_value in graph_values {
+			for source_index in 0..<len(graph_values) {
+				source_value := graph_values[source_index]
+				index_key := graph_index_keys[source_index]
 				values, array := array_from_value(source_value)
 				count := array ? len(values) : 1
 				for index in 0..<count {
@@ -2075,18 +2405,20 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					// it here by @id. Keep that identifier as the graph name instead of
 					// allocating a second anonymous graph for the reference.
 					if reference, reference_valid := object_from_value(graph_value); reference_valid && len(reference) == 1 {
-						if reference_id, has_reference_id := has_keyword(reference, &active_context, "@id"); has_reference_id {
+						if reference_id, has_reference_id := has_keyword(reference, &graph_context, "@id"); has_reference_id {
 							id, id_valid := string_value(reference_id)
 							if !id_valid do return {}, Parse_Error{code = .Invalid_IRI}
-							graph_name, graph_name_err := identifier_term(state, &active_context, id)
+							graph_name, graph_name_err := identifier_term(state, &graph_context, id)
 							if graph_name_err.code != .None do return {}, graph_name_err
+							if index_error := emit_custom_index(state, &graph_context, definition, graph_name, index_key, graph); index_error.code != .None do return {}, index_error
 							if emit_err := emit(state, subject, rdf.iri(predicate_iri), graph_name, graph); emit_err.code != .None do return {}, emit_err
 							continue
 						}
 					}
 					graph_name, graph_name_err := blank_node(state)
 					if graph_name_err.code != .None do return {}, graph_name_err
-					if graph_err := process_graph_container_entry(state, &active_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
+					if index_error := emit_custom_index(state, &graph_context, definition, graph_name, index_key, graph); index_error.code != .None do return {}, index_error
+					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
 				}
 			}
 			continue
@@ -2195,14 +2527,15 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 }
 
 @(private) process_value :: proc(state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, graph: rdf.Quad) -> (rdf.Term, Parse_Error) {
+	if definition.type == "@json" do return json_literal(state, value)
 	active_context := ctx^
 	object, is_object := object_from_value(value)
-	// Property- and type-scoped contexts are non-propagating unless their local
-	// context opts in. A newly entered node object therefore resumes the saved
-	// context before any context belonging to its own property is applied.
+	// A child node first resumes a non-propagating type scope. A property scope
+	// is then applied with its normal propagation behaviour (unless its local
+	// context explicitly sets @propagate: false).
 	if is_object && !definition.container_type && !definition.container_index && expand_rolls_back_context(&active_context, object) do active_context = previous_context(&active_context)
 	if definition.has_local_context {
-		updated, context_err := apply_term_scoped_context(state, &active_context, definition, true)
+		updated, context_err := apply_term_scoped_context(state, &active_context, definition, true, true)
 		if context_err.code != .None do return {}, context_err
 		active_context = updated
 	}
@@ -2240,6 +2573,45 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return {}
 }
 
+// prepare_json_input preserves empty object keys across core:encoding/json.
+// It rewrites only an unescaped empty JSON string immediately followed by a
+// colon; empty string values and non-empty keys are copied unchanged.
+@(private) prepare_json_input :: proc(builder: ^strings.Builder, input: string) {
+	index := 0
+	for index < len(input) {
+		if input[index] != '"' {
+			strings.write_byte(builder, input[index])
+			index += 1
+			continue
+		}
+		end := index + 1
+		escaped := false
+		for end < len(input) {
+			byte := input[end]
+			if escaped {
+				escaped = false
+			} else if byte == '\\' {
+				escaped = true
+			} else if byte == '"' {
+				break
+			}
+			end += 1
+		}
+		if end == len(input) {
+			strings.write_string(builder, input[index:])
+			return
+		}
+		next := end + 1
+		for next < len(input) && (input[next] == ' ' || input[next] == 9 || input[next] == 13 || input[next] == 10) do next += 1
+		if end == index + 1 && next < len(input) && input[next] == ':' {
+			strings.write_string(builder, EMPTY_JSON_OBJECT_KEY_SENTINEL_JSON)
+		} else {
+			strings.write_string(builder, input[index:end + 1])
+		}
+		index = end + 1
+	}
+}
+
 // parse transforms one complete JSON-LD document to RDF dataset statements.
 // It retains input-derived JSON and ctx state until completion, then
 // destroys it before returning. Use max_document_bytes for untrusted input.
@@ -2258,7 +2630,10 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 	// not retain a root value when trailing whitespace remains after an object.
 	// JSON permits that whitespace, so normalize it before materializing the AST.
 	document := strings.trim_space(input)
-	parsed, json_error := json.parse_string(document, .JSON, true)
+	prepared := strings.builder_make()
+	defer strings.builder_destroy(&prepared)
+	prepare_json_input(&prepared, document)
+	parsed, json_error := json.parse_string(strings.to_string(prepared), .JSON, true)
 	if json_error != .None do return Parse_Error{code = .Invalid_JSON, line = 1, column = 1}
 	defer json.destroy_value(parsed)
 	max_contexts := options.max_contexts

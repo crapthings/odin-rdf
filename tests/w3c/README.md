@@ -35,10 +35,14 @@ parse → write → parse round trip. Downloaded files are cached under `.cache/
 # JSON-LD core selection
 
 `../scripts/run-w3c-jsonld-tests.sh` pins the W3C JSON-LD API corpus and runs
-162 JSON-LD-to-RDF core cases. It intentionally does not claim the complete
-JSON-LD 1.1 API suite. Scoped contexts, map containers, direction handling,
+355 JSON-LD-to-RDF core cases. The adjacent Expansion and Flattening gates run
+307 and 56 core cases. The selections intentionally do not claim the complete JSON-LD 1.1 API
+suite. Scoped contexts, map containers, direction handling,
 Compaction, Framing, and RDF-to-JSON-LD each have dedicated pinned gates;
 generalized RDF remains outside the current profile.
+Flattening emits expanded JSON-LD only; W3C vectors that require an output
+context and `compactArrays` result shaping belong to the separate Compaction
+workflow.
 
 # RDF/XML core selection
 

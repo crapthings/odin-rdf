@@ -27,7 +27,7 @@ frame(builder: ^strings.Builder, input, frame: string,
 ```
 
 `expand` is implemented as the first bounded document-level operation. Its
-current core is guarded by 106 pinned W3C Expand cases and covers aliases,
+current core is guarded by 299 pinned W3C Expand cases and covers aliases,
 value/type/language expansion, lists, sets, transparent nesting, language/index
 containers, reverse maps, default/named graph expansion, and document-level
 `@graph`, `@id`, and `@type` containers. Property- and type-scoped contexts,
@@ -70,9 +70,9 @@ renamed or treated as a JSON-LD `expand` implementation.
 
 1. Expansion core: implemented for aliases, `@id`, `@type`, scalar and value
    expansion, lists, `@set`, `@nest`, language and index maps, `@reverse`, and `@graph`.
-2. A 106-case pinned W3C Expand core selection with structural JSON comparison.
+2. A 307-case pinned W3C Expand core selection with structural JSON comparison.
 3. Default-graph Flatten node-map generation: implemented.
-4. A 35-case pinned W3C Flatten selection with structural JSON
+4. A 56-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.
 5. Framing over the same representation: implemented with an 87-case W3C
    regression gate. Its bounded initial profile is specified in the

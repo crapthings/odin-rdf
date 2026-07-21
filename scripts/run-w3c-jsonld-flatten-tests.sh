@@ -17,6 +17,12 @@ cases='
 0011 0012 0013 0014 0015 0016 0017 0018 0019 0023
 0020 0021 0027 0030 0031 0032 0033 0034 0035 0036
 0037 0039 0040 0041 0042
+0022 0024 0025 0026 0028 0043 0047 0048 0049
+li01 li02 li03
+in01 in02 in03 in04 in05
+0038 0045
+0046
+in06
 '
 
 total=0
@@ -32,5 +38,5 @@ for case_id in $cases; do
 done
 
 printf 'W3C JSON-LD flattening core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 35
+test "$total" -eq 56
 test "$failures" -eq 0

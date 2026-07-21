@@ -674,8 +674,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if !state.allow_document_containers do return {}
 	relative_term := strings.has_prefix(term, "./") || strings.has_prefix(term, "../") || strings.has_prefix(term, "/")
 	if definition.prefix && relative_term do return Parse_Error{code = .Invalid_Term_Definition}
-	compact_term := strings.index_byte(term, ':') >= 0
-	if !relative_term && !compact_term do return {}
+	// A colon in a term does not by itself make that term a Compact IRI. It may
+	// be a legal term that simply must not be used as a prefix (W3C compact-p003).
+	// The mapping-equality check is required only for relative term definitions.
+	if !relative_term do return {}
 	expanded_term, expansion_error := expand_iri(state, ctx, term, true, true)
 	if expansion_error.code != .None do return expansion_error
 	if definition.id != expanded_term do return Parse_Error{code = .Invalid_Term_Definition}
@@ -1211,9 +1213,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if definition.id == "@context" do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if implicit_id && len(result.vocab) == 0 && !has_iri_scheme(term) && strings.index_byte(term, ':') < 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if mapping_error := validate_term_iri_mapping(state, &result, term, definition); mapping_error.code != .None do return {}, mapping_error
-		// JSON-LD 1.1 keyword aliases may not carry an IRI coercion or become a
-		// compact-IRI prefix. JSON-LD 1.0 keeps its legacy @type mapping form.
-		if state.allow_document_containers && is_keyword(definition.id) && (len(definition.type) > 0 || definition.prefix) do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		// JSON-LD 1.1 permits @id and @type aliases with the @id coercion used
+		// by the standard compacted form (W3C compact-0073). All keyword aliases
+		// remain ineligible as Compact-IRI prefixes, and every other coercion is
+		// rejected.
+		if state.allow_document_containers && is_keyword(definition.id) {
+			if definition.prefix || (len(definition.type) > 0 && (definition.type != "@id" || (definition.id != "@id" && definition.id != "@type"))) do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		}
 		if definition_err := set_term_definition(state, &result, &context_base, term, definition); definition_err.code != .None do return {}, definition_err
 	}
 	// A custom @index may name a term that is defined later in the same

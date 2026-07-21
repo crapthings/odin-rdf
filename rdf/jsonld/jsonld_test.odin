@@ -1096,6 +1096,45 @@ test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_rejects_invalid_reverse_term_definitions_and_values :: proc(t: ^testing.T) {
+	invalid_term_definitions := []string{
+		`{"@context":{"term":{"@id":"https://example.test/term","@reverse":"https://example.test/reverse"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@reverse":"https://example.test/reverse","@container":"@list"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@reverse":"not an IRI"}},"@id":"https://example.test/node"}`,
+	}
+	for input in invalid_term_definitions {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+	}
+	invalid_reverse_properties := []string{
+		`{"@id":"https://example.test/foo","@reverse":{"@id":"https://example.test/bar"}}`,
+		`{"@context":{"term":{"@reverse":"https://example.test/reverse"}},"@id":"https://example.test/foo","term":{"@list":["https://example.test/bar"]}}`,
+	}
+	for input in invalid_reverse_properties {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Reverse_Property)
+	}
+}
+
+@(test)
+test_rejects_invalid_value_indexes_nested_lists_and_language_maps :: proc(t: ^testing.T) {
+	invalid_values := []string{
+		`{"http://example.test/index":{"@value":"value","@index":true}}`,
+		`{"@context":{"label":{"@id":"https://example.test/label","@container":"@language"}},"label":{"en":true}}`,
+	}
+	for input in invalid_values {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect(t, err.code == Error_Code.Invalid_Value_Object || err.code == Error_Code.Invalid_List_Object)
+	}
+	nested_list, nested_list_err := parse_to_nquads(`{"http://example.test/list":{"@list":[{"@list":["value"]}]}}`, Options{processing_mode = .Json_LD_1_0})
+	defer delete(nested_list)
+	testing.expect_value(t, nested_list_err.code, Error_Code.Invalid_List_Object)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

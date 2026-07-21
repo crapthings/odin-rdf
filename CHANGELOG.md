@@ -101,6 +101,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Reject blank-node and relative IRI term-definition `@type` mappings. Cover
   W3C to-RDF negative vectors `er13` and `er23`, raising that gate to 367
   cases.
+- Reject conflicting or non-IRI reverse term definitions, invalid reverse
+  containers, keyword reverse-map entries, and reverse list values. Cover W3C
+  to-RDF negative vectors `er14`, `er17`, `er25`, `er36`, and `er50`, raising
+  that gate to 372 cases.
+- Reject non-string `@index` values and non-string language-map entries, and
+  pin JSON-LD 1.0's existing nested-list rejection. Cover W3C to-RDF negative
+  vectors `er24`, `er31`, `er32`, and `er35`, raising that gate to 376 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

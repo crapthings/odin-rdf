@@ -1022,6 +1022,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		definition_object, object_ok := object_from_value(definition_value)
 		if !object_ok do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if reverse_value, found := object_value(definition_object, "@reverse"); found {
+			if _, also_has_id := object_value(definition_object, "@id"); also_has_id do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			reverse, valid := string_value(reverse_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			// A keyword-shaped value that is not a JSON-LD keyword is ignored as
@@ -1038,6 +1039,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				definition.reverse = true
 			}
 			if make_error.code != .None do return {}, make_error
+			if definition.reverse && !strings.has_prefix(definition.id, "_:") && !valid_absolute_iri(definition.id) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		} else if id_value, has_identifier := object_value(definition_object, "@id"); has_identifier {
 			#partial switch null in id_value {
 			case json.Null:
@@ -1096,6 +1098,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if container_value, found := object_value(definition_object, "@container"); found {
 			if !apply_container(state, &definition, container_value) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		}
+		if definition.reverse && (definition.container_list || definition.container_language || definition.container_graph || definition.container_id || definition.container_type) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if nest_value, found := object_value(definition_object, "@nest"); found {
 			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if definition.reverse do return {}, Parse_Error{code = .Invalid_Term_Definition}
@@ -1628,6 +1631,9 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	_, has_explicit_type := has_keyword(object, ctx, "@type")
 	_, has_explicit_language := has_keyword(object, ctx, "@language")
 	if has_explicit_type && has_explicit_language do return {}, Parse_Error{code = .Invalid_Value_Object}
+	if index_value, has_index := has_keyword(object, ctx, "@index"); has_index {
+		if _, valid := string_value(index_value); !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+	}
 	direction := ""
 	has_direction := false
 	if direction_value, direction_found := has_keyword(object, ctx, "@direction"); direction_found {
@@ -1683,6 +1689,23 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if keyword_for(ctx, key) == keyword do return value, true
 	}
 	return {}, false
+}
+
+// A reverse property must not carry a list object. @set may wrap a value,
+// including an array of values, so inspect only that wrapper rather than
+// descending into ordinary node properties.
+@(private) reverse_value_has_list :: proc(ctx: ^Context, value: json.Value) -> bool {
+	if values, is_array := array_from_value(value); is_array {
+		for item in values {
+			if reverse_value_has_list(ctx, item) do return true
+		}
+		return false
+	}
+	object, is_object := object_from_value(value)
+	if !is_object do return false
+	if _, has_list := has_keyword(object, ctx, "@list"); has_list do return true
+	if set_value, has_set := has_keyword(object, ctx, "@set"); has_set do return reverse_value_has_list(ctx, set_value)
+	return false
 }
 
 @(private) graph_has_node_name :: proc(object: json.Object, ctx: ^Context, top_level: bool) -> bool {
@@ -1887,6 +1910,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return value
 }
 
+@(private) language_map_value_is_valid :: proc(value: json.Value) -> bool {
+	if _, is_string := string_value(value); is_string do return true
+	#partial switch _ in value { case json.Null: return true }
+	if values, is_array := array_from_value(value); is_array {
+		for item in values {
+			if !language_map_value_is_valid(item) do return false
+		}
+		return true
+	}
+	return false
+}
+
 // process_language_map turns a language container into its RDF values. The
 // language is part of the RDF literal, so it remains available to FromRDF and
 // can later be compacted back into a language map.
@@ -1898,6 +1933,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		return {}, Parse_Error{code = .Invalid_Value_Object}
 	}
 	for language, mapped_value in map_object {
+		if !language_map_value_is_valid(mapped_value) {
+			delete(result)
+			return {}, Parse_Error{code = .Invalid_Value_Object}
+		}
 		mapped_definition := definition
 		mapped_definition.has_language = false
 		mapped_definition.language_null = false
@@ -2377,6 +2416,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			reverse_object, valid := object_from_value(property_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Reverse_Property}
 			for reverse_key, reverse_value in reverse_object {
+				if is_keyword(reverse_key) do return {}, Parse_Error{code = .Invalid_Reverse_Property}
 				definition := active_context.terms[reverse_key]
 				if definition.disabled do continue
 				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(reverse_key) && strings.index_byte(reverse_key, ':') < 0 do continue
@@ -2425,6 +2465,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if len(keyword) > 0 do continue
 		definition := active_context.terms[key]
 		if definition.disabled do continue
+		if definition.reverse && reverse_value_has_list(&active_context, property_value) do return {}, Parse_Error{code = .Invalid_Reverse_Property}
 		if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(key) && strings.index_byte(key, ':') < 0 do continue
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }

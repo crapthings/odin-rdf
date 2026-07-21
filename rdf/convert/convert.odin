@@ -51,11 +51,16 @@ Reader_Limits :: struct {
 // use only explicitly supplied prefixes; they never infer namespaces from
 // input terms. RDF/XML and JSON-LD output retain complete datasets and
 // therefore require a positive reader_limits.max_records admission bound.
+// jsonld_document_loader is forwarded only while parsing JSON-LD input, so
+// callers can satisfy remote-context references without changing its explicit
+// I/O policy.
 Options :: struct {
-	input:           Format,
-	output:          Format,
-	reader_limits:   Reader_Limits,
-	turtle_prefixes: []turtle.Prefix,
+	input:                  Format,
+	output:                 Format,
+	reader_limits:          Reader_Limits,
+	turtle_prefixes:        []turtle.Prefix,
+	jsonld_document_loader: jsonld.Document_Loader,
+	jsonld_loader_data:     rawptr,
 }
 
 // Error_Code identifies a conversion failure. Source_Parse_Error includes the
@@ -309,7 +314,7 @@ Result :: struct {
 		parsed := jsonld.parse_reader(reader, collect_rdfxml_quad, jsonld.Reader_Options{
 			chunk_size = options.reader_limits.chunk_size,
 			max_document_bytes = options.reader_limits.max_document_bytes,
-			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records, document_loader = options.jsonld_document_loader, loader_data = options.jsonld_loader_data},
 		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -393,7 +398,7 @@ Result :: struct {
 		parsed := jsonld.parse_reader(reader, collect_jsonld_quad, jsonld.Reader_Options{
 			chunk_size = options.reader_limits.chunk_size,
 			max_document_bytes = options.reader_limits.max_document_bytes,
-			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records, document_loader = options.jsonld_document_loader, loader_data = options.jsonld_loader_data},
 		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None do set_batch_parse_error(&state, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -523,7 +528,7 @@ convert :: proc(reader: io.Reader, output: io.Writer, options: Options) -> Resul
 		parsed := jsonld.parse_reader(reader, write_destination_quad, jsonld.Reader_Options{
 			chunk_size = options.reader_limits.chunk_size,
 			max_document_bytes = options.reader_limits.max_document_bytes,
-			parse = jsonld.Options{max_quads = options.reader_limits.max_records},
+			parse = jsonld.Options{max_quads = options.reader_limits.max_records, document_loader = options.jsonld_document_loader, loader_data = options.jsonld_loader_data},
 		}, &state)
 		result.bytes_read = parsed.bytes_read
 		if state.error.code == .None && parsed.error.code != .None {

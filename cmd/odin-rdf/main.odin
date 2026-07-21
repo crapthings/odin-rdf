@@ -43,6 +43,7 @@ Command_Error_Code :: enum {
 	Diff_Standard_Input,
 	Invalid_Hash_Algorithm,
 	Context_Requires_JSONLD,
+	Invalid_Context_Map,
 }
 
 command_error_message :: proc(code: Command_Error_Code) -> string {
@@ -72,6 +73,7 @@ command_error_message :: proc(code: Command_Error_Code) -> string {
 	case .Diff_Standard_Input: return "diff does not accept standard input"
 	case .Invalid_Hash_Algorithm: return "--algorithm must be sha256 or sha384"
 	case .Context_Requires_JSONLD: return "--context requires JSON-LD output"
+	case .Invalid_Context_Map: return "--context-map must use URL=PATH with a regular local path"
 	}
 	return "unknown error"
 }
@@ -87,9 +89,26 @@ Command_Options :: struct {
 	input_format: convert.Format,
 	output_format: convert.Format,
 	context_path: string,
+	context_maps: [dynamic]Context_Map,
 	prefixes: [dynamic]turtle.Prefix,
 	reader_limits: convert.Reader_Limits,
 	help: bool,
+}
+
+// Context_Map binds one resolved remote-context URL to a local file. It is a
+// CLI-only admission policy: the JSON-LD package still performs no I/O itself.
+Context_Map :: struct {
+	url:  string,
+	path: string,
+}
+
+Context_Map_Entry :: struct {
+	url:      string,
+	document: string,
+}
+
+Context_Map_State :: struct {
+	entries: [dynamic]Context_Map_Entry,
 }
 
 Format_Command_Options :: struct {
@@ -161,6 +180,16 @@ append_prefix :: proc(prefixes: ^[dynamic]turtle.Prefix, value: string) -> bool 
 	return true
 }
 
+append_context_map :: proc(maps: ^[dynamic]Context_Map, value: string) -> bool {
+	equals := strings.index_byte(value, '=')
+	if equals <= 0 || equals == len(value) - 1 do return false
+	url, path := value[:equals], value[equals + 1:]
+	if path == "-" do return false
+	for existing in maps^ do if existing.url == url do return false
+	append(maps, Context_Map{url = url, path = path})
+	return true
+}
+
 parse_positive_decimal :: proc(value: string) -> (int, bool) {
 	if len(value) == 0 do return 0, false
 	for c in value do if c < '0' || c > '9' do return 0, false
@@ -203,7 +232,7 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 
 		value: string
 		needs_value := false
-		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--context" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
+		if !positional_only && (arg == "--from" || arg == "--to" || arg == "--output" || arg == "-o" || arg == "--context" || arg == "--context-map" || arg == "--prefix" || arg == "--max-records" || arg == "--max-line-bytes" || arg == "--max-statement-bytes" || arg == "--max-document-bytes") {
 			if i + 1 >= len(args) do return options, Command_Error{code = .Missing_Option_Value, value = arg}
 			i += 1
 			value = args[i]
@@ -236,6 +265,11 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 			if !needs_value do value = arg[len("--context="):]
 			if len(value) == 0 do return options, Command_Error{code = .Missing_Option_Value, value = "--context"}
 			options.context_path = value
+			continue
+		}
+		if !positional_only && (arg == "--context-map" || strings.has_prefix(arg, "--context-map=")) {
+			if !needs_value do value = arg[len("--context-map="):]
+			if !append_context_map(&options.context_maps, value) do return options, Command_Error{code = .Invalid_Context_Map, value = value}
 			continue
 		}
 		if !positional_only && (arg == "--prefix" || strings.has_prefix(arg, "--prefix=")) {
@@ -295,6 +329,9 @@ parse_convert_args :: proc(args: []string) -> (Command_Options, Command_Error) {
 	}
 	if len(options.context_path) > 0 && options.context_path == options.output_path && options.output_path != "-" {
 		return options, Command_Error{code = .Same_Input_Output}
+	}
+	if options.output_path != "-" {
+		for mapping in options.context_maps do if mapping.path == options.output_path do return options, Command_Error{code = .Same_Input_Output}
 	}
 	return options, {}
 }
@@ -536,7 +573,7 @@ parse_integrity_command_args :: proc(args: []string) -> (Integrity_Command_Optio
 
 print_help :: proc() {
 	fmt.println(`Usage:
-	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--context PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
+	  odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] [--context PATH] [--context-map URL=PATH] [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf format INPUT [--from turtle|trig] [--output PATH] [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] [--no-infer-prefixes]
 	  odin-rdf canon INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
 	  odin-rdf hash INPUT [--from FORMAT] [--output PATH] [--algorithm sha256|sha384] [--max-quads N] [--max-records N] [--max-line-bytes N] [--max-statement-bytes N] [--max-document-bytes N]
@@ -566,8 +603,10 @@ file receives XML or JSON-LD.
 
 --context PATH selects context-directed JSON-LD compaction instead of expanded
 JSON-LD output. It requires JSON-LD output, a positive --max-records N bound,
-and a regular context file; remote contexts still require the library API's
-explicit loader callback.
+and a regular context file. --context-map URL=PATH may be repeated to bind an
+exact resolved remote-context URL to a regular local file for JSON-LD input or
+for remote contexts referenced by --context. Mapped files are bounded by
+--max-document-bytes; the command never fetches a URL.
 
 convert accepts reader limits for untrusted input: --max-records N applies to
 all source syntaxes, --max-line-bytes N applies to N-Triples and N-Quads,
@@ -666,8 +705,73 @@ convert_to_file :: proc(input: io.Reader, output_path: string, options: convert.
 	return result
 }
 
+destroy_context_map_state :: proc(state: ^Context_Map_State) {
+	for entry in state.entries {
+		delete(entry.url)
+		delete(entry.document)
+	}
+	delete(state.entries)
+}
+
+context_map_loader :: proc(url: string, user_data: rawptr) -> (string, bool) {
+	state := cast(^Context_Map_State)user_data
+	for entry in state.entries do if entry.url == url do return entry.document, true
+	return "", false
+}
+
+// load_context_maps admits every referenced context file before JSON-LD
+// processing begins. The loader then has only immutable in-memory documents
+// to consult, so URL resolution cannot trigger network or filesystem I/O.
+load_context_maps :: proc(maps: []Context_Map, max_document_bytes: int) -> (Context_Map_State, bool) {
+	state: Context_Map_State
+	limit := max_document_bytes
+	if limit == 0 do limit = jsonld.DEFAULT_MAX_DOCUMENT_BYTES
+	for mapping in maps {
+		file, open_error := os.open(mapping.path)
+		if open_error != nil {
+			fmt.eprintfln("odin-rdf: cannot open context map %q: %s", mapping.path, os.error_string(open_error))
+			destroy_context_map_state(&state)
+			return {}, false
+		}
+		size, size_error := os.file_size(file)
+		_ = os.close(file)
+		if size_error != nil {
+			fmt.eprintfln("odin-rdf: cannot inspect context map %q: %s", mapping.path, os.error_string(size_error))
+			destroy_context_map_state(&state)
+			return {}, false
+		}
+		if size < 0 || size > i64(limit) {
+			fmt.eprintfln("odin-rdf: context map %q exceeds configured document byte limit", mapping.path)
+			destroy_context_map_state(&state)
+			return {}, false
+		}
+		document, read_error := os.read_entire_file(mapping.path, context.allocator)
+		if read_error != nil {
+			fmt.eprintfln("odin-rdf: cannot read context map %q: %s", mapping.path, os.error_string(read_error))
+			destroy_context_map_state(&state)
+			return {}, false
+		}
+		entry := Context_Map_Entry{
+			url = strings.clone(mapping.url) or_else "",
+			document = strings.clone(string(document)) or_else "",
+		}
+		delete(document)
+		append(&state.entries, entry)
+	}
+	return state, true
+}
+
 run_convert :: proc(options: Command_Options) -> int {
 	if len(options.context_path) > 0 do return run_compact_convert(options)
+	context_maps, maps_ok := load_context_maps(options.context_maps[:], options.reader_limits.max_document_bytes)
+	if !maps_ok do return 1
+	defer destroy_context_map_state(&context_maps)
+	document_loader: jsonld.Document_Loader
+	loader_data: rawptr
+	if len(options.context_maps) > 0 {
+		document_loader = context_map_loader
+		loader_data = &context_maps
+	}
 	input_file := os.stdin
 	close_input := false
 	if options.input_path != "-" {
@@ -686,6 +790,8 @@ run_convert :: proc(options: Command_Options) -> int {
 		output = options.output_format,
 		reader_limits = options.reader_limits,
 		turtle_prefixes = options.prefixes[:],
+		jsonld_document_loader = document_loader,
+		jsonld_loader_data = loader_data,
 	}
 	input := os.to_reader(input_file)
 	result: convert.Result
@@ -710,8 +816,17 @@ run_compact_convert :: proc(options: Command_Options) -> int {
 		fmt.eprintfln("odin-rdf: --context requires a positive --max-records limit")
 		return 1
 	}
+	context_maps, maps_ok := load_context_maps(options.context_maps[:], options.reader_limits.max_document_bytes)
+	if !maps_ok do return 1
+	defer destroy_context_map_state(&context_maps)
+	document_loader: jsonld.Document_Loader
+	loader_data: rawptr
+	if len(options.context_maps) > 0 {
+		document_loader = context_map_loader
+		loader_data = &context_maps
+	}
 	collector: dataset.Collector
-	collect_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.reader_limits.max_records, &collector)
+	collect_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.reader_limits.max_records, &collector, "", document_loader, loader_data)
 	defer dataset.destroy(&collector)
 	if collect_error.code != .None {
 		report_integrity_error(options.input_format, options.input_path, collect_error)
@@ -743,7 +858,7 @@ run_compact_convert :: proc(options: Command_Options) -> int {
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	compact_error := jsonld.compact(&builder, collector.quads[:], string(context_document), jsonld.Compact_Options{
-		context_options = jsonld.Options{max_document_bytes = options.reader_limits.max_document_bytes},
+		context_options = jsonld.Options{max_document_bytes = options.reader_limits.max_document_bytes, document_loader = document_loader, loader_data = loader_data},
 		serializer_options = jsonld.Serialize_Options{max_quads = options.reader_limits.max_records},
 	})
 	if compact_error != .None {
@@ -930,7 +1045,7 @@ set_integrity_collection_error :: proc(result: ^convert.Result, collector: ^data
 	}
 }
 
-collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, limits: convert.Reader_Limits, base_iri: string, collector: ^dataset.Collector) -> convert.Result {
+collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, limits: convert.Reader_Limits, base_iri: string, collector: ^dataset.Collector, document_loader: jsonld.Document_Loader, loader_data: rawptr) -> convert.Result {
 	result: convert.Result
 	#partial switch format {
 	case .N_Triples:
@@ -961,7 +1076,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 		parsed := jsonld.parse_reader(reader, dataset.sink, jsonld.Reader_Options{
 			chunk_size = limits.chunk_size,
 			max_document_bytes = limits.max_document_bytes,
-			parse = jsonld.Options{base_iri = base_iri, max_quads = limits.max_records},
+			parse = jsonld.Options{base_iri = base_iri, max_quads = limits.max_records, document_loader = document_loader, loader_data = loader_data},
 		}, collector)
 		result.bytes_read = parsed.bytes_read
 		if parsed.error.code != .None do set_integrity_collection_error(&result, collector, parsed.error.line, parsed.error.column, jsonld.parse_error_message(parsed.error.code), parsed.reader_error)
@@ -988,7 +1103,7 @@ collect_integrity_dataset :: proc(reader: io.Reader, format: convert.Format, lim
 	return result
 }
 
-load_integrity_dataset :: proc(path: string, format: convert.Format, limits: convert.Reader_Limits, max_quads: int, collector: ^dataset.Collector, base_iri := "") -> convert.Error {
+load_integrity_dataset :: proc(path: string, format: convert.Format, limits: convert.Reader_Limits, max_quads: int, collector: ^dataset.Collector, base_iri: string, document_loader: jsonld.Document_Loader, loader_data: rawptr) -> convert.Error {
 	if init_err := dataset.init(collector, dataset.Options{max_quads = max_quads}); init_err != .None do return convert.Error{code = .Graph_Collection_Error, detail = dataset.error_message(init_err)}
 	input_file := os.stdin
 	close_input := false
@@ -999,7 +1114,7 @@ load_integrity_dataset :: proc(path: string, format: convert.Format, limits: con
 		close_input = true
 	}
 	defer if close_input do _ = os.close(input_file)
-	return collect_integrity_dataset(os.to_reader(input_file), format, limits, base_iri, collector).error
+	return collect_integrity_dataset(os.to_reader(input_file), format, limits, base_iri, collector, document_loader, loader_data).error
 }
 
 report_integrity_error :: proc(format: convert.Format, path: string, err: convert.Error) {
@@ -1079,7 +1194,7 @@ write_canonical_diff :: proc(builder: ^strings.Builder, before, after: string) -
 
 run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 	left: dataset.Collector
-	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left, options.base_iri)
+	left_error := load_integrity_dataset(options.input_path, options.input_format, options.reader_limits, options.max_quads, &left, options.base_iri, nil, nil)
 	defer dataset.destroy(&left)
 	if left_error.code != .None {
 		report_integrity_error(options.input_format, options.input_path, left_error)
@@ -1089,7 +1204,7 @@ run_integrity_command :: proc(options: Integrity_Command_Options) -> int {
 
 	if options.command == .Compare || options.command == .Diff {
 		right: dataset.Collector
-		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right, options.base_iri)
+		right_error := load_integrity_dataset(options.other_path, options.other_format, options.reader_limits, options.max_quads, &right, options.base_iri, nil, nil)
 		defer dataset.destroy(&right)
 		if right_error.code != .None {
 			report_integrity_error(options.other_format, options.other_path, right_error)
@@ -1187,5 +1302,6 @@ main :: proc() {
 		exit_code = run_convert(options)
 	}
 	delete(options.prefixes)
+	delete(options.context_maps)
 	os.exit(exit_code)
 }

@@ -54,6 +54,7 @@ test_parses_convert_command_with_repeated_prefixes :: proc(t: ^testing.T) {
 test_parses_context_directed_jsonld_conversion :: proc(t: ^testing.T) {
 	options, err := parse_convert_args([]string{"convert", "input.nt", "--to", "jsonld", "--context", "context.jsonld", "--max-records", "10"})
 	defer delete(options.prefixes)
+	defer delete(options.context_maps)
 	testing.expect_value(t, err.code, Command_Error_Code.None)
 	testing.expect_value(t, options.context_path, "context.jsonld")
 	testing.expect_value(t, options.output_format, convert.Format.JSON_LD)
@@ -65,7 +66,29 @@ test_parses_context_directed_jsonld_conversion :: proc(t: ^testing.T) {
 
 	conflict_options, conflict_err := parse_convert_args([]string{"convert", "input.nt", "--to", "jsonld", "--context", "context.jsonld", "--output", "context.jsonld", "--max-records", "10"})
 	defer delete(conflict_options.prefixes)
+	defer delete(conflict_options.context_maps)
 	testing.expect_value(t, conflict_err.code, Command_Error_Code.Same_Input_Output)
+
+	mapped_options, mapped_err := parse_convert_args([]string{"convert", "input.jsonld", "--to", "nquads", "--context-map", "https://example.test/context=fixtures/context.jsonld", "--context-map=https://example.test/other=fixtures/other.jsonld"})
+	defer delete(mapped_options.prefixes)
+	defer delete(mapped_options.context_maps)
+	testing.expect_value(t, mapped_err.code, Command_Error_Code.None)
+	testing.expect_value(t, len(mapped_options.context_maps), 2)
+	testing.expect_value(t, mapped_options.context_maps[0].url, "https://example.test/context")
+	testing.expect_value(t, mapped_options.context_maps[0].path, "fixtures/context.jsonld")
+
+	invalid_options, invalid_err := parse_convert_args([]string{"convert", "input.jsonld", "--to", "nquads", "--context-map", "https://example.test/context="})
+	defer delete(invalid_options.prefixes)
+	defer delete(invalid_options.context_maps)
+	testing.expect_value(t, invalid_err.code, Command_Error_Code.Invalid_Context_Map)
+	stdin_options, stdin_err := parse_convert_args([]string{"convert", "input.jsonld", "--to", "nquads", "--context-map", "https://example.test/context=-"})
+	defer delete(stdin_options.prefixes)
+	defer delete(stdin_options.context_maps)
+	testing.expect_value(t, stdin_err.code, Command_Error_Code.Invalid_Context_Map)
+	output_map_options, output_map_err := parse_convert_args([]string{"convert", "input.jsonld", "--to", "nquads", "--context-map", "https://example.test/context=output.nq", "--output", "output.nq"})
+	defer delete(output_map_options.prefixes)
+	defer delete(output_map_options.context_maps)
+	testing.expect_value(t, output_map_err.code, Command_Error_Code.Same_Input_Output)
 }
 
 @(test)
@@ -97,6 +120,73 @@ test_context_directed_jsonld_conversion_is_atomic :: proc(t: ^testing.T) {
 	output, read_err = read_test_file(target_path, &buffer)
 	testing.expect(t, read_err == nil)
 	testing.expect_value(t, output, "previous\n")
+	testing.expect(t, !os.exists(temporary_path))
+}
+
+@(test)
+test_convert_loads_explicit_local_jsonld_context_maps :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-context-map-input.jsonld"
+	context_path :: "odin-rdf-cli-context-map.jsonld"
+	target_path :: "odin-rdf-cli-context-map-output.nq"
+	temporary_path :: "odin-rdf-cli-context-map-output.nq.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(context_path)
+		_ = os.remove(target_path)
+		_ = os.remove(temporary_path)
+	}
+	testing.expect(t, write_test_file(input_path, `{"@context":"https://example.test/context","@id":"https://example.test/alice","name":"Alice"}`) == nil)
+	testing.expect(t, write_test_file(context_path, `{"@context":{"name":"https://schema.org/name"}}`) == nil)
+	options, parse_err := parse_convert_args([]string{"convert", input_path, "--to", "nquads", "--output", target_path, "--context-map", "https://example.test/context=" + context_path})
+	defer delete(options.prefixes)
+	defer delete(options.context_maps)
+	testing.expect_value(t, parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_convert(options), 0)
+	buffer: [256]byte
+	output, read_err := read_test_file(target_path, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect(t, strings.contains(output, `<https://example.test/alice> <https://schema.org/name> "Alice" .`))
+	testing.expect(t, !os.exists(temporary_path))
+
+	testing.expect(t, write_test_file(target_path, "previous\n") == nil)
+	limited_options, limited_parse_err := parse_convert_args([]string{"convert", input_path, "--to", "nquads", "--output", target_path, "--context-map", "https://example.test/context=" + context_path, "--max-document-bytes", "8"})
+	defer delete(limited_options.prefixes)
+	defer delete(limited_options.context_maps)
+	testing.expect_value(t, limited_parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_convert(limited_options), 1)
+	output, read_err = read_test_file(target_path, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect_value(t, output, "previous\n")
+	testing.expect(t, !os.exists(temporary_path))
+}
+
+@(test)
+test_compaction_loads_explicit_local_jsonld_context_maps :: proc(t: ^testing.T) {
+	input_path :: "odin-rdf-cli-compact-map-input.nt"
+	context_path :: "odin-rdf-cli-compact-map-context.jsonld"
+	mapped_context_path :: "odin-rdf-cli-compact-map-remote.jsonld"
+	target_path :: "odin-rdf-cli-compact-map-output.jsonld"
+	temporary_path :: "odin-rdf-cli-compact-map-output.jsonld.odin-rdf.tmp"
+	defer {
+		_ = os.remove(input_path)
+		_ = os.remove(context_path)
+		_ = os.remove(mapped_context_path)
+		_ = os.remove(target_path)
+		_ = os.remove(temporary_path)
+	}
+	testing.expect(t, write_test_file(input_path, `<https://example.test/alice> <https://schema.org/name> "Alice" .
+`) == nil)
+	testing.expect(t, write_test_file(context_path, `{"@context":"https://example.test/context"}`) == nil)
+	testing.expect(t, write_test_file(mapped_context_path, `{"@context":{"name":"https://schema.org/name"}}`) == nil)
+	options, parse_err := parse_convert_args([]string{"convert", input_path, "--to", "jsonld", "--context", context_path, "--context-map", "https://example.test/context=" + mapped_context_path, "--output", target_path, "--max-records", "10"})
+	defer delete(options.prefixes)
+	defer delete(options.context_maps)
+	testing.expect_value(t, parse_err.code, Command_Error_Code.None)
+	testing.expect_value(t, run_convert(options), 0)
+	buffer: [256]byte
+	output, read_err := read_test_file(target_path, &buffer)
+	testing.expect(t, read_err == nil)
+	testing.expect(t, strings.contains(output, `"name": "Alice"`))
 	testing.expect(t, !os.exists(temporary_path))
 }
 
@@ -670,6 +760,7 @@ test_command_error_messages_are_stable :: proc(t: ^testing.T) {
 		.Diff_Standard_Input = "diff does not accept standard input",
 		.Invalid_Hash_Algorithm = "--algorithm must be sha256 or sha384",
 		.Context_Requires_JSONLD = "--context requires JSON-LD output",
+		.Invalid_Context_Map = "--context-map must use URL=PATH with a regular local path",
 	}
 	for code in Command_Error_Code do testing.expect_value(t, command_error_message(code), messages[code])
 }

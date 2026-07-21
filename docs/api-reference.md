@@ -448,7 +448,8 @@ The adapter does not flush or close either stream.
 
 ```sh
 odin-rdf convert INPUT [--from FORMAT] [--to FORMAT] [--output PATH] \
-  [--prefix LABEL=NAMESPACE] [--max-records N] [--max-line-bytes N] \
+  [--context PATH] [--context-map URL=PATH] [--prefix LABEL=NAMESPACE] \
+  [--max-records N] [--max-line-bytes N] \
   [--max-statement-bytes N] [--max-document-bytes N]
 odin-rdf format INPUT [--from turtle|trig] [--output PATH] \
   [--prefix LABEL=NAMESPACE] [--max-triples N] [--max-quads N] \
@@ -489,6 +490,12 @@ standard input and cannot be the output path. This remains all-or-nothing for
 standard output and file targets; `--max-document-bytes` bounds both JSON-LD
 input and the context file. Without `--context`, JSON-LD conversion emits the
 deterministic expanded form.
+
+`--context-map URL=PATH` may be repeated for JSON-LD input or for a remote
+context named by `--context`. Each mapping matches the loader's resolved URL
+exactly, is read once before JSON-LD processing, and is bounded by
+`--max-document-bytes`. `PATH` cannot be standard input or the output path.
+The command does not fetch remote contexts.
 
 `format` accepts Turtle or TriG input, inferring `.ttl` or `.trig` file paths;
 standard input requires `--from turtle` or `--from trig`. It retains the

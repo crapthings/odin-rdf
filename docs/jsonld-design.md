@@ -72,6 +72,10 @@ map to the JSON-LD 1.1 `https://www.w3.org/ns/i18n#` datatype form and are
 restored as `@language` and `@direction` during serialization or compaction.
 Set both to `.Compound_Literal` to use the alternative RDF blank-node mapping
 with `rdf:value`, `rdf:direction`, and optional `rdf:language` instead.
+Set `Options.produce_generalized_rdf = true` to retain blank-node predicates
+in the JSON-LD to-RDF output. The default remains strict RDF 1.1; generalized
+output must be consumed by an explicitly compatible sink, such as
+`nquads.write_quad_with_options(..., {allow_generalized_rdf = true})`.
 
 ```odin
 compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
@@ -113,8 +117,8 @@ written as a JSON integer or floating value. Without that source association,
 the RDF dataset alone cannot retain the distinction.
 
 The input processor remains a deliberately bounded JSON-LD 1.1 to-RDF profile.
-It emits standard RDF only: generalized RDF statements, including blank-node
-predicates, are intentionally excluded.
+It emits strict RDF 1.1 by default and supports generalized RDF blank-node
+predicates only through the explicit `produce_generalized_rdf` option.
 The serializer supplies the interoperable expanded RDF-to-JSON-LD form: it
 handles complete and partial RDF list collapse, shared blank nodes across named
 graphs, native scalar options, and graph-node merging. It does not compact IRIs
@@ -163,9 +167,9 @@ JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
 directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
-differences. `scripts/run-w3c-jsonld-tests.sh` runs 355 to-RDF vectors,
-including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 308 Expansion vectors,
+differences. `scripts/run-w3c-jsonld-tests.sh` runs 357 to-RDF vectors,
+including default direction omission, `i18n-datatype`, compound-literal, and
+explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 308 Expansion vectors,
 including document-scope free-value removal, `@id` IRI processing, and null
 local-context restoration to the document base.
 `scripts/run-w3c-jsonld-flatten-tests.sh` runs 57 Flattening vectors, covering

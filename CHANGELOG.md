@@ -88,6 +88,10 @@ This project follows [Semantic Versioning](https://semver.org/).
   W3C Framing `0015`, raising that gate to 92 cases.
 - Add Flatten output-context compaction with a selectable compact-arrays
   policy, covering W3C Flatten `0044` and raising that gate to 57 cases.
+- Add opt-in JSON-LD `produce_generalized_rdf` support for blank-node
+  predicates. Strict RDF validation and writers remain the default; the new
+  N-Quads generalized-writer option is explicit. Cover W3C to-RDF `0118` and
+  `e075`, raising that gate to 357 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

@@ -18,6 +18,13 @@ import nquads "../nquads"
 	return true
 }
 
+@(private) collect_generalized_quad :: proc(quad: rdf.Quad, user_data: rawptr) -> bool {
+	state := cast(^Collect_State)user_data
+	if nquads.write_quad_with_options(&state.builder, quad, {allow_generalized_rdf = true}) != .None do return false
+	state.count += 1
+	return true
+}
+
 @(private) parse_to_nquads :: proc(input: string, options: Options = {}) -> (string, Parse_Error) {
 	state := Collect_State{builder = strings.builder_make()}
 	defer strings.builder_destroy(&state.builder)
@@ -73,6 +80,20 @@ test_basic_context_and_typed_values :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/friend> <https://example.test/bob> .`))
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/count> "4"^^<http://www.w3.org/2001/XMLSchema#integer> .`))
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/active> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .`))
+}
+
+@(test)
+test_produce_generalized_rdf_is_explicit_and_deduplicates_collapsed_predicates :: proc(t: ^testing.T) {
+	input := `{"@context":{"term":"_:term"},"@id":"_:term","term":["value","value"]}`
+	strict := Collect_State{builder = strings.builder_make()}
+	defer strings.builder_destroy(&strict.builder)
+	testing.expect_value(t, parse(input, collect_quad, {}, &strict).code, Error_Code.None)
+	testing.expect_value(t, strict.count, 0)
+	generalized := Collect_State{builder = strings.builder_make()}
+	defer strings.builder_destroy(&generalized.builder)
+	testing.expect_value(t, parse(input, collect_generalized_quad, Options{produce_generalized_rdf = true}, &generalized).code, Error_Code.None)
+	testing.expect_value(t, generalized.count, 1)
+	testing.expect_value(t, strings.to_string(generalized.builder), "_:b0 _:b0 \"value\" .\n")
 }
 
 @(test)

@@ -15,11 +15,12 @@ State :: struct {
 	write_error: nquads.Write_Error,
 	tests_root: string,
 	loaded:     [dynamic][]byte,
+	allow_generalized_rdf: bool,
 }
 
 write_quad :: proc(quad: rdf.Quad, user_data: rawptr) -> bool {
 	state := cast(^State)user_data
-	state.write_error = nquads.write_quad(&state.builder, quad)
+	state.write_error = nquads.write_quad_with_options(&state.builder, quad, {allow_generalized_rdf = state.allow_generalized_rdf})
 	return state.write_error == .None
 }
 
@@ -78,7 +79,7 @@ wrap_expand_context :: proc(builder: ^strings.Builder, input, context_document: 
 
 main :: proc() {
 	if len(os.args) < 3 || len(os.args) > 5 {
-		fmt.eprintln("usage: jsonld_runner <input.jsonld> <base-iri> [tests-root] [i18n-datatype|compound-literal|json-ld-1.0|expand-context-e077]")
+		fmt.eprintln("usage: jsonld_runner <input.jsonld> <base-iri> [tests-root] [i18n-datatype|compound-literal|generalized-rdf|json-ld-1.0|expand-context-e077]")
 		os.exit(2)
 	}
 	data, read_error := os.read_entire_file(os.args[1], context.allocator)
@@ -98,6 +99,9 @@ main :: proc() {
 			options.rdf_direction = .I18n_Datatype
 		case "compound-literal":
 			options.rdf_direction = .Compound_Literal
+		case "generalized-rdf":
+			options.produce_generalized_rdf = true
+			state.allow_generalized_rdf = true
 		case "json-ld-1.0":
 			options.processing_mode = .Json_LD_1_0
 		case "expand-context-e077":

@@ -29,7 +29,7 @@ and retain integration tests for their own JSON-LD documents.
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation; generalized RDF (such as blank-node predicates) is excluded. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. Generalized RDF output is opt-in and requires a compatible sink. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
@@ -47,12 +47,12 @@ and the remaining Framing policy matrix are outside the current scope. See the
 limits.
 
 <details>
-<summary>Conformance breakdown — 2,177 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,179 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
-| JSON-LD to-RDF / Expansion / Flattening / Framing | 355 / 308 / 57 / 92 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 357 / 308 / 57 / 92 |
 | JSON-LD RDF-to-JSON-LD / Compaction | 54 / 246 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 

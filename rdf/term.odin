@@ -179,7 +179,7 @@ validate_term_structure :: proc(term: Term) -> Term_Structure_Error {
 	return .None
 }
 
-// validate_triple_structure checks the RDF triple-position rules and the
+// validate_triple_structure checks the RDF 1.1 triple-position rules and the
 // structural invariants of all three terms.
 validate_triple_structure :: proc(triple: Triple) -> Triple_Structure_Error {
 	if triple.subject.kind == .Literal do return .Invalid_Subject
@@ -190,10 +190,32 @@ validate_triple_structure :: proc(triple: Triple) -> Triple_Structure_Error {
 	return .None
 }
 
+// validate_generalized_triple_structure accepts the generalized RDF extension
+// in which a predicate may be an IRI or blank node. Callers must opt in to this
+// separately; validate_triple_structure remains strict RDF 1.1 by default.
+validate_generalized_triple_structure :: proc(triple: Triple) -> Triple_Structure_Error {
+	if triple.subject.kind == .Literal do return .Invalid_Subject
+	if triple.predicate.kind != .IRI && triple.predicate.kind != .Blank_Node do return .Invalid_Predicate
+	if validate_term_structure(triple.subject) != .None do return .Invalid_Subject_Term
+	if validate_term_structure(triple.predicate) != .None do return .Invalid_Predicate_Term
+	if validate_term_structure(triple.object) != .None do return .Invalid_Object_Term
+	return .None
+}
+
 // validate_quad_structure checks RDF triple rules and, for named graphs, the
 // graph-name kind and term structure. The default graph is not represented by a term.
 validate_quad_structure :: proc(quad: Quad) -> Quad_Structure_Error {
 	if validate_triple_structure(triple(quad)) != .None do return .Invalid_Triple
+	if !quad.has_graph do return .None
+	if quad.graph.kind != .IRI && quad.graph.kind != .Blank_Node do return .Invalid_Graph
+	if validate_term_structure(quad.graph) != .None do return .Invalid_Graph_Term
+	return .None
+}
+
+// validate_generalized_quad_structure extends generalized triple validation
+// with the same named-graph rules as RDF 1.1 datasets.
+validate_generalized_quad_structure :: proc(quad: Quad) -> Quad_Structure_Error {
+	if validate_generalized_triple_structure(triple(quad)) != .None do return .Invalid_Triple
 	if !quad.has_graph do return .None
 	if quad.graph.kind != .IRI && quad.graph.kind != .Blank_Node do return .Invalid_Graph
 	if validate_term_structure(quad.graph) != .None do return .Invalid_Graph_Term

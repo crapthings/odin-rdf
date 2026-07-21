@@ -241,6 +241,9 @@ the JSON-LD 1.1 i18n datatype; set `Serialize_Options.rdf_direction` (including
 `@language`/`@direction` on output. `.Compound_Literal` instead uses and
 recognizes the RDF `rdf:value` / `rdf:direction` / optional `rdf:language`
 blank-node representation.
+Set `Options.produce_generalized_rdf = true` only when the sink explicitly
+accepts blank-node predicates; for example, use
+`nquads.write_quad_with_options` with `allow_generalized_rdf = true`.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,

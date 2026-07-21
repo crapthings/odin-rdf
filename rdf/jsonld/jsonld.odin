@@ -138,6 +138,7 @@ Options :: struct {
 	max_remote_contexts: int,
 	max_quads:           int,
 	rdf_direction:       RDF_Direction_Mode,
+	produce_generalized_rdf: bool,
 	processing_mode:     Processing_Mode,
 	document_loader:     Document_Loader,
 	loader_data:         rawptr,
@@ -227,6 +228,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	allow_direction:           bool,
 	legacy_prefixes:           bool,
 	rdf_direction:             RDF_Direction_Mode,
+	produce_generalized_rdf:   bool,
+	generalized_quad_keys:     map[string]bool,
 	retain_id_only_nodes:       bool,
 	retain_frame_controls:      bool,
 	prune_frame_blank_ids:       bool,
@@ -292,6 +295,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	delete(state.contexts)
 	if state.remote_urls != nil do delete(state.remote_urls)
 	if state.named_bnodes != nil do delete(state.named_bnodes)
+	if state.generalized_quad_keys != nil do delete(state.generalized_quad_keys)
 	if state.referenced_frame_blank_ids != nil do delete(state.referenced_frame_blank_ids)
 	if state.frame_blank_aliases != nil do delete(state.frame_blank_aliases)
 	if state.compact_nodes != nil do delete(state.compact_nodes)
@@ -1296,17 +1300,77 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return valid_absolute_iri(term.datatype)
 }
 
+// rdf_predicate_term preserves strict RDF 1.1 by default. JSON-LD callers
+// that explicitly request produce_generalized_rdf may instead use a blank node
+// as the predicate term, retaining its source identifier allocation.
+@(private) rdf_predicate_term :: proc(state: ^State, expanded: string) -> (rdf.Term, Parse_Error) {
+	if strings.has_prefix(expanded, "_:") {
+		if !state.produce_generalized_rdf do return {}, Parse_Error{code = .Invalid_IRI}
+		return expanded_identifier_term(state, expanded)
+	}
+	if !valid_absolute_iri(expanded) do return {}, Parse_Error{code = .Invalid_IRI}
+	return rdf.iri(expanded), {}
+}
+
+@(private) append_generalized_quad_term :: proc(builder: ^strings.Builder, term: rdf.Term) {
+	strings.write_i64(builder, i64(term.kind))
+	strings.write_byte(builder, ':')
+	strings.write_i64(builder, i64(len(term.value)))
+	strings.write_byte(builder, ':')
+	strings.write_string(builder, term.value)
+	strings.write_byte(builder, ':')
+	strings.write_i64(builder, i64(len(term.language)))
+	strings.write_byte(builder, ':')
+	strings.write_string(builder, term.language)
+	strings.write_byte(builder, ':')
+	strings.write_i64(builder, i64(len(term.datatype)))
+	strings.write_byte(builder, ':')
+	strings.write_string(builder, term.datatype)
+	strings.write_byte(builder, '|')
+}
+
+// generalized_quad_seen implements RDF dataset set semantics for the explicit
+// generalized-RDF mode. Ordinary parsing retains its existing streaming
+// behavior, while generalized aliases that collapse to the same blank-node
+// predicate cannot produce duplicate dataset statements.
+@(private) generalized_quad_seen :: proc(state: ^State, subject, predicate, object: rdf.Term, graph: rdf.Quad) -> (bool, Parse_Error) {
+	if state.generalized_quad_keys == nil do state.generalized_quad_keys = make(map[string]bool)
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	append_generalized_quad_term(&builder, subject)
+	append_generalized_quad_term(&builder, predicate)
+	append_generalized_quad_term(&builder, object)
+	strings.write_byte(&builder, graph.has_graph ? '1' : '0')
+	strings.write_byte(&builder, '|')
+	if graph.has_graph do append_generalized_quad_term(&builder, graph.graph)
+	text := strings.to_string(builder)
+	if state.generalized_quad_keys[text] do return true, {}
+	key, own_error := own(state, text)
+	if own_error.code != .None do return false, own_error
+	state.generalized_quad_keys[key] = true
+	return false, {}
+}
+
 @(private) emit :: proc(state: ^State, subject, predicate, object: rdf.Term, graph: rdf.Quad) -> Parse_Error {
 	// The JSON-LD to-RDF algorithm emits only well-formed RDF statements. Drop
 	// a complete statement when any participating IRI or language tag is
 	// invalid, rather than forwarding it to a serializer that must reject it
 	// (W3C wf01--wf05/wf07).
 	if subject.kind == .IRI && !valid_absolute_iri(subject.value) do return {}
-	if predicate.kind != .IRI || !valid_absolute_iri(predicate.value) do return {}
+	if predicate.kind == .IRI {
+		if !valid_absolute_iri(predicate.value) do return {}
+	} else if predicate.kind != .Blank_Node || !state.produce_generalized_rdf {
+		return {}
+	}
 	if !valid_rdf_object_term(object) do return {}
 	if graph.has_graph {
 		if graph.graph.kind == .IRI && !valid_absolute_iri(graph.graph.value) do return {}
 		if graph.graph.kind != .IRI && graph.graph.kind != .Blank_Node do return {}
+	}
+	if state.produce_generalized_rdf {
+		seen, seen_error := generalized_quad_seen(state, subject, predicate, object, graph)
+		if seen_error.code != .None do return seen_error
+		if seen do return {}
 	}
 	if state.max_quads > 0 && state.emitted >= state.max_quads do return Parse_Error{code = .Quad_Limit}
 	quad := graph
@@ -2120,7 +2184,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	return true
 }
 
-@(private) process_graph_container_entry :: proc(state: ^State, ctx: ^Context, subject: rdf.Term, predicate: string, graph_name: rdf.Term, value: json.Value, graph: rdf.Quad, unwrap_graph_wrapper := false) -> Parse_Error {
+@(private) process_graph_container_entry :: proc(state: ^State, ctx: ^Context, subject, predicate: rdf.Term, graph_name: rdf.Term, value: json.Value, graph: rdf.Quad, unwrap_graph_wrapper := false) -> Parse_Error {
 	graph_quad := graph
 	graph_quad.has_graph = true
 	graph_quad.graph = graph_name
@@ -2141,7 +2205,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			}
 		} else if _, graph_err := process_node(state, ctx, node, graph_quad); graph_err.code != .None do return graph_err
 	}
-	return emit(state, subject, rdf.iri(predicate), graph_name, graph)
+	return emit(state, subject, predicate, graph_name, graph)
 }
 
 // Type-scoped contexts govern a complete node, including its @id. Resolve
@@ -2307,7 +2371,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(reverse_key) && strings.index_byte(reverse_key, ':') < 0 do continue
 				predicate_iri, predicate_err := expand_iri(state, &active_context, reverse_key, true, false)
 				if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
-				if strings.has_prefix(predicate_iri, "_:") do continue
+				if strings.has_prefix(predicate_iri, "_:") && !state.produce_generalized_rdf do continue
+				if !strings.has_prefix(predicate_iri, "_:") && !valid_absolute_iri(predicate_iri) do continue
+				predicate, predicate_term_err := rdf_predicate_term(state, predicate_iri)
+				if predicate_term_err.code != .None do return {}, Parse_Error{code = .Invalid_Reverse_Property}
 				values, array := array_from_value(reverse_value)
 				value_count := array ? len(values) : 1
 				for index in 0..<value_count {
@@ -2315,8 +2382,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					object_term, value_err := process_value(state, &active_context, definition, reverse_item, graph)
 					if value_err.code != .None || object_term.kind == .Literal { return {}, Parse_Error{code = .Invalid_Reverse_Property} }
 					if definition.reverse {
-						if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None do return {}, emit_err
-					} else if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
+						if emit_err := emit(state, subject, predicate, object_term, graph); emit_err.code != .None do return {}, emit_err
+					} else if emit_err := emit(state, object_term, predicate, subject, graph); emit_err.code != .None do return {}, emit_err
 				}
 			}
 			continue
@@ -2348,11 +2415,13 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if len(definition.id) == 0 && len(active_context.vocab) == 0 && !has_iri_scheme(key) && strings.index_byte(key, ':') < 0 do continue
 		predicate_iri, predicate_err := expand_iri(state, &active_context, key, true, false)
 		if predicate_err.code != .None || len(predicate_iri) == 0 || is_keyword(predicate_iri) { return {}, Parse_Error{code = .Invalid_IRI} }
-		// JSON-LD drops properties whose expanded predicate is a blank node;
-		// RDF predicates must be valid absolute IRIs. In particular, a
-		// vocabulary ending in '#' plus a fragment-shaped property name would
-		// otherwise create an invalid double-fragment IRI (W3C e111/e112).
-		if strings.has_prefix(predicate_iri, "_:") || !valid_absolute_iri(predicate_iri) do continue
+		// Strict RDF drops blank-node predicates. An explicit JSON-LD
+		// produce_generalized_rdf opt-in retains them, while malformed IRI
+		// predicates remain dropped in either mode (W3C e111/e112).
+		if strings.has_prefix(predicate_iri, "_:") && !state.produce_generalized_rdf do continue
+		if !strings.has_prefix(predicate_iri, "_:") && !valid_absolute_iri(predicate_iri) do continue
+		predicate, predicate_term_err := rdf_predicate_term(state, predicate_iri)
+		if predicate_term_err.code != .None do return {}, predicate_term_err
 		if definition.container_graph {
 			// A graph container still expands values through its property-scoped
 			// context. In particular, a scoped null context must clear inherited
@@ -2376,7 +2445,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 						graph_name, graph_name_err = identifier_term(state, &graph_context, graph_id)
 						if graph_name_err.code != .None do return {}, graph_name_err
 					}
-					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate_iri, graph_name, mapped_value, graph, true); graph_err.code != .None do return {}, graph_err
+					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate, graph_name, mapped_value, graph, true); graph_err.code != .None do return {}, graph_err
 				}
 				continue
 			}
@@ -2411,14 +2480,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 							graph_name, graph_name_err := identifier_term(state, &graph_context, id)
 							if graph_name_err.code != .None do return {}, graph_name_err
 							if index_error := emit_custom_index(state, &graph_context, definition, graph_name, index_key, graph); index_error.code != .None do return {}, index_error
-							if emit_err := emit(state, subject, rdf.iri(predicate_iri), graph_name, graph); emit_err.code != .None do return {}, emit_err
+							if emit_err := emit(state, subject, predicate, graph_name, graph); emit_err.code != .None do return {}, emit_err
 							continue
 						}
 					}
 					graph_name, graph_name_err := blank_node(state)
 					if graph_name_err.code != .None do return {}, graph_name_err
 					if index_error := emit_custom_index(state, &graph_context, definition, graph_name, index_key, graph); index_error.code != .None do return {}, index_error
-					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate_iri, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
+					if graph_err := process_graph_container_entry(state, &graph_context, subject, predicate, graph_name, graph_value, graph, definition.container_index); graph_err.code != .None do return {}, graph_err
 				}
 			}
 			continue
@@ -2432,11 +2501,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 						delete(mapped)
 						return {}, Parse_Error{code = .Invalid_Reverse_Property}
 					}
-					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+					if emit_err := emit(state, mapped_term, predicate, subject, graph); emit_err.code != .None {
 						delete(mapped)
 						return {}, emit_err
 					}
-				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+				} else if emit_err := emit(state, subject, predicate, mapped_term, graph); emit_err.code != .None {
 					delete(mapped)
 					return {}, emit_err
 				}
@@ -2459,11 +2528,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 						delete(mapped)
 						return {}, Parse_Error{code = .Invalid_Reverse_Property}
 					}
-					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+					if emit_err := emit(state, mapped_term, predicate, subject, graph); emit_err.code != .None {
 						delete(mapped)
 						return {}, emit_err
 					}
-				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+				} else if emit_err := emit(state, subject, predicate, mapped_term, graph); emit_err.code != .None {
 					delete(mapped)
 					return {}, emit_err
 				}
@@ -2480,11 +2549,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 						delete(mapped)
 						return {}, Parse_Error{code = .Invalid_Reverse_Property}
 					}
-					if emit_err := emit(state, mapped_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+					if emit_err := emit(state, mapped_term, predicate, subject, graph); emit_err.code != .None {
 						delete(mapped)
 						return {}, emit_err
 					}
-				} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), mapped_term, graph); emit_err.code != .None {
+				} else if emit_err := emit(state, subject, predicate, mapped_term, graph); emit_err.code != .None {
 					delete(mapped)
 					return {}, emit_err
 				}
@@ -2497,8 +2566,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			if list_err.code != .None do return {}, list_err
 			if definition.reverse {
 				if list.kind == .Literal do return {}, Parse_Error{code = .Invalid_Reverse_Property}
-				if emit_err := emit(state, list, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None do return {}, emit_err
-			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), list, graph); emit_err.code != .None { return {}, emit_err }
+				if emit_err := emit(state, list, predicate, subject, graph); emit_err.code != .None do return {}, emit_err
+			} else if emit_err := emit(state, subject, predicate, list, graph); emit_err.code != .None { return {}, emit_err }
 			continue
 		}
 		object_terms, values_err := process_value_set_aware(state, &active_context, definition, property_value, graph)
@@ -2512,11 +2581,11 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 					delete(object_terms)
 					return {}, Parse_Error{code = .Invalid_Reverse_Property}
 				}
-				if emit_err := emit(state, object_term, rdf.iri(predicate_iri), subject, graph); emit_err.code != .None {
+				if emit_err := emit(state, object_term, predicate, subject, graph); emit_err.code != .None {
 					delete(object_terms)
 					return {}, emit_err
 				}
-			} else if emit_err := emit(state, subject, rdf.iri(predicate_iri), object_term, graph); emit_err.code != .None {
+			} else if emit_err := emit(state, subject, predicate, object_term, graph); emit_err.code != .None {
 				delete(object_terms)
 				return {}, emit_err
 			}
@@ -2651,6 +2720,7 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		max_remote = max_remote,
 		max_quads = options.max_quads,
 		rdf_direction = options.rdf_direction,
+		produce_generalized_rdf = options.produce_generalized_rdf,
 		loader = options.document_loader,
 		loader_data = options.loader_data,
 		allow_document_containers = options.processing_mode != .Json_LD_1_0,

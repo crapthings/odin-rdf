@@ -674,10 +674,18 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	if !state.allow_document_containers do return {}
 	relative_term := strings.has_prefix(term, "./") || strings.has_prefix(term, "../") || strings.has_prefix(term, "/")
 	if definition.prefix && relative_term do return Parse_Error{code = .Invalid_Term_Definition}
-	// A colon in a term does not by itself make that term a Compact IRI. It may
-	// be a legal term that simply must not be used as a prefix (W3C compact-p003).
-	// The mapping-equality check is required only for relative term definitions.
-	if !relative_term do return {}
+	compact_separator := strings.index_byte(term, ':')
+	if !relative_term {
+		if compact_separator < 0 do return {}
+		// A colon alone does not make a term a Compact IRI. A term such as
+		// `compact-iris:` without a defined prefix is legal but is not used for
+		// IRI compaction (W3C compact-p003). Absolute IRIs and terms whose prefix
+		// is defined remain subject to mapping consistency (to-RDF er43/er44).
+		if !has_iri_scheme(term) {
+			prefix, found := ctx.terms[term[:compact_separator]]
+			if !found || !prefix.prefix do return {}
+		}
+	}
 	expanded_term, expansion_error := expand_iri(state, ctx, term, true, true)
 	if expansion_error.code != .None do return expansion_error
 	if definition.id != expanded_term do return Parse_Error{code = .Invalid_Term_Definition}

@@ -92,6 +92,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   predicates. Strict RDF validation and writers remain the default; the new
   N-Quads generalized-writer option is explicit. Cover W3C to-RDF `0118` and
   `e075`, raising that gate to 357 cases.
+- Reject value and list objects under `@included` and `@nest`, and reject
+  reverse term definitions that declare `@nest`. Cover W3C to-RDF negative
+  vectors `en04`, `en06`, `in08`, and `in09`, raising that gate to 361 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

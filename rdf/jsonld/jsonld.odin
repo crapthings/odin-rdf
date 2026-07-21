@@ -1097,6 +1097,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		}
 		if nest_value, found := object_value(definition_object, "@nest"); found {
 			if !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
+			if definition.reverse do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			nest, valid := string_value(nest_value)
 			if !valid || len(nest) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			definition.nest, make_error = own(state, nest)
@@ -2358,6 +2359,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				node_value := array ? included[index] : property_value
 				node, valid := object_from_value(node_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Graph}
+				if _, is_value := has_keyword(node, &active_context, "@value"); is_value do return {}, Parse_Error{code = .Invalid_Value_Object}
+				if _, is_list := has_keyword(node, &active_context, "@list"); is_list do return {}, Parse_Error{code = .Invalid_List_Object}
 				if _, included_err := process_node(state, &active_context, node, graph); included_err.code != .None do return {}, included_err
 			}
 			continue
@@ -2405,6 +2408,8 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 				nested_value := is_array ? nested_values[index] : property_value
 				nested, valid := object_from_value(nested_value)
 				if !valid do return {}, Parse_Error{code = .Invalid_Value_Object}
+				if _, is_value := has_keyword(nested, &nest_context, "@value"); is_value do return {}, Parse_Error{code = .Invalid_Value_Object}
+				if _, is_list := has_keyword(nested, &nest_context, "@list"); is_list do return {}, Parse_Error{code = .Invalid_List_Object}
 				if _, nested_err := process_node(state, &nest_context, nested, graph, false, &subject); nested_err.code != .None do return {}, nested_err
 			}
 			continue

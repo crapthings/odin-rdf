@@ -1284,6 +1284,19 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 
 @(private) frame_compact_write_value :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, definition: Term_Definition, has_definition: bool, policy: Compact_Array_Policy) -> Compact_Error {
 	if object, is_object := object_from_value(value); is_object {
+		if state.prune_frame_blank_ids && len(object) == 1 {
+			id_value, has_id := object_value(object, "@id")
+			id, valid_id := string_value(id_value)
+			if has_id && valid_id && len(id) >= 2 && id[0:2] == "_:" {
+				// Framing discards an anonymous reference that has no selected
+				// node content. Keep the alias allocation deterministic for a later
+				// reference, but do not expose the implementation-only identifier
+				// (W3C framing-p046).
+				if _, err := compact_iri(state, ctx, id, false); err != .None do return err
+				strings.write_string(builder, "{}")
+				return .None
+			}
+		}
 		// A graph container compacts the framed graph members as the value of
 		// its term. The synthetic graph-node identifier is an implementation
 		// detail and must not force an @graph wrapper into the compact result.

@@ -27,11 +27,11 @@ frame(builder: ^strings.Builder, input, frame: string,
 ```
 
 `expand` is implemented as the first bounded document-level operation. Its
-current core is guarded by 73 pinned W3C Expand vectors and covers aliases,
+current core is guarded by 106 pinned W3C Expand cases and covers aliases,
 value/type/language expansion, lists, sets, transparent nesting, language/index
 containers, reverse maps, default/named graph expansion, and document-level
-`@graph`, `@id`, and `@type` containers. Scoped contexts remain later
-context-profile work.
+`@graph`, `@id`, and `@type` containers. Property- and type-scoped contexts,
+including `@propagate: false`, are part of the current profile.
 
 `flatten` expands first, then builds a bounded deterministic node-map that
 merges embedded nodes, allocates blank nodes, preserves list/index values,
@@ -43,8 +43,8 @@ container profile as Expansion.
 It supports `@id`, `@type`, property, value, and list matching; recursive
 embedding with standard embed modes; `@explicit`, defaults, and
 `@requireAll`, and basic reverse framing. Cycles fall back to `@id`
-references. Bounded `@included` framing is supported; named-graph matching is
-still outside the implemented policy matrix.
+references. Bounded `@included` selection and named-graph subframes are
+supported; the remaining Framing policy matrix stays outside this profile.
 
 All three operations accept a complete bounded JSON-LD document and atomically
 append output only after successful processing. They use the existing opt-in
@@ -70,11 +70,11 @@ renamed or treated as a JSON-LD `expand` implementation.
 
 1. Expansion core: implemented for aliases, `@id`, `@type`, scalar and value
    expansion, lists, `@set`, `@nest`, language and index maps, `@reverse`, and `@graph`.
-2. A 73-case pinned W3C Expand core selection with structural JSON comparison.
+2. A 106-case pinned W3C Expand core selection with structural JSON comparison.
 3. Default-graph Flatten node-map generation: implemented.
 4. A 35-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.
-5. Framing over the same representation: implemented with an 84-case W3C
+5. Framing over the same representation: implemented with an 87-case W3C
    regression gate. Its bounded initial profile is specified in the
    [JSON-LD Framing delivery design](jsonld-framing-design.md).
 

@@ -195,25 +195,23 @@ source-recovered `@graph` and graph-map forms, `@included`, JSON literals,
 and nested source structures. RDF-invisible source annotations are restored
 only when their association with the serialized dataset is unique.
 
-`scripts/run-w3c-jsonld-framing-tests.sh` runs 87 pinned Framing vectors for
-nested and deep-node embedding, type and `@id` selection, value/list patterns,
-all embed modes, defaults, `@requireAll`, `@set` containers, protected empty
-contexts, `@included` selection, JSON-LD 1.1 graph shape, and invalid frame
-paths. It structurally compares the context-directed result.
-The selected vectors are the executable boundary for the current framing
-profile, not a claim of full JSON-LD Framing conformance.
+`scripts/run-w3c-jsonld-framing-tests.sh` runs the full 92-vector pinned W3C
+Framing manifest: nested and deep-node embedding, type and `@id` selection,
+value/list patterns, all embed modes, defaults, `@requireAll`, `@set`
+containers, protected empty contexts, `@included` selection, JSON-LD 1.1 graph
+shape, and invalid frame paths. It structurally compares the context-directed
+result.
 
 The Expansion gate includes five sourced-context `@import` vectors. It runs
-106 vectors in total and covers
+398 executions across all 385 unique evaluation vectors and covers
 source overrides, relative source identifiers resolved through an importer's
 `@vocab`, protected source definitions, and the expected rejection of
 incompatible protected-term redefinitions. It also covers property-, type-,
 and embedded-context propagation, sourced propagation, and invalid
 `@propagate` values. Default and term directions, list and language-map
 directions, explicit value directions, and invalid direction forms bring its
-current total to 106 cases.
+current coverage to the full pinned manifest.
 
 The document core is specified in
 [Expanded JSON-LD document core](jsonld-expanded-document-design.md). Future
-work extends its framing policy matrix and broader JSON-LD 1.1 conversion
-coverage.
+work broadens JSON-LD 1.1 interoperability beyond the pinned manifests.

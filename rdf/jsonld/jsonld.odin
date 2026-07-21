@@ -996,7 +996,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	// prefix mappings first so a later compact IRI such as ex:friend does not
 	// depend on map iteration order.
 	for term, definition_value in object {
-		if len(term) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		if len(term) == 0 || term == EMPTY_JSON_OBJECT_KEY_SENTINEL do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if is_keyword(term) || has_keyword_form(term) do continue
 		id, simple := string_value(definition_value)
 		if !simple {
@@ -1014,7 +1014,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		result.terms[owned_term] = Term_Definition{id = identifier}
 	}
 	for term, definition_value in object {
-		if len(term) == 0 do return {}, Parse_Error{code = .Invalid_Term_Definition}
+		if len(term) == 0 || term == EMPTY_JSON_OBJECT_KEY_SENTINEL do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		if is_keyword(term) || has_keyword_form(term) do continue
 		// A redefinition must not resolve its own identifier through a previous
 		// context definition. Other local prefix mappings remain available.

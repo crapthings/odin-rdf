@@ -1181,6 +1181,13 @@ test_rejects_inconsistent_relative_and_compact_iri_terms :: proc(t: ^testing.T) 
 }
 
 @(test)
+test_rejects_an_empty_context_term :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"":{"@id":"https://example.test/empty"}},"@id":"https://example.test/node"}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
 test_later_contexts_redefine_terms_against_their_current_vocab :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context": [

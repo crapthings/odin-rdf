@@ -1057,9 +1057,10 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 			type_name, valid := string_value(type_value)
 			if !valid do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if type_name == "@id" { definition.type = "@id" } else if type_name == "@vocab" { definition.type = "@vocab" } else if type_name == "@json" { definition.type = "@json" } else {
-				definition.type, make_error = expand_iri(state, &result, type_name, true, true)
+				definition.type, make_error = expand_iri(state, &result, type_name, true, false)
 				if make_error.code != .None do return {}, make_error
 			}
+			if definition.type != "@id" && definition.type != "@vocab" && definition.type != "@json" && definition.type != "@none" && (strings.has_prefix(definition.type, "_:") || !valid_absolute_iri(definition.type)) do return {}, Parse_Error{code = .Invalid_Term_Definition}
 			if definition.type == "@none" && !state.allow_document_containers do return {}, Parse_Error{code = .Invalid_Term_Definition}
 		}
 		if language_value, found := object_value(definition_object, "@language"); found {

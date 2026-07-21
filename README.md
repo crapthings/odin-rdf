@@ -47,12 +47,12 @@ and the remaining Framing policy matrix are outside the current scope. See the
 limits.
 
 <details>
-<summary>Conformance breakdown — 2,187 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,189 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
-| JSON-LD to-RDF / Expansion / Flattening / Framing | 365 / 308 / 57 / 92 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 367 / 308 / 57 / 92 |
 | JSON-LD RDF-to-JSON-LD / Compaction | 54 / 246 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 

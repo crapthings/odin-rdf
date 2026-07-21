@@ -63,7 +63,7 @@ tn02
 wf01 wf02 wf03 wf04 wf05 wf07
 '
 
-negative_cases='di08 e123 m020 so01 so02 so03 c029 pi01 tn01 ep02 er21 er42 en04 en06 in08 in09 er37 er38 er39 er41'
+negative_cases='di08 e123 m020 so01 so02 so03 c029 pi01 tn01 ep02 er21 er42 en04 en06 in08 in09 er13 er23 er37 er38 er39 er41'
 
 total=0
 failures=0
@@ -115,5 +115,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD to-RDF core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 365
+test "$total" -eq 367
 test "$failures" -eq 0

@@ -488,6 +488,7 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	ids:          map[string]int,
 	owned:        [dynamic]json.Value,
 	graph_values: map[string]json.Array,
+	legacy_prefixes: bool,
 }
 
 @(private) frame_destroy_node_map :: proc(node_map: ^Frame_Node_Map) {
@@ -1149,6 +1150,21 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 	for key in frame_keys {
 		if is_keyword(key) || frame_is_control(key) do continue
 		if _, present := object_value(node, key); present do continue
+		if node_map.legacy_prefixes {
+			// JSON-LD 1.0 permits a source property that looks like a compact
+			// IRI. A framing context can define that spelling as a term, so
+			// recognise it as already present before inserting a frame default
+			// (W3C framing-0010).
+			legacy_property_present := false
+			for term, definition in output_ctx.terms {
+				if definition.id != key do continue
+				if _, present := object_value(node, term); present {
+					legacy_property_present = true
+					break
+				}
+			}
+			if legacy_property_present do continue
+		}
 		candidate, has_candidate := object_value(frame, key)
 		if !has_candidate do continue
 		child_frame, child_valid := object_from_value(candidate)
@@ -1467,7 +1483,19 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 			if !valid do return .Invalid_Expanded_JSON
 			err: Compact_Error
 			compacted_key, definition, has_definition, err = compact_property_term(state, ctx, key, array)
-			if err != .None do return err
+			if err != .None {
+				// JSON-LD 1.0 framing retains an input property that looks like a
+				// compact IRI, even when the output context would reinterpret that
+				// spelling as a different IRI. This is the legacy CURIE-conflict
+				// compaction rule (W3C framing-0010).
+				if state.legacy_prefixes && err == .Invalid_Context && has_iri_scheme(key) {
+					compacted_key = key
+					definition = {}
+					has_definition = false
+				} else {
+					return err
+				}
+			}
 		}
 		if !first do strings.write_string(builder, ", ")
 		write_json_string(builder, compacted_key)
@@ -1558,11 +1586,16 @@ frame :: proc(builder: ^strings.Builder, input, frame_text: string, options: Fra
 	if frame_has_unsupported_policy(raw_frame_document) do return .Unsupported_Feature
 	active_context, has_context := object_value(raw_frame, "@context")
 	context_options := options.context_options
+	// Framing exposes its processing mode separately from the shared context
+	// limits. Keep every internal Expansion, Flattening, and compaction-context
+	// pass in that same mode; otherwise a JSON-LD 1.0 frame is expanded as 1.1
+	// and can be rejected before matching begins.
+	if options.processing_mode == .Json_LD_1_0 do context_options.processing_mode = .Json_LD_1_0
 	max_contexts := context_options.max_contexts
 	if max_contexts == 0 do max_contexts = DEFAULT_MAX_CONTEXTS
 	max_remote := context_options.max_remote_contexts
 	if max_remote == 0 do max_remote = DEFAULT_MAX_REMOTE_CONTEXTS
-	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), referenced_frame_blank_ids = make(map[string]bool), frame_blank_aliases = make(map[string]string), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = true, prune_frame_blank_ids = options.processing_mode == .Json_LD_1_1, canonical_frame_blank_ids = options.processing_mode == .Json_LD_1_1}
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), referenced_frame_blank_ids = make(map[string]bool), frame_blank_aliases = make(map[string]string), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = context_options.processing_mode != .Json_LD_1_0, allow_direction = context_options.processing_mode != .Json_LD_1_0, legacy_prefixes = context_options.processing_mode == .Json_LD_1_0, prune_frame_blank_ids = options.processing_mode == .Json_LD_1_1, canonical_frame_blank_ids = options.processing_mode == .Json_LD_1_1}
 	defer destroy_state(&state)
 	ctx, context_error := make_context(&state, nil)
 	if context_error.code != .None do return frame_from_context_error(context_error)
@@ -1580,18 +1613,19 @@ frame :: proc(builder: ^strings.Builder, input, frame_text: string, options: Fra
 
 	flattened := strings.builder_make()
 	defer strings.builder_destroy(&flattened)
-	if err := flatten(&flattened, input, Flatten_Options{context_options = options.context_options, max_nodes = max_nodes, max_output_bytes = intermediate_max, retain_reference_nodes = true}); err != .None do return frame_from_flatten_error(err)
+	if err := flatten(&flattened, input, Flatten_Options{context_options = context_options, max_nodes = max_nodes, max_output_bytes = intermediate_max, retain_reference_nodes = true}); err != .None do return frame_from_flatten_error(err)
 	flat_document, flat_json_error := json.parse_string(strings.to_string(flattened), .JSON, true)
 	if flat_json_error != .None do return .Invalid_JSON
 	defer json.destroy_value(flat_document)
 	flat_nodes, flat_valid := array_from_value(flat_document)
 	if !flat_valid do return .Invalid_JSON
 	node_map := frame_make_node_map(flat_nodes)
+	node_map.legacy_prefixes = context_options.processing_mode == .Json_LD_1_0
 	defer frame_destroy_node_map(&node_map)
 
 	expanded_frame := strings.builder_make()
 	defer strings.builder_destroy(&expanded_frame)
-	if err := expand_frame(&expanded_frame, frame_text, Expand_Options{context_options = options.context_options, max_output_bytes = intermediate_max}); err != .None do return frame_from_expand_error(err)
+	if err := expand_frame(&expanded_frame, frame_text, Expand_Options{context_options = context_options, max_output_bytes = intermediate_max}); err != .None do return frame_from_expand_error(err)
 	expanded_frame_document, expanded_frame_json_error := json.parse_string(strings.to_string(expanded_frame), .JSON, true)
 	if expanded_frame_json_error != .None do return .Invalid_Frame
 	defer json.destroy_value(expanded_frame_document)

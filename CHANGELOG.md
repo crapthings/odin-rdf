@@ -81,6 +81,13 @@ This project follows [Semantic Versioning](https://semver.org/).
   properties; the Framing gate now has 89 cases.
 - Prune unselected ID-only anonymous references from compact framed values,
   covering W3C Framing `p046` and raising that gate to 90 cases.
+- Propagate JSON-LD 1.0 processing mode through Framing and preserve legacy
+  CURIE-conflict properties during framed compaction, covering W3C Framing
+  `0010` and raising that gate to 91 cases.
+- Add the already-passing JSON-LD 1.0 deep-embedding replacement vector
+  W3C Framing `0015`, raising that gate to 92 cases.
+- Add Flatten output-context compaction with a selectable compact-arrays
+  policy, covering W3C Flatten `0044` and raising that gate to 57 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

@@ -71,10 +71,11 @@ renamed or treated as a JSON-LD `expand` implementation.
 1. Expansion core: implemented for aliases, `@id`, `@type`, scalar and value
    expansion, lists, `@set`, `@nest`, language and index maps, `@reverse`, and `@graph`.
 2. A 308-case pinned W3C Expand core selection with parsed JSON-value comparison.
-3. Default-graph Flatten node-map generation: implemented.
-4. A 56-case pinned W3C Flatten selection with structural JSON
+3. Default-graph Flatten node-map generation and optional output-context
+   compaction: implemented.
+4. A 57-case pinned W3C Flatten selection with structural JSON
    comparison: implemented.
-5. Framing over the same representation: implemented with a 90-case W3C
+5. Framing over the same representation: implemented with a 92-case W3C
    regression gate. Its bounded initial profile is specified in the
    [JSON-LD Framing delivery design](jsonld-framing-design.md).
 

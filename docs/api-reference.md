@@ -245,7 +245,9 @@ blank-node representation.
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,
 preserves lists and `@index`, normalizes reverse properties, and retains nested
-`@graph` objects.
+`@graph` objects. Set `Flatten_Options.output_context` to compact that node-map
+with a supplied JSON-LD context; set `array_policy = .Preserve` to implement
+the standard `compactArrays: false` shape.
 `Flatten_Options.max_nodes` defaults to 100,000 and `max_output_bytes` to
 32 MiB.
 

@@ -1391,7 +1391,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	parsed, json_err := json.parse_string(strings.to_string(prepared), .JSON, true)
 	if json_err != .None do return .Invalid_JSON
 	defer json.destroy_value(parsed)
-	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = context_options.processing_mode != .Json_LD_1_0, allow_direction = context_options.processing_mode != .Json_LD_1_0, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls}
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = context_options.processing_mode != .Json_LD_1_0, allow_direction = context_options.processing_mode != .Json_LD_1_0, legacy_prefixes = context_options.processing_mode == .Json_LD_1_0, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls}
 	defer destroy_state(&state)
 	ctx, context_err := make_context(&state, nil)
 	if context_err.code != .None do return expand_from_parse_error(context_err)

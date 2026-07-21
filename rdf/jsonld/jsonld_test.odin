@@ -1355,6 +1355,26 @@ test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_flatten_with_output_context_preserves_requested_arrays :: proc(t: ^testing.T) {
+	input := `[{
+  "@id": "http://example/foo",
+  "http://example/term": [{"@value": "value"}]
+}]`
+	context_document := `{"@context":{"term":"http://example/term"}}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, flatten(&builder, input, Flatten_Options{output_context = context_document, array_policy = .Preserve}), Flatten_Error.None)
+	expected := `{
+  "@context": {"term": "http://example/term"},
+  "@graph": [
+    {"@id": "http://example/foo", "term": ["value"]}
+  ]
+}
+`
+	testing.expect_value(t, strings.to_string(builder), expected)
+}
+
+@(test)
 test_flattening_bounds_node_map_and_handles_cycles :: proc(t: ^testing.T) {
 	input := `{"@context":{"p":"https://example.test/p"},"@id":"https://example.test/a","p":{"@id":"https://example.test/a"}}`
 	builder := strings.builder_make()

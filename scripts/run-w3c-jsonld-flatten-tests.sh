@@ -35,6 +35,8 @@ for case_id in $cases; do
   run_ok=true
   if [ "$case_id" = 0044 ]; then
     "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" --context "$suite/flatten/0044-context.jsonld" --preserve-arrays > "$actual" || run_ok=false
+  elif [ "$case_id" = 0026 ]; then
+    "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" json-ld-1.0 > "$actual" || run_ok=false
   else
     "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" > "$actual" || run_ok=false
   fi

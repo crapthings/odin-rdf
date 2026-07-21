@@ -131,6 +131,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Statically validate an unused scoped context's implicit terms without
   constructing that context or altering protected-term ordering. Cover W3C
   to-RDF negative vector `c033`, raising that gate to 390 cases.
+- Expand the JSON-LD to-RDF gate to every W3C evaluation vector: all 345
+  positive and all 106 negative cases, for 451 cases total.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

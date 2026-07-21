@@ -65,6 +65,8 @@ main :: proc() {
 			options.output_context = string(output_context)
 		case "--preserve-arrays":
 			options.array_policy = .Preserve
+		case "json-ld-1.0":
+			options.context_options.processing_mode = .Json_LD_1_0
 		case:
 			if len(state.tests_root) > 0 {
 				fmt.eprintf("unknown flatten option: %s\n", argument)

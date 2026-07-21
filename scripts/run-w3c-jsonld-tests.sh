@@ -63,7 +63,7 @@ tn02
 wf01 wf02 wf03 wf04 wf05 wf07
 '
 
-negative_cases='di08 e123 m020 so01 so02 so03 c029 pi01 tn01 ep02 er21 er42 en04 en06 in08 in09 er13 er23 er37 er38 er39 er41 er14 er17 er25 er36 er50 er24 er31 er32 er35 e115 e116 er19 er20 er43 er56 pr33 pi03 er26 er44 er48 er49 er52 c033'
+negative_cases='c029 c030 c032 c033 di08 e115 e116 e123 ec01 ec02 em01 en01 en02 en03 en04 en05 en06 ep02 ep03 er01 er02 er03 er04 er05 er06 er07 er08 er09 er10 er11 er12 er13 er14 er15 er17 er18 er19 er20 er21 er22 er23 er24 er25 er26 er27 er28 er29 er30 er31 er32 er33 er34 er35 er36 er37 er38 er39 er40 er41 er42 er43 er44 er48 er49 er50 er51 er52 er53 er54 er55 er56 in07 in08 in09 m020 pi01 pi02 pi03 pi04 pi05 pr01 pr03 pr04 pr05 pr08 pr09 pr11 pr12 pr17 pr18 pr20 pr21 pr26 pr28 pr31 pr32 pr33 pr42 so01 so02 so03 so07 so10 so12 so13 tn01'
 
 total=0
 failures=0
@@ -108,7 +108,7 @@ done
 for case_id in $negative_cases; do
   input="$suite/toRdf/$case_id-in.jsonld"
   mode=''
-  case "$case_id" in so01|c029|pi01|tn01|ep02|er21|er42|er24|er32|e115|e116) mode=json-ld-1.0 ;; esac
+  case "$case_id" in c029|e115|e116|ep02|er02|er03|er21|er24|er32|er42|pi01|so01|tn01) mode=json-ld-1.0 ;; esac
   if "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/toRdf/$case_id-in.jsonld" "$suite" $mode >/dev/null 2>&1; then
     failures=$((failures + 1))
   fi
@@ -116,5 +116,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD to-RDF core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 390
+test "$total" -eq 451
 test "$failures" -eq 0

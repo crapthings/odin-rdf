@@ -4,6 +4,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.30.1 - 2026-07-21
+
+- Correct the JSON-LD design documentation to describe the explicit CLI
+  `--context-map URL=PATH` facility accurately. Mapped remote contexts are
+  preloaded from local files, remain bounded by `--max-document-bytes`, and
+  are never fetched over the network.
+
 ## 0.30.0 - 2026-07-21
 
 - Add repeatable CLI `--context-map URL=PATH` mappings for JSON-LD input and

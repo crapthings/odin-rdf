@@ -170,7 +170,7 @@ JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs all 451 JSON-LD-to-RDF
 evaluation vectors: 345 positive and 106 negative,
 including default direction omission, `i18n-datatype`, compound-literal, and
-explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 308 Expansion vectors,
+explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 380 Expansion vectors,
 including document-scope free-value removal, `@id` IRI processing, and null
 local-context restoration to the document base.
 `scripts/run-w3c-jsonld-flatten-tests.sh` runs 57 Flattening vectors, covering

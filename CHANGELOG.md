@@ -133,6 +133,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   to-RDF negative vector `c033`, raising that gate to 390 cases.
 - Expand the JSON-LD to-RDF gate to every W3C evaluation vector: all 345
   positive and all 106 negative cases, for 451 cases total.
+- Expand the JSON-LD Expansion gate from 19 to 91 verified negative W3C
+  vectors, raising that gate from 308 to 380 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

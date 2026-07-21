@@ -22,13 +22,16 @@ valid for the callback only. The reader retains at most `max_document_bytes`
 `expand` is separate from `serialize`: it takes a JSON-LD document and emits
 the JSON-LD Expansion form before an RDF conversion could discard ordinary
 `@index` annotations. It is atomic, deterministic, and independently bounds
-the expanded output at 32 MiB by default. Its first W3C-gated core includes
+the expanded output at 32 MiB by default. Its full pinned W3C Expansion
+manifest includes
 aliases, value/type/language expansion, `@list`, nested `@set`, `@nest`, language and
 index containers, reverse maps, default/named graph expansion, and document-level
 `@graph`, `@id`, and `@type` containers including `@graph` composites.
 
 `flatten` consumes that expanded-document boundary and emits a deterministic,
-bounded node-map. It merges embedded nodes by identifier, preserves lists and
+bounded node-map. An optional `output_context` compacts that result with the
+same bounded compaction policy; use `compact` directly when the starting point
+is an RDF dataset. It merges embedded nodes by identifier, preserves lists and
 ordinary `@index`, applies reverse relationships to their referenced nodes,
 and retains nested graph objects.
 
@@ -42,8 +45,8 @@ standard embed modes, ordinary-property `@requireAll`, and basic reverse
 framing, bounded `@included` selection, and bounded named-graph subframes.
 Graph subframes resolve references against a graph-local node view and
 graph-container terms compact selected graph members without a synthetic
-`@graph` wrapper. Scoped graph storage and the remaining Framing policy matrix
-remain later work.
+`@graph` wrapper. The full pinned W3C Framing manifest is covered; general
+purpose graph storage and SPARQL remain separate product directions.
 
 ```odin
 serialize(builder: ^strings.Builder, quads: []rdf.Quad,
@@ -70,6 +73,10 @@ map to the JSON-LD 1.1 `https://www.w3.org/ns/i18n#` datatype form and are
 restored as `@language` and `@direction` during serialization or compaction.
 Set both to `.Compound_Literal` to use the alternative RDF blank-node mapping
 with `rdf:value`, `rdf:direction`, and optional `rdf:language` instead.
+Set `Options.produce_generalized_rdf = true` to retain blank-node predicates
+in the JSON-LD to-RDF output. The default remains strict RDF 1.1; generalized
+output must be consumed by an explicitly compatible sink, such as
+`nquads.write_quad_with_options(..., {allow_generalized_rdf = true})`.
 
 ```odin
 compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
@@ -100,10 +107,19 @@ and network policy explicitly.
 The processor accepts strict JSON and handles local contexts, `@base`,
 `@vocab`, prefixes, term aliases, `@id`, `@type`, value objects, language and
 datatype coercion, arrays, nested `@set`, and `@list`, reverse properties, `@graph`,
-`@included`, `@nest`, and `@json` value objects. It emits default and named graph quads and keeps
-explicit blank-node identifiers document-local.
+`@included`, `@nest`, and `@json` value objects. Term-coerced and direct
+`@json` values become deterministically ordered RDF JSON literals. It emits
+default and named graph quads and keeps explicit blank-node identifiers
+document-local.
+
+When `Compact_Options.source_document` uniquely associates an RDF JSON numeric
+literal with its source value, Compaction also restores whether that source was
+written as a JSON integer or floating value. Without that source association,
+the RDF dataset alone cannot retain the distinction.
 
 The input processor remains a deliberately bounded JSON-LD 1.1 to-RDF profile.
+It emits strict RDF 1.1 by default and supports generalized RDF blank-node
+predicates only through the explicit `produce_generalized_rdf` option.
 The serializer supplies the interoperable expanded RDF-to-JSON-LD form: it
 handles complete and partial RDF list collapse, shared blank nodes across named
 graphs, native scalar options, and graph-node merging. It does not compact IRIs
@@ -119,8 +135,8 @@ the same opt-in document loader. Expansion and Flattening preserve JSON-LD 1.1
 base and term `@direction` mappings on expanded value objects. Its opt-in
 `.I18n_Datatype` mode maps those values through RDF and restores them in
 serialization and compaction; `.Compound_Literal` supplies the standard RDF
-blank-node alternative. A built-in HTTP loader and the remaining Framing policy
-matrix remain separate conformance milestones.
+blank-node alternative. A built-in HTTP loader remains a separate conformance
+milestone.
 Document Expansion, Flattening, and Framing honor `@propagate: false` by
 rolling back to the previous context for nested node objects; type-scoped
 contexts are non-propagating unless they set `@propagate: true`. `@protected`
@@ -147,14 +163,21 @@ contexts fail explicitly instead of causing implicit network access.
 
 The repository pins the W3C JSON-LD API test corpus. In addition to the stable
 JSON-LD-to-RDF core selection, `scripts/run-w3c-jsonld-fromrdf-tests.sh` runs
-46 RDF-to-JSON-LD core vectors, including RDF lists, named graphs,
+54 RDF-to-JSON-LD core vectors, including RDF lists, named graphs,
 `useNativeTypes`, `useRdfType`, duplicate triples, `rdf:JSON`, and i18n
 directional datatypes and compound literals.
 It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
-differences. `scripts/run-w3c-jsonld-tests.sh` runs 162 to-RDF vectors,
-including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 246 Compaction cases:
+differences. `scripts/run-w3c-jsonld-tests.sh` runs all 451 JSON-LD-to-RDF
+evaluation vectors: 345 positive and 106 negative,
+including default direction omission, `i18n-datatype`, compound-literal, and
+explicit generalized-RDF output. `scripts/run-w3c-jsonld-expand-tests.sh` runs 398 executions covering all 385 unique Expansion evaluation vectors,
+including document-scope free-value removal, `@id` IRI processing, and null
+local-context restoration to the document base.
+`scripts/run-w3c-jsonld-flatten-tests.sh` runs all 58 Flattening evaluation vectors, covering
+node maps, nested graph objects, lists, blank-node allocation, and output
+context compaction with `compactArrays: false`.
+`scripts/run-w3c-jsonld-compact-tests.sh` runs 246 Compaction cases:
 229 positive vectors whose compacted JSON is compared structurally with the
 pinned expected output, plus 17 negative cases. The positive gate includes
 graph/index and graph/id map keys with `@none` aliases, document-base relative

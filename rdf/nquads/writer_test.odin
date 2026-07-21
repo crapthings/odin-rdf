@@ -31,6 +31,17 @@ test_write_quad_is_atomic_on_failure :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_write_generalized_quad_requires_explicit_opt_in :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	quad := rdf.default_graph_quad(rdf.Triple{rdf.iri("urn:s"), rdf.blank_node("p"), rdf.literal("value")})
+	testing.expect_value(t, write_quad(&builder, quad), Write_Error.Invalid_Triple)
+	testing.expect_value(t, strings.to_string(builder), "")
+	testing.expect_value(t, write_quad_with_options(&builder, quad, {allow_generalized_rdf = true}), Write_Error.None)
+	testing.expect_value(t, strings.to_string(builder), "<urn:s> _:p \"value\" .\n")
+}
+
+@(test)
 test_write_error_messages_are_stable :: proc(t: ^testing.T) {
 	messages := [Write_Error]string{
 		.None                      = "no error",

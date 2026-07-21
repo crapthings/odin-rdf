@@ -4,6 +4,12 @@ import "core:strings"
 import rdf ".."
 import ntriples "../ntriples"
 
+// Writer_Options selects explicit extensions to the strict RDF 1.1 N-Quads
+// writer. The default rejects blank-node predicates.
+Writer_Options :: struct {
+	allow_generalized_rdf: bool,
+}
+
 // Write_Error identifies why a quad cannot be serialized as N-Quads.
 Write_Error :: enum {
 	None,
@@ -61,10 +67,10 @@ write_error_message :: proc(code: Write_Error) -> string {
 	return .Invalid_Term_Kind
 }
 
-// write_quad atomically appends one canonical-layout N-Quads record. The
-// destination builder remains unchanged when validation fails.
-write_quad :: proc(builder: ^strings.Builder, quad: rdf.Quad) -> Write_Error {
-	structure_error := rdf.validate_quad_structure(quad)
+// write_quad_with_options atomically appends one canonical-layout N-Quads
+// record. Generalized RDF serialization requires explicit opt-in.
+write_quad_with_options :: proc(builder: ^strings.Builder, quad: rdf.Quad, options: Writer_Options = {}) -> Write_Error {
+	structure_error := options.allow_generalized_rdf ? rdf.validate_generalized_quad_structure(quad) : rdf.validate_quad_structure(quad)
 	if structure_error == .Invalid_Triple do return .Invalid_Triple
 	if structure_error == .Invalid_Graph || structure_error == .Invalid_Graph_Term do return .Invalid_Graph
 
@@ -82,4 +88,9 @@ write_quad :: proc(builder: ^strings.Builder, quad: rdf.Quad) -> Write_Error {
 	strings.write_string(&temporary, " .\n")
 	strings.write_string(builder, strings.to_string(temporary))
 	return .None
+}
+
+// write_quad is the strict RDF 1.1 convenience form.
+write_quad :: proc(builder: ^strings.Builder, quad: rdf.Quad) -> Write_Error {
+	return write_quad_with_options(builder, quad)
 }

@@ -33,8 +33,8 @@ load_document :: proc(url: string, user_data: rawptr) -> (string, bool) {
 }
 
 main :: proc() {
-	if len(os.args) != 3 && len(os.args) != 4 {
-		fmt.eprintln("usage: jsonld_flatten_runner <input.jsonld> <base-iri> [tests-root]")
+	if len(os.args) < 3 {
+		fmt.eprintln("usage: jsonld_flatten_runner <input.jsonld> <base-iri> [tests-root] [--context context.jsonld] [--preserve-arrays]")
 		os.exit(2)
 	}
 	input, read_error := os.read_entire_file(os.args[1], context.allocator)
@@ -46,8 +46,36 @@ main :: proc() {
 	state: State
 	defer destroy_state(&state)
 	options := jsonld.Flatten_Options{context_options = {base_iri = os.args[2]}}
-	if len(os.args) == 4 {
-		state.tests_root = os.args[3]
+	output_context: []byte
+	defer delete(output_context)
+	for index := 3; index < len(os.args); index += 1 {
+		argument := os.args[index]
+		switch argument {
+		case "--context":
+			index += 1
+			if index >= len(os.args) {
+				fmt.eprintln("--context requires a JSON-LD context file")
+				os.exit(2)
+			}
+			output_context, read_error = os.read_entire_file(os.args[index], context.allocator)
+			if read_error != nil {
+				fmt.eprintf("cannot read %s: %v\n", os.args[index], read_error)
+				os.exit(2)
+			}
+			options.output_context = string(output_context)
+		case "--preserve-arrays":
+			options.array_policy = .Preserve
+		case "json-ld-1.0":
+			options.context_options.processing_mode = .Json_LD_1_0
+		case:
+			if len(state.tests_root) > 0 {
+				fmt.eprintf("unknown flatten option: %s\n", argument)
+				os.exit(2)
+			}
+			state.tests_root = argument
+		}
+	}
+	if len(state.tests_root) > 0 {
 		options.context_options.document_loader = load_document
 		options.context_options.loader_data = &state
 	}

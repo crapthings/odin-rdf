@@ -3,7 +3,7 @@
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
-![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-1%2C747%2F1%2C747-0f766e)
+![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C364%2F2%2C364-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
@@ -22,14 +22,14 @@ graph store or SPARQL engine.
 
 ## Status and scope
 
-**Current release: `0.28.2`** — ready for production use within the documented
+**Current release: `0.29.0`** — ready for production use within the documented
 profile. The public API may still evolve, so applications should pin a release
 and retain integration tests for their own JSON-LD documents.
 
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. Generalized RDF output is opt-in and requires a compatible sink. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
@@ -42,18 +42,18 @@ directional RDF round trips require opt-in `i18n-datatype` or
 Framing includes recursive embedding, standard embed modes, defaults,
 `@requireAll`, value/list patterns, basic reverse framing, bounded `@included`
 selection, and bounded named-graph subframes. Scoped graph storage, SPARQL,
-and the remaining Framing policy matrix are outside the current scope. See the
-[JSON-LD processing profile](docs/jsonld-design.md) for exact behavior and
-limits.
+and other application-level query features are outside the current scope. The
+full pinned W3C Framing manifest is gated; see the [JSON-LD processing
+profile](docs/jsonld-design.md) for exact behavior and limits.
 
 <details>
-<summary>Conformance breakdown — 1,747 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,364 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
-| JSON-LD to-RDF / Expansion / Flattening / Framing | 162 / 106 / 35 / 87 |
-| JSON-LD RDF-to-JSON-LD / Compaction | 46 / 246 |
+| JSON-LD to-RDF / Expansion / Flattening / Framing | 451 / 398 / 58 / 92 |
+| JSON-LD RDF-to-JSON-LD / Compaction | 54 / 246 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 
 </details>
@@ -400,7 +400,8 @@ as an orientation point, never as a cross-machine claim or a hard CI threshold.
 
 ## Roadmap
 
-1. Complete the remaining JSON-LD Framing policy matrix and broaden JSON-LD 1.1 conformance; keep graph storage and SPARQL as separate product directions.
+1. Broaden JSON-LD 1.1 interoperability beyond the pinned W3C API manifests;
+   keep graph storage and SPARQL as separate product directions.
 
 ## License
 

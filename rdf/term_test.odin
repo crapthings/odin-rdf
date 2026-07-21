@@ -21,6 +21,9 @@ test_triple_structure_validation :: proc(t: ^testing.T) {
 	testing.expect_value(t, validate_triple_structure(valid), Triple_Structure_Error.None)
 	testing.expect_value(t, validate_triple_structure(Triple{literal("s"), iri("urn:p"), literal("o")}), Triple_Structure_Error.Invalid_Subject)
 	testing.expect_value(t, validate_triple_structure(Triple{iri("urn:s"), blank_node("p"), literal("o")}), Triple_Structure_Error.Invalid_Predicate)
+	generalized := Triple{iri("urn:s"), blank_node("p"), literal("o")}
+	testing.expect_value(t, validate_generalized_triple_structure(generalized), Triple_Structure_Error.None)
+	testing.expect_value(t, validate_generalized_quad_structure(default_graph_quad(generalized)), Quad_Structure_Error.None)
 }
 
 @(test)

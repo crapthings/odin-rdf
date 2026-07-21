@@ -211,6 +211,18 @@ Compact_Options :: struct {
 	order:             int,
 }
 
+// Compact_Source_Json_Value_Annotation retains the JSON shape chosen by a
+// source document for one RDF JSON numeric literal. RDF preserves its numeric
+// value but not whether the source used an integer or floating JSON token.
+@(private) Compact_Source_Json_Value_Annotation :: struct {
+	subject_id: string,
+	predicate:  string,
+	numeric:    f64,
+	integer:    i64,
+	is_float:   bool,
+	has_numeric: bool,
+}
+
 @(private) destroy_compact_list_term_groups :: proc(groups: ^[dynamic]Compact_List_Term_Group) {
 	for &group in groups^ do delete(group.values)
 	delete(groups^)
@@ -622,13 +634,47 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		strings.write_byte(builder, '{')
 		for key, index in keys {
 			if index > 0 do strings.write_string(builder, ", ")
-			write_json_string(builder, key)
+			output_key := key == EMPTY_JSON_OBJECT_KEY_SENTINEL ? "" : key
+			write_json_string(builder, output_key)
 			strings.write_string(builder, ": ")
 			if !compact_write_raw_json(builder, actual[key]) do return false
 		}
 		strings.write_byte(builder, '}')
 	}
 	return true
+}
+
+// compact_source_json_value selects a source numeric value only when exactly
+// one source annotation proves it belongs to this property. That keeps source
+// recovery conservative for anonymous nodes and duplicate numeric values.
+@(private) compact_source_json_value :: proc(state: ^State, subject: json.Object, predicate: string, value: json.Value) -> (Compact_Source_Json_Value_Annotation, bool, Compact_Error) {
+	subject_value, has_subject := object_value(subject, "@id")
+	subject_id, valid_subject := string_value(subject_value)
+	if has_subject && !valid_subject do return {}, false, .Invalid_Expanded_JSON
+	if !has_subject do subject_id = ""
+	matches := 0
+	result: Compact_Source_Json_Value_Annotation
+	runtime_number: f64
+	has_runtime_number := false
+	#partial switch numeric_value in value {
+	case json.Integer:
+		runtime_number = f64(numeric_value)
+		has_runtime_number = true
+	case json.Float:
+		runtime_number = f64(numeric_value)
+		has_runtime_number = true
+	}
+	if !has_runtime_number do return {}, false, .None
+	for annotation in state.compact_source_json_value_annotations {
+		subject_matches := annotation.subject_id == subject_id
+		if !subject_matches && len(annotation.subject_id) == 0 && (!has_subject || strings.has_prefix(subject_id, "_:")) do subject_matches = true
+		if !subject_matches || annotation.predicate != predicate do continue
+		if !annotation.has_numeric || annotation.numeric != runtime_number do continue
+		matches += 1
+		if matches > 1 do return {}, false, .None
+		result = annotation
+	}
+	return result, matches == 1, .None
 }
 
 @(private) compact_write_identifier :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value, vocab: bool, allow_terms: bool = true) -> Compact_Error {
@@ -1338,6 +1384,8 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		has_raw_index_values := false
 		source_property_value := ""
 		has_source_property_value := false
+		source_json_value: Compact_Source_Json_Value_Annotation
+		has_source_json_value := false
 		if is_keyword(key) {
 			compacted_key = compact_keyword(ctx, key)
 			definition, has_definition = context_definition_for_iri(ctx, key)
@@ -1396,6 +1444,20 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 					compacted_key = key
 					definition = {}
 					has_definition = false
+				}
+			}
+			// RDF JSON literals retain JSON values but not the source numeric
+			// token class. When an unambiguous source annotation matches, restore
+			// that source value before ordinary scalar compaction.
+			if has_definition && definition.type == "@json" && !definition.container_set && !definition.container_list && !definition.container_language && !definition.container_index && !definition.container_id && !definition.container_type && !definition.container_graph && len(array) == 1 {
+				item, valid_item := object_from_value(array[0])
+				raw_value, has_raw_value := object_value(item, "@value")
+				type_value, has_type := object_value(item, "@type")
+				type_name, valid_type := string_value(type_value)
+				if valid_item && has_raw_value && has_type && valid_type && type_name == "@json" {
+					source_error: Compact_Error
+					source_json_value, has_source_json_value, source_error = compact_source_json_value(state, object, key, raw_value)
+					if source_error != .None do return source_error
 				}
 			}
 			// A language map may represent @none, but an explicit language-null
@@ -1766,6 +1828,14 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 			handled_annotation := false
 			if has_source_property_value && len(array) == 1 && has_definition && (definition.type == "@id" || definition.type == "@vocab") && !definition.container_set && !definition.container_list && !definition.container_language && !definition.container_index && !definition.container_id && !definition.container_type && !definition.container_graph {
 				write_json_string(output, source_property_value)
+				handled_annotation = true
+			}
+			if !handled_annotation && has_source_json_value {
+				if source_json_value.is_float {
+					write_json_float(output, source_json_value.numeric)
+				} else {
+					strings.write_i64(output, source_json_value.integer)
+				}
 				handled_annotation = true
 			}
 			if has_definition && definition.container_set {
@@ -3071,6 +3141,59 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 	return .None
 }
 
+// The source document is expanded before this collector runs, so predicate
+// keys are absolute IRIs and can be matched against the serializer's node
+// map. Store numeric shape rather than a borrowed json.Value because the
+// parsed source document is released after collection.
+@(private) compact_collect_source_json_value_annotations :: proc(state: ^State, value: json.Value) -> Compact_Error {
+	node, valid_node := object_from_value(value)
+	if !valid_node do return .None
+	subject_value, has_subject := object_value(node, "@id")
+	subject_id, valid_subject := string_value(subject_value)
+	if has_subject && !valid_subject do return .Invalid_Expanded_JSON
+	if !has_subject do subject_id = ""
+	for predicate, values_value in node {
+		if is_keyword(predicate) do continue
+		values, valid_values := array_from_value(values_value)
+		if !valid_values do return .Invalid_Expanded_JSON
+		for item in values {
+			item_object, valid_item := object_from_value(item)
+			raw_value, has_raw_value := object_value(item_object, "@value")
+			type_value, has_type := object_value(item_object, "@type")
+			type_name, valid_type := string_value(type_value)
+			if valid_item && has_raw_value && has_type && valid_type && type_name == "@json" {
+				numeric: f64
+				has_numeric := false
+				#partial switch raw_number in raw_value {
+				case json.Integer:
+					numeric = f64(raw_number)
+					has_numeric = true
+				case json.Float:
+					numeric = f64(raw_number)
+					has_numeric = true
+				}
+				if !has_numeric {
+					if nested_error := compact_collect_source_json_value_annotations(state, item); nested_error != .None do return nested_error
+					continue
+				}
+				owned_subject, subject_error := own(state, subject_id)
+				if subject_error.code != .None do return .Out_Of_Memory
+				owned_predicate, predicate_error := own(state, predicate)
+				if predicate_error.code != .None do return .Out_Of_Memory
+				integer: i64
+				is_float := false
+				#partial switch raw_number in raw_value {
+				case json.Integer: integer = i64(raw_number)
+				case json.Float: is_float = true
+				}
+				append(&state.compact_source_json_value_annotations, Compact_Source_Json_Value_Annotation{subject_id = owned_subject, predicate = owned_predicate, numeric = numeric, integer = integer, is_float = is_float, has_numeric = true})
+			}
+			if nested_error := compact_collect_source_json_value_annotations(state, item); nested_error != .None do return nested_error
+		}
+	}
+	return .None
+}
+
 @(private) compact_collect_source_root_value_order_annotations :: proc(state: ^State, nodes: json.Array) -> Compact_Error {
 	if len(nodes) != 1 do return .None
 	root, valid_root := object_from_value(nodes[0])
@@ -3523,6 +3646,7 @@ compact_error_message :: proc(code: Compact_Error) -> string {
 		if empty_property_error := compact_collect_source_empty_property_annotations(state, node); empty_property_error != .None do return empty_property_error
 		if type_order_error := compact_collect_source_type_order_annotations(state, node); type_order_error != .None do return type_order_error
 		if value_order_error := compact_collect_source_value_order_annotations(state, node); value_order_error != .None do return value_order_error
+		if json_value_error := compact_collect_source_json_value_annotations(state, node); json_value_error != .None do return json_value_error
 	}
 	if top_level_error := compact_collect_source_top_level_named_nodes(state, nodes); top_level_error != .None do return top_level_error
 	if root_value_order_error := compact_collect_source_root_value_order_annotations(state, nodes); root_value_order_error != .None do return root_value_order_error

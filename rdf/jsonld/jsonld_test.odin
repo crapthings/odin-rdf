@@ -18,6 +18,13 @@ import nquads "../nquads"
 	return true
 }
 
+@(private) collect_generalized_quad :: proc(quad: rdf.Quad, user_data: rawptr) -> bool {
+	state := cast(^Collect_State)user_data
+	if nquads.write_quad_with_options(&state.builder, quad, {allow_generalized_rdf = true}) != .None do return false
+	state.count += 1
+	return true
+}
+
 @(private) parse_to_nquads :: proc(input: string, options: Options = {}) -> (string, Parse_Error) {
 	state := Collect_State{builder = strings.builder_make()}
 	defer strings.builder_destroy(&state.builder)
@@ -73,6 +80,44 @@ test_basic_context_and_typed_values :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/friend> <https://example.test/bob> .`))
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/count> "4"^^<http://www.w3.org/2001/XMLSchema#integer> .`))
 	testing.expect(t, strings.contains(actual, `<https://example.test/alice> <https://example.test/active> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .`))
+}
+
+@(test)
+test_produce_generalized_rdf_is_explicit_and_deduplicates_collapsed_predicates :: proc(t: ^testing.T) {
+	input := `{"@context":{"term":"_:term"},"@id":"_:term","term":["value","value"]}`
+	strict := Collect_State{builder = strings.builder_make()}
+	defer strings.builder_destroy(&strict.builder)
+	testing.expect_value(t, parse(input, collect_quad, {}, &strict).code, Error_Code.None)
+	testing.expect_value(t, strict.count, 0)
+	generalized := Collect_State{builder = strings.builder_make()}
+	defer strings.builder_destroy(&generalized.builder)
+	testing.expect_value(t, parse(input, collect_generalized_quad, Options{produce_generalized_rdf = true}, &generalized).code, Error_Code.None)
+	testing.expect_value(t, generalized.count, 1)
+	testing.expect_value(t, strings.to_string(generalized.builder), "_:b0 _:b0 \"value\" .\n")
+}
+
+@(test)
+test_json_type_coercion_preserves_complete_json_values :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "ex": "https://example.test/",
+    "payload": {"@id":"ex:payload", "@type":"@json"}
+  },
+  "@id": "ex:subject",
+  "payload": [true, {"z":"last", "":"empty", "a":"first"}, null]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/subject> <https://example.test/payload> "[true,{\"\":\"empty\",\"a\":\"first\",\"z\":\"last\"},null]"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON> .`))
+
+	null_actual, null_err := parse_to_nquads(`{
+  "@context": {"payload": {"@id":"https://example.test/payload", "@type":"@json"}},
+  "payload": null
+}`)
+	defer delete(null_actual)
+	testing.expect_value(t, null_err.code, Error_Code.None)
+	testing.expect(t, strings.contains(null_actual, `<https://example.test/payload> "null"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON> .`))
+
 }
 
 @(test)
@@ -1017,6 +1062,24 @@ test_object_term_definitions_expand_same_context_compact_iris :: proc(t: ^testin
 }
 
 @(test)
+test_explicit_false_prefix_does_not_expand_compact_iris :: proc(t: ^testing.T) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	err := expand(&builder, `{
+  "@context": {
+    "@version": 1.1,
+    "tag": {"@id": "https://example.test/tag/", "@prefix": false}
+  },
+  "tag:champin.net,2019:prop": "literal",
+  "tag": "value"
+}`)
+	testing.expect_value(t, err, Expand_Error.None)
+	actual := strings.to_string(builder)
+	testing.expect(t, strings.contains(actual, `"tag:champin.net,2019:prop"`))
+	testing.expect(t, !strings.contains(actual, `https://example.test/tag/champin.net,2019:prop`))
+}
+
+@(test)
 test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context":{"knows":"https://example.test/knows"},
@@ -1030,6 +1093,122 @@ test_reverse_maps_ignore_unmapped_relative_keys :: proc(t: ^testing.T) {
 	testing.expect_value(t, err.code, Error_Code.None)
 	testing.expect(t, strings.contains(actual, `<https://example.test/bob> <https://example.test/knows> <https://example.test/alice> .`))
 	testing.expect(t, !strings.contains(actual, "carol"))
+}
+
+@(test)
+test_rejects_invalid_reverse_term_definitions_and_values :: proc(t: ^testing.T) {
+	invalid_term_definitions := []string{
+		`{"@context":{"term":{"@id":"https://example.test/term","@reverse":"https://example.test/reverse"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@reverse":"https://example.test/reverse","@container":"@list"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@reverse":"not an IRI"}},"@id":"https://example.test/node"}`,
+	}
+	for input in invalid_term_definitions {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+	}
+	invalid_reverse_properties := []string{
+		`{"@id":"https://example.test/foo","@reverse":{"@id":"https://example.test/bar"}}`,
+		`{"@context":{"term":{"@reverse":"https://example.test/reverse"}},"@id":"https://example.test/foo","term":{"@list":["https://example.test/bar"]}}`,
+	}
+	for input in invalid_reverse_properties {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Reverse_Property)
+	}
+}
+
+@(test)
+test_rejects_invalid_value_indexes_nested_lists_and_language_maps :: proc(t: ^testing.T) {
+	invalid_values := []string{
+		`{"http://example.test/index":{"@value":"value","@index":true}}`,
+		`{"@context":{"label":{"@id":"https://example.test/label","@container":"@language"}},"label":{"en":true}}`,
+	}
+	for input in invalid_values {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect(t, err.code == Error_Code.Invalid_Value_Object || err.code == Error_Code.Invalid_List_Object)
+	}
+	nested_list, nested_list_err := parse_to_nquads(`{"http://example.test/list":{"@list":[{"@list":["value"]}]}}`, Options{processing_mode = .Json_LD_1_0})
+	defer delete(nested_list)
+	testing.expect_value(t, nested_list_err.code, Error_Code.Invalid_List_Object)
+}
+
+@(test)
+test_rejects_invalid_context_keyword_and_iri_term_mappings :: proc(t: ^testing.T) {
+	invalid_contexts := []string{
+		`{"@context":{"term":{"@id":"@context"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"term":{"@container":"@set"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"@context":{"p":"https://example.test/p"}},"@id":"https://example.test/node"}`,
+		`{"@context":{"@version":1.1,"foo":{"@id":"@type","@prefix":true}},"foo:bar":"https://example.test/value"}`,
+	}
+	for input in invalid_contexts {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect(t, err.code == Error_Code.Invalid_Context || err.code == Error_Code.Invalid_Term_Definition)
+	}
+	invalid_type_alias, type_alias_err := parse_to_nquads(`{"@context":{"http://www.w3.org/1999/02/22-rdf-syntax-ns#type":{"@id":"@type","@type":"@id"}}}`, Options{processing_mode = .Json_LD_1_1})
+	defer delete(invalid_type_alias)
+	testing.expect_value(t, type_alias_err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
+test_rejects_keyword_as_a_property_valued_index :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"@version":1.1,"container":{"@id":"https://example.test/container","@container":"@index","@index":"@index"}}}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
+test_rejects_colliding_identifier_aliases_in_a_node :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"id":"@id","ID":"@id"},"id":"https://example.test/one","ID":"https://example.test/two"}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_IRI)
+}
+
+@(test)
+test_rejects_inconsistent_relative_and_compact_iri_terms :: proc(t: ^testing.T) {
+	invalid_contexts := []string{
+		`{"@context":{"./something":"https://example.test/other"}}`,
+		`{"@context":{"v":"https://example.test/vocab#","v:term":"v:other"}}`,
+		`{"@context":{"@vocab":"https://example.test/","./something":{"@type":"@id","@prefix":true}}}`,
+	}
+	for input in invalid_contexts {
+		actual, err := parse_to_nquads(input)
+		defer delete(actual)
+		testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+	}
+}
+
+@(test)
+test_accepts_a_terminal_colon_context_term :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "compact-iris:": "https://example.test/compact-iris-",
+    "property": "https://example.test/property"
+  },
+  "property": {
+    "@id": "https://example.test/compact-iris-are-considered",
+    "property": "Prefix terms must end in a gen-delim"
+  }
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/compact-iris-are-considered> <https://example.test/property> "Prefix terms must end in a gen-delim" .`))
+}
+
+@(test)
+test_rejects_an_empty_context_term :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"":{"@id":"https://example.test/empty"}},"@id":"https://example.test/node"}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
+}
+
+@(test)
+test_rejects_an_unused_scoped_context_with_an_implicit_term_without_vocab :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"@context":{"@version":1.1,"t1":{"@id":"ex:t1","@context":{"t2":{"@context":{"type":null}}}}}}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.Invalid_Term_Definition)
 }
 
 @(test)
@@ -1135,7 +1314,7 @@ test_base_null_drops_nodes_with_relative_identifiers :: proc(t: ^testing.T) {
 	actual, err := parse_to_nquads(`{
   "@context":{"child":"https://example.test/child","name":"https://example.test/name"},
   "child":{"@context":{"@base":null},"@id":"relative","name":"dropped"}
-}`, Options{base_iri = "https://example.test/document"})
+	}`, Options{base_iri = "https://example.test/document"})
 	defer delete(actual)
 	testing.expect_value(t, err.code, Error_Code.None)
 	testing.expect_value(t, actual, "")
@@ -1161,6 +1340,67 @@ test_empty_prefix_compact_iris_use_the_vocabulary_mapping :: proc(t: ^testing.T)
 	defer delete(actual)
 	testing.expect_value(t, err.code, Error_Code.None)
 	testing.expect(t, strings.contains(actual, `<https://example.test/vocab:term> "value" .`))
+}
+
+@(test)
+test_invalid_expanded_predicates_are_dropped :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@vocab":"https://example.test/vocab#"},
+  "valid":"kept",
+  "#fragment":"dropped"
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/vocab#valid> "kept" .`))
+	testing.expect(t, !strings.contains(actual, "dropped"))
+}
+
+@(test)
+test_non_absolute_id_coerced_list_values_are_dropped :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context": {
+    "@base": null,
+    "list":{"@id":"https://example.test/list","@container":"@list","@type":"@id"}
+  },
+  "list":["relative"]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/list> _:`))
+	testing.expect(t, strings.contains(actual, `<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .`))
+	testing.expect(t, !strings.contains(actual, "relative"))
+}
+
+@(test)
+test_nest_identifiers_select_the_enclosing_node_subject :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"data":"@nest","id":"@id","name":"https://example.test/name"},
+  "data":{"id":"https://example.test/resource","name":"nested"}
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/resource> <https://example.test/name> "nested" .`))
+}
+
+@(test)
+test_negative_zero_uses_the_jsonld_native_integer_form :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{"https://example.test/number":-0e0}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `"0"^^<http://www.w3.org/2001/XMLSchema#integer>`))
+}
+
+@(test)
+test_none_type_preserves_native_jsonld_value_types :: proc(t: ^testing.T) {
+	actual, err := parse_to_nquads(`{
+  "@context":{"@version":1.1,"value":{"@id":"https://example.test/value","@type":"@none"}},
+  "value":["text",true,10.0]
+}`)
+	defer delete(actual)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "text" .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .`))
+	testing.expect(t, strings.contains(actual, `<https://example.test/value> "10"^^<http://www.w3.org/2001/XMLSchema#integer> .`))
 }
 
 @(test)
@@ -1249,6 +1489,26 @@ test_flattens_embedded_and_reverse_nodes_atomically :: proc(t: ^testing.T) {
 	expected := `[{"@id": "https://example.test/alice", "https://example.test/knows": [{"@id": "https://example.test/bob"}], "https://example.test/name": [{"@value": "Alice"}]}, {"@id": "https://example.test/bob", "https://example.test/name": [{"@value": "Bob"}]}, {"@id": "https://example.test/carol", "https://example.test/knows": [{"@id": "https://example.test/alice"}], "https://example.test/name": [{"@value": "Carol"}]}]
 `
 	testing.expect_value(t, strings.to_string(builder)[len("previous\n"):], expected)
+}
+
+@(test)
+test_flatten_with_output_context_preserves_requested_arrays :: proc(t: ^testing.T) {
+	input := `[{
+  "@id": "http://example/foo",
+  "http://example/term": [{"@value": "value"}]
+}]`
+	context_document := `{"@context":{"term":"http://example/term"}}`
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	testing.expect_value(t, flatten(&builder, input, Flatten_Options{output_context = context_document, array_policy = .Preserve}), Flatten_Error.None)
+	expected := `{
+  "@context": {"term": "http://example/term"},
+  "@graph": [
+    {"@id": "http://example/foo", "term": ["value"]}
+  ]
+}
+`
+	testing.expect_value(t, strings.to_string(builder), expected)
 }
 
 @(test)

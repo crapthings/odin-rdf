@@ -17,6 +17,13 @@ cases='
 0011 0012 0013 0014 0015 0016 0017 0018 0019 0023
 0020 0021 0027 0030 0031 0032 0033 0034 0035 0036
 0037 0039 0040 0041 0042
+0022 0024 0025 0026 0028 0043 0047 0048 0049
+li01 li02 li03
+in01 in02 in03 in04 in05
+0038 0045
+0046
+in06
+0044
 '
 
 total=0
@@ -25,12 +32,25 @@ for case_id in $cases; do
   input="$suite/flatten/$case_id-in.jsonld"
   expected="$suite/flatten/$case_id-out.jsonld"
   actual="$root/.cache/odin-rdf-jsonld-flatten-$case_id.actual.jsonld"
-  if ! "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" > "$actual" || ! jq -S -c . "$actual" > "$actual.canonical" || ! jq -S -c . "$expected" > "$expected.canonical" || ! diff -u "$expected.canonical" "$actual.canonical"; then
+  run_ok=true
+  if [ "$case_id" = 0044 ]; then
+    "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" --context "$suite/flatten/0044-context.jsonld" --preserve-arrays > "$actual" || run_ok=false
+  elif [ "$case_id" = 0026 ]; then
+    "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" json-ld-1.0 > "$actual" || run_ok=false
+  else
+    "$runner" "$input" "https://w3c.github.io/json-ld-api/tests/flatten/$case_id-in.jsonld" "$suite" > "$actual" || run_ok=false
+  fi
+  if [ "$run_ok" = false ] || ! jq -S -c . "$actual" > "$actual.canonical" || ! jq -S -c . "$expected" > "$expected.canonical" || ! diff -u "$expected.canonical" "$actual.canonical"; then
     failures=$((failures + 1))
   fi
   total=$((total + 1))
 done
 
+if "$runner" "$suite/flatten/e001-in.jsonld" "https://w3c.github.io/json-ld-api/tests/flatten/e001-in.jsonld" "$suite" >/dev/null 2>&1; then
+  failures=$((failures + 1))
+fi
+total=$((total + 1))
+
 printf 'W3C JSON-LD flattening core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 35
+test "$total" -eq 58
 test "$failures" -eq 0

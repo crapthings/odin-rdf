@@ -4,6 +4,172 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.29.0 - 2026-07-21
+
+- Complete the pinned W3C JSON-LD API evaluation manifests for JSON-LD-to-RDF,
+  Expansion, Flattening, Framing, RDF-to-JSON-LD, and Compaction. Expansion
+  now covers all 385 unique vectors (398 gate executions), while Flattening
+  covers all 58 vectors.
+- Strengthen JSON-LD validation around value/list objects, reverse properties,
+  scoped contexts, identifier aliases, `@included`, container combinations,
+  property-valued index maps, and conflicting flattened indexes. Frame value
+  patterns remain available to the Framing algorithm without weakening ordinary
+  Expansion validation.
+
+- Preserve term-coerced `@json` values as deterministically ordered RDF JSON
+  literals, including arrays, `null`, and empty object member names;
+  source-aware Compaction restores a uniquely associated source numeric shape.
+  Expand the W3C JSON-LD to-RDF gate from 162 to 185 vectors.
+- Remove free-floating top-level values and lists during Expansion, and apply
+  document-relative IRI processing to node identifiers and `@type: @id`
+  values. A null local context restores the document base while null `@base`
+  clears it. The configured base option is also covered. Expand the W3C
+  JSON-LD Expansion gate from 106 to 299 vectors, including existing graph
+  values in graph/index and graph/id containers, native values under IRI
+  coercion, multiple aliases for `@type`, and explicit `@prefix: false`
+  Compact IRI handling. Custom `@index` properties now retain pre-existing
+  expanded values while adding the map key, including graph/index containers.
+  Keyword-shaped `@reverse` mappings are ignored rather than creating reverse
+  properties, and repeated aliases for `@included`/`@graph` merge their
+  expanded values. Property-scoped contexts propagate through nested values by
+  default, while explicit `@propagate: false` keeps its rollback behavior;
+  scoped contexts on `@nest` aliases apply at every nested level. The to-RDF
+  gate grows from 185 to 355 vectors alongside these Expansion cases. The
+  `@id` map base-option vector is now included in both gates. W3C fixture
+  loaders now cover the relative remote-context resolution vector as well.
+  Empty and relative `@base` overrides are covered with the configured base
+  option. Invalid datatype IRIs in value objects are rejected during
+  Expansion. W3C runners now expose JSON-LD 1.0 mode, and both document paths
+  reject 1.1-only `@import`, `@propagate`, and custom `@index` definitions
+  there, as well as `@type: "@none"`. JSON-LD 1.0 now rejects empty and
+  relative `@vocab` mappings; the pinned gates also cover version conflicts
+  and 1.1-only `@id`/array container mappings. JSON-LD 1.0 also rejects the
+  JSON-LD 1.1-only `@type` keyword redefinition used to select `@set`.
+  The to-RDF gate also fixes RDF graph comparison for blank-node label
+  allocation and locks the supported protected-term and scoped-context cases.
+  Property-scoped null contexts now clear inherited protection before applying
+  a nested local context, matching JSON-LD 1.1 protected-term semantics.
+  Keyword-shaped invalid `@reverse` mappings without a vocabulary are ignored
+  during to-RDF conversion instead of producing an invalid RDF predicate.
+  Graph containers now apply property-scoped contexts before parsing graph
+  members, including scoped null-context protection clearing.
+  Custom index properties now also emit RDF data for graph/index containers.
+  Type-scoped contexts now govern node identifiers as well as nested values.
+  Invalid and recursively sourced `@import` contexts are pinned as negative
+  cases in both Expansion and to-RDF.
+  Language maps now recognize a term alias of `@none` during to-RDF conversion.
+  The W3C to-RDF runner now covers the `base` and `expandContext` option
+  fixtures without broadening the library's public parse surface. Empty and
+  relative `@base` option vectors are now pinned directly. Invalid expanded
+  predicates, including a raw second fragment delimiter after vocabulary
+  expansion, are dropped instead of being serialized as RDF IRIs. Invalid or
+  relative `@id`-coerced values are likewise removed from RDF lists.
+  Identifiers supplied through direct `@nest` members now select the enclosing
+  RDF node, preserving JSON:API-style included-resource identity.
+  Native negative zero now uses JSON-LD's integer zero RDF representation.
+  JSON-LD 1.1 `@type: "@none"` now suppresses only string type coercion while
+  retaining native values, explicit value-object types, and IRI objects.
+  To-RDF now drops statements containing invalid subject, predicate, object,
+  datatype, language-tag, or graph-name terms before serializing RDF.
+  The Flattening W3C gate now includes the already-supported list, graph, and
+  embedded-node vectors, increasing from 35 to 56 cases. Flattening now also
+  folds nested `@included` nodes into the active node map and issues stable
+  blank-node identifiers independently of source labels. Explicit empty IDs
+  remain present when a local context clears the document base. Direct `@id`
+  members inside `@nest` now identify the enclosing expanded node.
+  The Expansion gate includes the matching JSON:API nested-identity and JSON
+  value vectors, increasing from 299 to 308 cases. Type identifiers now expand
+  against the context preceding their type-scoped contexts, and property-scoped
+  contexts now govern scalar coercion as well as object values.
+  The W3C Expansion runner also covers its `expandContext` fixture without
+  broadening the public Expansion options.
+  Type-map-selected scoped contexts now remain active while expanding nested
+  index-map values, covering the W3C `c013` composition vector.
+  Expansion expectations now use parsed JSON-value comparison, as required by
+  the W3C object-comparison harness, so equivalent JSON number representations
+  cover `js12` without conflating source spelling with JSON value semantics.
+- Add the already-supported W3C Framing `0021` and `ra03` vectors, covering
+  JSON-LD 1.0 blank-node types and `@requireAll` matching of both type and
+  properties; the Framing gate now has 89 cases.
+- Prune unselected ID-only anonymous references from compact framed values,
+  covering W3C Framing `p046` and raising that gate to 90 cases.
+- Propagate JSON-LD 1.0 processing mode through Framing and preserve legacy
+  CURIE-conflict properties during framed compaction, covering W3C Framing
+  `0010` and raising that gate to 91 cases.
+- Add the already-passing JSON-LD 1.0 deep-embedding replacement vector
+  W3C Framing `0015`, raising that gate to 92 cases.
+- Add Flatten output-context compaction with a selectable compact-arrays
+  policy, covering W3C Flatten `0044` and raising that gate to 57 cases.
+- Add opt-in JSON-LD `produce_generalized_rdf` support for blank-node
+  predicates. Strict RDF validation and writers remain the default; the new
+  N-Quads generalized-writer option is explicit. Cover W3C to-RDF `0118` and
+  `e075`, raising that gate to 357 cases.
+- Reject value and list objects under `@included` and `@nest`, and reject
+  reverse term definitions that declare `@nest`. Cover W3C to-RDF negative
+  vectors `en04`, `en06`, `in08`, and `in09`, raising that gate to 361 cases.
+- Enforce value-object keyword, type/language, and scalar-language invariants,
+  and reject extra members on list objects. Cover W3C to-RDF negative vectors
+  `er37`, `er38`, `er39`, and `er41`, raising that gate to 365 cases.
+- Reject blank-node and relative IRI term-definition `@type` mappings. Cover
+  W3C to-RDF negative vectors `er13` and `er23`, raising that gate to 367
+  cases.
+- Reject conflicting or non-IRI reverse term definitions, invalid reverse
+  containers, keyword reverse-map entries, and reverse list values. Cover W3C
+  to-RDF negative vectors `er14`, `er17`, `er25`, `er36`, and `er50`, raising
+  that gate to 372 cases.
+- Reject non-string `@index` values and non-string language-map entries, and
+  pin JSON-LD 1.0's existing nested-list rejection. Cover W3C to-RDF negative
+  vectors `er24`, `er31`, `er32`, and `er35`, raising that gate to 376 cases.
+- Pin the existing JSON-LD 1.0 rejection of empty and relative `@vocab`
+  mappings with W3C to-RDF negative vectors `e115` and `e116`, raising that
+  gate to 378 cases.
+- Reject invalid `@context` aliases, implicit relative mappings without a
+  vocabulary, and JSON-LD 1.1 keyword aliases with coercion or prefix flags.
+  Cover W3C to-RDF negative vectors `er19`, `er20`, `er43`, `er56`, and
+  `pr33`, raising that gate to 383 cases.
+- Reject JSON-LD's `@index` keyword as a property-valued index name. Cover
+  W3C to-RDF negative vector `pi03`, raising that gate to 384 cases.
+- Reject a second `@id` member introduced through a colliding identifier
+  alias, while retaining multiple legal `@type` aliases. Cover W3C to-RDF
+  negative vector `er26`, raising that gate to 385 cases.
+- Require JSON-LD 1.1 relative and compact IRI-looking terms to retain their
+  own expansion, and prohibit a relative term from becoming an `@prefix`.
+  Cover W3C to-RDF negative vectors `er44`, `er48`, and `er49`, raising that
+  gate to 388 cases. The runner now explicitly executes `e071` in its W3C
+  JSON-LD 1.0 mode.
+- Reject an empty context term while retaining the internal empty-object-key
+  sentinel exclusively for opaque `@json` values. Cover W3C to-RDF negative
+  vector `er52`, raising that gate to 389 cases.
+- Statically validate an unused scoped context's implicit terms without
+  constructing that context or altering protected-term ordering. Cover W3C
+  to-RDF negative vector `c033`, raising that gate to 390 cases.
+- Expand the JSON-LD to-RDF gate to every W3C evaluation vector: all 345
+  positive and all 106 negative cases, for 451 cases total.
+- Expand the JSON-LD Expansion gate from 19 to 91 verified negative W3C
+  vectors, raising that gate from 308 to 380 cases.
+- Validate Expansion value-object members, arrays, type/language combinations,
+  language tags, and language-map values. Cover W3C negative vectors `er29`,
+  `er35`, `er37`–`er39`, and `er51`, raising the gate to 386 cases.
+- Reject non-node `@included` values during Expansion and the invalid
+  `[@list, @set]` container combination. Cover W3C negative vectors `in07`–
+  `in09` and `es02`, raising the gate to 390 cases.
+- Validate reverse-property names and expanded values during Expansion. Cover
+  W3C negative vectors `er25`, `er34`, and `er36`, raising the gate to 393
+  cases.
+- Enforce JSON-LD 1.0 list-of-lists restrictions and list-object member
+  validation during Expansion. Cover W3C negative vectors `er24`, `er32`, and
+  `er41`, raising the gate to 396 cases.
+- Reject duplicate `@id` aliases and property-valued index injection into a
+  value object during Expansion. Cover W3C negative vectors `er26` and
+  `pi05`, raising the gate to 398 cases.
+- Reject conflicting `@index` values while Flattening the same node identifier.
+  Cover the final W3C Flattening evaluation vector `e001`, raising that gate
+  to all 58 cases.
+- Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
+  the supported direction-mode cases `di01`–`di10`. Directional output now
+  compares parsed JSON values while allowing only the top-level node array to
+  be unordered, matching RDF dataset semantics without weakening nested
+  `@list` order checks.
 - Reorganize the README around supported workflows, production boundaries,
   and task-oriented entry points; consolidate conformance indicators while
   retaining the full W3C gate breakdown on demand.

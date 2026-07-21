@@ -1132,7 +1132,12 @@ DEFAULT_MAX_FRAME_EMBEDDING_DEPTH :: 128
 					if !first do strings.write_string(builder, ", ")
 					write_json_string(builder, "@type")
 					strings.write_string(builder, ": [")
-					if !compact_write_raw_json(builder, default_type) do return .Invalid_Frame
+					default_types, default_is_array := array_from_value(default_type)
+					default_count := default_is_array ? len(default_types) : 1
+					for index in 0..<default_count {
+						if index > 0 do strings.write_string(builder, ", ")
+						if !compact_write_raw_json(builder, default_is_array ? default_types[index] : default_type) do return .Invalid_Frame
+					}
 					strings.write_byte(builder, ']')
 					first = false
 				}

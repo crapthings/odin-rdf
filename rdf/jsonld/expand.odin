@@ -539,6 +539,43 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return expand_append_property(properties, "@type", strings.to_string(temporary))
 }
 
+// Framing retains type maps so @default can supply a type for an otherwise
+// untyped match. The map structure is framing control data, but its default
+// type value still has to be expanded before it is copied into the expanded
+// frame and later compacted into the result.
+@(private) expand_write_frame_type_map :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, value: json.Value) -> Expand_Error {
+	type_map, valid := object_from_value(value)
+	if !valid do return .Invalid_Value_Object
+	keys := expand_sorted_keys(type_map)
+	defer delete(keys)
+	strings.write_byte(builder, '{')
+	first := true
+	for key in keys {
+		if !first do strings.write_string(builder, ", ")
+		write_json_string(builder, key)
+		strings.write_string(builder, ": ")
+		map_value := type_map[key]
+		if key == "@default" {
+			types, is_array := array_from_value(map_value)
+			count := is_array ? len(types) : 1
+			if is_array do strings.write_byte(builder, '[')
+			for index in 0..<count {
+				if index > 0 do strings.write_string(builder, ", ")
+				item := is_array ? types[index] : map_value
+				type_name, type_valid := string_value(item)
+				if !type_valid do return .Invalid_Value_Object
+				expanded, expand_error := expand_iri(state, ctx, type_name, true, true)
+				if expand_error.code != .None do return expand_from_parse_error(expand_error)
+				write_json_string(builder, expanded)
+			}
+			if is_array do strings.write_byte(builder, ']')
+		} else if !compact_write_raw_json(builder, map_value) do return .Invalid_Value_Object
+		first = false
+	}
+	strings.write_byte(builder, '}')
+	return .None
+}
+
 @(private) expand_write_graph_item :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, definition: Term_Definition, value: json.Value, map_key: string) -> Expand_Error {
 	strings.write_string(builder, `{"@graph": `)
 	if err := expand_write_values(builder, state, ctx, definition, value); err != .None do return err
@@ -850,7 +887,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	if type_value, has_type := has_keyword(object, &ctx, "@type"); has_type {
 		if type_object, is_type_object := object_from_value(type_value); state.retain_frame_controls && is_type_object {
 			expand_write_member_prefix(builder, &first, "@type")
-			if !compact_write_raw_json(builder, type_object) do return false, .Invalid_Value_Object
+			if err := expand_write_frame_type_map(builder, state, &ctx, type_object); err != .None do return false, err
 		} else if err := expand_append_types(state, &ctx, &properties, type_value); err != .None do return false, err
 		has_non_id = true
 	}

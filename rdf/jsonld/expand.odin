@@ -294,9 +294,20 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 @(private) expand_write_value_object :: proc(builder: ^strings.Builder, state: ^State, ctx: ^Context, object: json.Object) -> (bool, Expand_Error) {
 	value, has_value := has_keyword(object, ctx, "@value")
 	if !has_value do return false, .Invalid_Value_Object
+	for key in object {
+		keyword := keyword_for(ctx, key)
+		if keyword != "@value" && keyword != "@type" && keyword != "@language" && keyword != "@direction" && keyword != "@index" do return false, .Invalid_Value_Object
+	}
+	type_value, has_type := has_keyword(object, ctx, "@type")
+	language_value, has_language := has_keyword(object, ctx, "@language")
+	if has_type && has_language do return false, .Invalid_Value_Object
+	if _, value_is_array := array_from_value(value); value_is_array {
+		type_name, type_is_string := string_value(type_value)
+		if !has_type || !type_is_string || (type_name != "@json" && keyword_for(ctx, type_name) != "@json") do return false, .Invalid_Value_Object
+	}
 	#partial switch _ in value {
 	case json.Null:
-		if type_value, has_type := has_keyword(object, ctx, "@type"); has_type {
+		if has_type {
 			type_name, valid_type := string_value(type_value)
 			if valid_type && (type_name == "@json" || keyword_for(ctx, type_name) == "@json") {
 				strings.write_string(builder, `{"@value": null, "@type": "@json"}`)
@@ -307,13 +318,16 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	}
 	direction_value, has_direction := has_keyword(object, ctx, "@direction")
 	if has_direction {
-		if _, has_type := has_keyword(object, ctx, "@type"); has_type do return false, .Invalid_Value_Object
+		if has_type do return false, .Invalid_Value_Object
 		direction, valid := string_value(direction_value)
 		if !valid || (direction != "ltr" && direction != "rtl") do return false, .Invalid_Value_Object
 	}
+	if has_language {
+		if _, value_is_string := string_value(value); !value_is_string do return false, .Invalid_Value_Object
+	}
 	strings.write_string(builder, `{"@value": `)
 	if !compact_write_raw_json(builder, value) do return false, .Invalid_Value_Object
-	if language_value, has_language := has_keyword(object, ctx, "@language"); has_language {
+	if has_language {
 		if language_object, is_object := object_from_value(language_value); state.retain_frame_controls && is_object {
 			strings.write_string(builder, `, "@language": `)
 			if !compact_write_raw_json(builder, language_object) do return false, .Invalid_Value_Object
@@ -328,7 +342,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 			write_json_string(builder, lowercase)
 			delete(lowercase)
 		}
-	} else if type_value, has_type := has_keyword(object, ctx, "@type"); has_type {
+	} else if has_type {
 		strings.write_string(builder, `, "@type": `)
 		if type_object, is_object := object_from_value(type_value); state.retain_frame_controls && is_object {
 			if !compact_write_raw_json(builder, type_object) do return false, .Invalid_Value_Object
@@ -493,6 +507,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		for index in 0..<count {
 			item := is_array ? values[index] : mapped
 			#partial switch _ in item { case json.Null: continue }
+			if _, is_string := string_value(item); !is_string do return .Invalid_Value_Object
 			if !first do strings.write_string(builder, ", ")
 			mapped_definition := definition
 			none_key := expand_is_none_key(ctx, language)

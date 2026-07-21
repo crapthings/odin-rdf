@@ -135,6 +135,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   positive and all 106 negative cases, for 451 cases total.
 - Expand the JSON-LD Expansion gate from 19 to 91 verified negative W3C
   vectors, raising that gate from 308 to 380 cases.
+- Validate Expansion value-object members, arrays, type/language combinations,
+  language tags, and language-map values. Cover W3C negative vectors `er29`,
+  `er35`, `er37`–`er39`, and `er51`, raising the gate to 386 cases.
 - Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
   the supported direction-mode cases `di01`–`di10`. Directional output now
   compares parsed JSON values while allowing only the top-level node array to

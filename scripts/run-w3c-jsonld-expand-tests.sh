@@ -48,7 +48,7 @@ di01 di02 di03 di04 di05 di06 di07
 '
 
 negative_cases='
-0123 c030 c032 c033 di08 di09 ec01 ec02 em01 en01 en02 en03 en04 en05 en06 ep03 er01 er04 er05 er06 er07 er08 er09 er10 er11 er12 er13 er14 er15 er17 er18 er19 er20 er22 er23 er27 er28 er30 er31 er33 er40 er43 er44 er48 er49 er50 er52 er53 er54 er55 er56 m020 pi02 pi03 pi04 pr01 pr03 pr04 pr05 pr08 pr09 pr11 pr12 pr17 pr18 pr20 pr21 pr26 pr28 pr31 pr32 pr33 pr42 so02 so03 so07 so10 so12 so13
+0123 c030 c032 c033 di08 di09 ec01 ec02 em01 en01 en02 en03 en04 en05 en06 ep03 er01 er04 er05 er06 er07 er08 er09 er10 er11 er12 er13 er14 er15 er17 er18 er19 er20 er22 er23 er27 er28 er29 er30 er31 er33 er35 er37 er38 er39 er40 er43 er44 er48 er49 er50 er51 er52 er53 er54 er55 er56 m020 pi02 pi03 pi04 pr01 pr03 pr04 pr05 pr08 pr09 pr11 pr12 pr17 pr18 pr20 pr21 pr26 pr28 pr31 pr32 pr33 pr42 so02 so03 so07 so10 so12 so13
 0115 0116 c029 ep02 er02 er03 er21 er42 es01 pi01 so01 tn01
 '
 
@@ -79,5 +79,5 @@ for case_id in $negative_cases; do
 done
 
 printf 'W3C JSON-LD expansion core: %d cases, %d failures\n' "$total" "$failures"
-test "$total" -eq 380
+test "$total" -eq 386
 test "$failures" -eq 0

@@ -154,30 +154,23 @@ It compares canonical RDF datasets after parsing the expected and generated
 JSON-LD, so irrelevant node/object ordering does not hide or create semantic
 differences. `scripts/run-w3c-jsonld-tests.sh` runs 162 to-RDF vectors,
 including default direction omission, `i18n-datatype`, and compound-literal
-output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 151 semantic compaction
-vectors, including graph/index and graph/id map keys with `@none` aliases plus
-document-base relative identifiers, parent paths, query/fragment references,
-and keyword-like path segments. The broader 1.1 suite remains the gate for
-graph-container and generalized RDF work.
+output. `scripts/run-w3c-jsonld-compact-tests.sh` runs 246 Compaction cases:
+229 positive vectors whose compacted JSON is compared structurally with the
+pinned expected output, plus 17 negative cases. The positive gate includes
+graph/index and graph/id map keys with `@none` aliases, document-base relative
+identifiers, parent paths, query/fragment references, and keyword-like path
+segments. This remains a pinned core selection, not a claim of complete JSON-LD
+1.1 Compaction conformance.
 
-`scripts/run-w3c-jsonld-compact-tests.sh` runs 151 local-context compaction
-vectors from the same pinned corpus, including property-valued index maps,
-scoped nested nodes, default, term, list, and language-container direction
-handling. It parses both generated and expected
-documents and compares their RDFC-1.0 canonical RDF datasets. Shape-sensitive
-vectors additionally compare parsed JSON values with object-key order ignored,
-so the gate catches container/array regressions without requiring meaningless
-object-key ordering. This includes direct/aliased `@type` `@set` forms and
-selected compact-IRI output cases. It also structurally verifies the direct
-anonymous `@graph` container form (including multi-node `@included`) when
-source annotations make the otherwise RDF-invisible association unambiguous;
-this includes the single anonymous `[@graph, @index]` form. Other graph map
-forms remain semantic-only coverage for now, except for the corresponding
-anonymous `[@graph, @id]` `@none` key (and its term alias), with or without
-`@set`, and for an explicit source graph ID; the same is covered for explicit and `@none` anonymous
-`[@graph, @index, @set]` keys. A named graph inside an anonymous
-`[@graph, @index]` container also retains its source `@index` member beside
-`@id` and `@graph` when the association is unique.
+Each positive vector supplies its original source document to Compaction and
+also undergoes RDF-semantic comparison. The structural comparison ignores JSON
+object-key order but preserves array order and shape, so it catches
+container/array regressions as well as semantic drift. It covers
+property-valued index maps, scoped nested nodes, default/term/list/language
+containers, direct and aliased `@type` `@set` forms, compact-IRI output,
+source-recovered `@graph` and graph-map forms, `@included`, JSON literals,
+and nested source structures. RDF-invisible source annotations are restored
+only when their association with the serialized dataset is unique.
 
 `scripts/run-w3c-jsonld-framing-tests.sh` runs 87 pinned Framing vectors for
 nested and deep-node embedding, type and `@id` selection, value/list patterns,

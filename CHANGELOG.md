@@ -4,6 +4,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Synchronize JSON-LD W3C gate counts, supported Framing and scoped-context
+  capabilities, Compaction exact-output coverage, and the landing-page total
+  with the pinned runners used by CI.
+
 ## 0.28.0 - 2026-07-21
 
 - Restore the direct JSON shape of an anonymous JSON-LD 1.1 `@graph`

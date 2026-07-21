@@ -79,8 +79,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Add the already-supported W3C Framing `0021` and `ra03` vectors, covering
   JSON-LD 1.0 blank-node types and `@requireAll` matching of both type and
   properties; the Framing gate now has 89 cases.
-- Extend the RDF-to-JSON-LD gate from 46 to 50 vectors with the already-
-  supported direction-mode cases `di01`, `di02`, `di09`, and `di10`.
+- Extend the RDF-to-JSON-LD gate from 46 to all 54 pinned vectors, including
+  the supported direction-mode cases `di01`–`di10`. Directional output now
+  compares parsed JSON values while allowing only the top-level node array to
+  be unordered, matching RDF dataset semantics without weakening nested
+  `@list` order checks.
 - Reorganize the README around supported workflows, production boundaries,
   and task-oriented entry points; consolidate conformance indicators while
   retaining the full W3C gate breakdown on demand.

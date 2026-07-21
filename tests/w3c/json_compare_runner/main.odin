@@ -54,9 +54,29 @@ json_values_equal :: proc(left, right: json.Value) -> bool {
 	return false
 }
 
+json_top_level_arrays_equal_unordered :: proc(left, right: json.Value) -> bool {
+	left_values, left_is_array := left.(json.Array)
+	right_values, right_is_array := right.(json.Array)
+	if !left_is_array || !right_is_array do return json_values_equal(left, right)
+	if len(left_values) != len(right_values) do return false
+	matched := make([]bool, len(right_values))
+	defer delete(matched)
+	for left_value in left_values {
+		found := false
+		for right_value, index in right_values {
+			if matched[index] || !json_values_equal(left_value, right_value) do continue
+			matched[index] = true
+			found = true
+			break
+		}
+		if !found do return false
+	}
+	return true
+}
+
 main :: proc() {
-	if len(os.args) != 3 {
-		fmt.eprintln("usage: json_compare_runner <expected.json> <actual.json>")
+	if len(os.args) < 3 || len(os.args) > 4 {
+		fmt.eprintln("usage: json_compare_runner <expected.json> <actual.json> [--unordered-top-level-array]")
 		os.exit(2)
 	}
 	expected_data, expected_read_error := os.read_entire_file(os.args[1], context.allocator)
@@ -83,7 +103,12 @@ main :: proc() {
 		os.exit(1)
 	}
 	defer json.destroy_value(actual)
-	if !json_values_equal(expected, actual) {
+	unordered_top_level_array := len(os.args) == 4 && os.args[3] == "--unordered-top-level-array"
+	if len(os.args) == 4 && !unordered_top_level_array {
+		fmt.eprintf("unknown comparison option: %s\n", os.args[3])
+		os.exit(2)
+	}
+	if unordered_top_level_array ? !json_top_level_arrays_equal_unordered(expected, actual) : !json_values_equal(expected, actual) {
 		fmt.eprintln("parsed JSON values differ")
 		os.exit(1)
 	}

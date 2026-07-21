@@ -658,7 +658,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	}
 	// The supported combinations retain the same RDF interpretation as their
 	// single-container counterparts. Graph containers are document-level only.
-	if definition.container_list && (definition.container_language || definition.container_index) do return false
+	if definition.container_list && (definition.container_set || definition.container_language || definition.container_index) do return false
 	if definition.container_language && definition.container_index do return false
 	if definition.container_graph && (definition.container_list || definition.container_language) do return false
 	if definition.container_id && (definition.container_list || definition.container_language || definition.container_index) do return false

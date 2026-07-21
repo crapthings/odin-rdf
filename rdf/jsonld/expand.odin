@@ -475,6 +475,20 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	return .None
 }
 
+@(private) expand_validate_included_values :: proc(ctx: ^Context, value: json.Value) -> Expand_Error {
+	if values, is_array := array_from_value(value); is_array {
+		for item in values {
+			if err := expand_validate_included_values(ctx, item); err != .None do return err
+		}
+		return .None
+	}
+	object, valid := object_from_value(value)
+	if !valid do return .Invalid_Value_Object
+	if _, has_value := has_keyword(object, ctx, "@value"); has_value do return .Invalid_Value_Object
+	if _, has_list := has_keyword(object, ctx, "@list"); has_list do return .Invalid_Value_Object
+	return .None
+}
+
 // Keyword aliases are separate source members but one expanded keyword. Merge
 // their expanded values before serializing so ordinary JSON object semantics
 // cannot discard every member except the last alias.
@@ -483,6 +497,9 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	first := true
 	for key in keys {
 		if keyword_for(ctx, key) != keyword do continue
+		if keyword == "@included" {
+			if err := expand_validate_included_values(ctx, object[key]); err != .None do return err
+		}
 		if err := expand_write_values_item(builder, state, ctx, {}, object[key], &first); err != .None do return err
 	}
 	strings.write_byte(builder, ']')

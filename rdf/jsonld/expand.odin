@@ -614,6 +614,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	defer json.destroy_value(parsed)
 	object, valid := object_from_value(parsed)
 	if !valid do return .Invalid_Value_Object
+	if _, is_value := object_value(object, "@value"); is_value do return .Invalid_Value_Object
 	strings.write_byte(builder, '{')
 	first := true
 	found_index := false
@@ -1222,6 +1223,12 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	defer expand_destroy_properties(&properties)
 	reverse_properties := make([dynamic]Expand_Property)
 	defer expand_destroy_properties(&reverse_properties)
+	identifier_members := 0
+	for key in keys {
+		if keyword_for(&ctx, key) != "@id" do continue
+		identifier_members += 1
+		if identifier_members > 1 do return false, .Invalid_IRI
+	}
 	id_value, has_id := has_keyword(object, &ctx, "@id")
 	if !has_id {
 		nested_id, nested_found, nested_error := expand_nested_identifier(state, &ctx, object)

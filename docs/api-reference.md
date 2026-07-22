@@ -268,7 +268,9 @@ fragments, and can combine scripts with `extract_all_scripts`. The latter
 preserves each top-level graph boundary. `parse_url` returns an empty RDF
 dataset for an HTML page with no selected script, while `expand_url` reports a
 loading failure, matching the respective JSON-LD HTML algorithms. The CLI
-remains local-file based and exposes no HTTP document loader.
+remains local-file based and exposes no HTTP document loader. See the
+[runnable explicit-loader example](../examples/jsonld_web/main.odin) for a
+deterministic HTML admission boundary.
 
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,

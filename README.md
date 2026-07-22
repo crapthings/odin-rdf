@@ -16,18 +16,19 @@ processing, and RDFC-1.0 dataset integrity work. It is a library and CLI, not a
 graph store or SPARQL engine.
 
 **Start here:** [streaming library example](examples/basic/main.odin) ·
+[Web JSON-LD loader example](examples/jsonld_web/main.odin) ·
 [command-line conversion](#command-line-conversion) ·
 [API reference](docs/api-reference.md) ·
 [JSON-LD profile](docs/jsonld-design.md)
 
 ## Status and scope
 
-**Current release: `0.30.1`** — the 0.30 line adds explicit local context maps
-to the CLI, so bounded JSON-LD conversion can use approved remote-context
-documents without network access. The public API may still evolve, so
-applications should pin a release and retain integration tests for their own
-JSON-LD documents. The unreleased main branch also adds explicit callback-based
-Remote Document and HTML JSON-LD entry points; it still supplies no HTTP client.
+**Current release: `0.31.0`** — bounded JSON-LD conversion supports approved
+local context maps, while library callers can admit Remote Documents and HTML
+JSON-LD through an explicit callback-based loader. The public API may still
+evolve, so applications should pin a release and retain integration tests for
+their own JSON-LD documents. The library still supplies no HTTP client.
+See the [compatibility policy](docs/compatibility.md) for release expectations.
 
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
@@ -93,7 +94,7 @@ flowchart LR
 
 ## Design goals
 
-- Treat RDF 1.1 as the stable baseline and introduce RDF 1.2 features only as explicit, experimental extensions.
+- Treat RDF 1.1 as the stable baseline; RDF 1.2 is outside this repository's current scope.
 - Keep parsers independent of files, in-memory graph implementations, and databases.
 - Stream triples to a sink instead of requiring the entire graph to be retained in memory.
 - Support chunked `io.Reader` input with configurable line and triple limits.
@@ -122,6 +123,7 @@ examples/turtle_writer/ Streaming Turtle-to-Turtle conversion example
 examples/turtle_formatter/ Batch Turtle formatting example
 examples/rdfxml_writer/ Stateful RDF/XML document writer example
 examples/conversion/  Conversion with explicit reader limits
+examples/jsonld_web/  Explicit-loader HTML JSON-LD-to-RDF example
 tests/w3c/           Pinned W3C conformance test runner
 tests/property/      Deterministic parser/reader/writer property tests
 tests/fuzz/          Reproducible differential parser fuzzing harness
@@ -141,6 +143,9 @@ are grouped by job:
 - **JSON-LD documents and datasets:** `jsonld.parse` emits quads;
   `expand`, `flatten`, and `frame` work on bounded documents; `serialize` and
   `compact` produce deterministic JSON-LD from a complete bounded dataset.
+  `parse_url` and `expand_url` admit Remote Documents and HTML only through an
+  application-supplied loader; see the runnable
+  [`examples/jsonld_web`](examples/jsonld_web/main.odin).
 - **Dataset ownership and integrity:** `dataset.Collector` retains owned quads
   under an admission limit. `canon.canonicalize`, `canonical_hash`, and
   `isomorphic` provide RDFC-1.0 canonicalization, hashes, and comparison.
@@ -386,7 +391,9 @@ odin run examples/basic
 odin run examples/turtle
 odin run examples/turtle_writer
 odin run examples/turtle_formatter
+odin run examples/rdfxml_writer
 odin run examples/conversion
+odin run examples/jsonld_web
 odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
@@ -406,13 +413,20 @@ odin run cmd/odin-rdf -- --help
 ```
 
 Maintainers should also follow the [release checklist](docs/releasing.md).
-Performance comparisons use the documented [v0.4.0 baseline](benchmarks/baseline.md)
+Performance comparisons use the documented [current baseline](benchmarks/baseline.md)
 as an orientation point, never as a cross-machine claim or a hard CI threshold.
+For supported public APIs and upgrade expectations, see the
+[compatibility policy](docs/compatibility.md). To report a security issue, see
+the [security policy](SECURITY.md).
 
-## Roadmap
+## Maintenance focus
 
-1. Broaden JSON-LD 1.1 interoperability beyond the pinned W3C API manifests;
-   keep graph storage and SPARQL as separate product directions.
+1. Preserve RDF 1.1 and the pinned W3C behavior through focused fixes,
+   regression tests, and documented resource limits.
+2. Improve integration ergonomics with runnable examples and explicit adapter
+   boundaries, without making transport or storage implicit.
+3. Keep SPARQL and RDF 1.2 as separate product directions rather than expanding
+   this core library's scope.
 
 ## License
 

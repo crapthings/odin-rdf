@@ -6,7 +6,8 @@ and keep feature work in a pull request until all applicable gates pass.
 ## Prepare
 
 - [ ] Confirm the release scope and semantic version.
-- [ ] Update README status, examples, roadmap, landing page, and API reference.
+- [ ] Update README status, examples, maintenance focus, landing page, API
+      reference, compatibility policy, and security policy when applicable.
 - [ ] Add a dated changelog entry with compatibility notes.
 - [ ] Confirm all repository URLs and examples use `crapthings/odin-rdf`.
 - [ ] Run `git diff --check` and verify no generated or local files are staged.
@@ -26,6 +27,8 @@ odin check rdf/canon -no-entry-point -vet -warnings-as-errors
 odin check rdf/dataset -no-entry-point -vet -warnings-as-errors
 odin check rdf/convert -no-entry-point -vet -warnings-as-errors
 odin check cmd/odin-rdf -vet -warnings-as-errors
+odin check tests/w3c/jsonld_web_runner -vet -warnings-as-errors
+sh scripts/check-doc-facts.sh
 odin test rdf -sanitize:address
 odin test rdf/internal/termlex -sanitize:address
 odin test rdf/ntriples -sanitize:address
@@ -49,6 +52,7 @@ odin run examples/turtle_writer
 odin run examples/turtle_formatter
 odin run examples/rdfxml_writer
 odin run examples/conversion
+odin run examples/jsonld_web
 odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-tests.sh
 ./scripts/run-w3c-nquads-tests.sh
@@ -59,6 +63,8 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-jsonld-framing-tests.sh
 ./scripts/run-w3c-jsonld-fromrdf-tests.sh
 ./scripts/run-w3c-jsonld-compact-tests.sh
+./scripts/run-w3c-jsonld-remote-document-tests.sh
+./scripts/run-w3c-jsonld-html-tests.sh
 ./scripts/run-w3c-rdfxml-tests.sh
 ./scripts/run-w3c-trig-tests.sh
 ./scripts/run-w3c-rdf-canon-tests.sh

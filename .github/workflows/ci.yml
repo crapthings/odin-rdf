@@ -42,7 +42,9 @@ jobs:
       - run: odin run examples/turtle
       - run: odin run examples/turtle_writer
       - run: odin run examples/turtle_formatter
+      - run: odin run examples/rdfxml_writer
       - run: odin run examples/conversion
+      - run: odin run examples/jsonld_web
       - run: odin run cmd/odin-rdf -- --help
 
   w3c:
@@ -110,6 +112,7 @@ jobs:
       - run: odin check benchmarks/formatter -vet -warnings-as-errors
       - run: odin check benchmarks/mixed -vet -warnings-as-errors
       - run: odin check tests/fuzz -vet -warnings-as-errors
+      - run: sh scripts/check-doc-facts.sh
       - run: BENCH_RUNS=1 BENCH_RECORDS=1000 BENCH_ROUNDS=1 ./scripts/run-benchmarks.sh
       - run: odin run tests/fuzz -define:FUZZ_CASES=1000 -define:FUZZ_MAX_BYTES=256
       - run: odin test rdf -sanitize:address

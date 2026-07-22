@@ -46,7 +46,7 @@
     <section class="mx-auto grid max-w-7xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:pb-32 lg:pt-28">
       <div class="flex flex-col justify-center">
         <div class="mb-7 flex flex-wrap gap-2">
-          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 2,364/2,364</span>
+          <span class="rounded-full border border-olive-700/20 bg-olive-200/60 px-3 py-1 font-mono text-xs text-olive-800">W3C 2,432/2,432</span>
           <span class="rounded-full border border-lime-700/20 bg-lime-100 px-3 py-1 font-mono text-xs text-lime-800">RDF 1.1</span>
           <span class="rounded-full border border-stone-400/25 bg-white/70 px-3 py-1 font-mono text-xs text-stone-700">MIT</span>
         </div>
@@ -55,7 +55,7 @@
           <span class="text-olive-700">built the Odin way.</span>
         </h1>
         <p class="mt-7 max-w-2xl text-lg leading-8 text-olive-800/75 sm:text-xl">
-          A small, streaming-first RDF toolkit with conformant RDF syntax parsing, deterministic formatting, W3C dataset canonicalization, bounded readers, and a loss-aware conversion CLI. Explicit lifetimes. Predictable limits. No graph store attached.
+          A small, streaming-first RDF toolkit with conformant RDF syntax parsing, bounded JSON-LD document APIs, deterministic formatting, W3C dataset canonicalization, and a loss-aware conversion CLI. Explicit lifetimes. Predictable limits. No graph store attached.
         </p>
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
           <a href="#quickstart" class="inline-flex items-center justify-center rounded-xl bg-olive-800 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-olive-900/10 transition hover:bg-olive-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-olive-700">Start parsing</a>
@@ -63,7 +63,7 @@
         </div>
         <dl class="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-olive-950/10 pt-7">
           <div>
-            <dt class="font-mono text-2xl font-semibold text-olive-950">2,364/2,364</dt>
+            <dt class="font-mono text-2xl font-semibold text-olive-950">2,432/2,432</dt>
             <dd class="mt-1 text-xs leading-5 text-olive-700/65">Pinned W3C gate cases</dd>
           </div>
           <div>
@@ -167,7 +167,7 @@ err := ttl.parse(input, consume)
         <div>
           <p class="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-olive-700">Standards without overclaiming</p>
           <h2 class="mt-4 text-3xl font-semibold tracking-tight text-olive-950 sm:text-4xl">Clear about what is—and is not—implemented.</h2>
-          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF, deterministic expanded JSON-LD output, and context-directed compaction, plus bidirectional RDF/XML default-graph processing, conformant TriG parsing and streaming-safe TriG serialization, and complete W3C RDFC-1.0 canonicalization with bounded hashes, isomorphism checks, and deterministic dataset diffs. It also includes RDF 1.1 terms, triples, quads, N-Triples, N-Quads, Turtle parsing and writing, an owned capacity-bounded collector, deterministic formatting, and loss-aware conversion. No hidden network client or graph store.</p>
+          <p class="mt-6 max-w-xl text-lg leading-8 text-olive-800/70">The current work includes bounded JSON-LD-to-RDF, Expansion, Flattening, Compaction, Framing, and explicit Remote Document / HTML JSON-LD entry points. Applications supply their own transport policy; the library has no hidden network client. It also provides bidirectional RDF/XML default-graph processing, conformant TriG parsing and streaming-safe TriG serialization, complete W3C RDFC-1.0 canonicalization with bounded hashes, isomorphism checks, and deterministic dataset diffs.</p>
           <a href="https://www.w3.org/TR/rdf-canon/" class="mt-8 inline-flex text-sm font-semibold text-olive-800 hover:text-olive-600">Read the W3C RDFC-1.0 specification →</a>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -179,7 +179,8 @@ err := ttl.parse(input, consume)
               <li>N-Triples parser and writer</li>
               <li>Quad model and N-Quads syntax</li>
               <li>Conformant Turtle parser, writer, and formatter</li>
-              <li>Bounded JSON-LD-to-RDF, expanded output, and compaction</li>
+              <li>Bounded JSON-LD to-RDF, Expand, Flatten, Compact, and Frame APIs</li>
+              <li>Explicit callback-driven Remote Documents and HTML JSON-LD extraction</li>
               <li>Bounded RDF/XML input, batch writer, and stateful document writer</li>
               <li>Conformant TriG parser, streaming writer, and dataset formatter</li>
               <li>W3C RDFC-1.0 canonicalization with SHA-256 and SHA-384</li>
@@ -194,7 +195,7 @@ err := ttl.parse(input, consume)
           <div class="rounded-2xl border border-olive-950/10 bg-olive-50/60 p-6">
             <p class="font-mono text-xs uppercase tracking-wider text-olive-700/65">Deliberately separate</p>
             <ul class="mt-5 space-y-3 text-sm text-olive-800/70">
-              <li>JSON-LD framing APIs</li>
+              <li>Built-in HTTP transport, authentication, and cache policy</li>
               <li>RDFS and OWL reasoning</li>
               <li>SKOS and Dublin Core</li>
               <li>Graph or dataset storage</li>
@@ -250,7 +251,7 @@ err := ttl.parse(input, consume)
 <span class="text-amber-200">./scripts/run-w3c-rdf-canon-tests.sh</span>
 
 <span class="text-lime-300">Pinned core gates:</span>
-<span class="text-lime-300">2,364 pinned W3C cases, 0 failures</span></code></pre>
+<span class="text-lime-300">2,432 pinned W3C cases, 0 failures</span></code></pre>
         </div>
       </div>
     </section>

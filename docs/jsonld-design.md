@@ -13,6 +13,9 @@ parse_reader(reader: io.Reader, sink: Sink, options: Reader_Options = {}, user_d
 expand(builder: ^strings.Builder, input: string, options: Expand_Options = {}) -> Expand_Error
 flatten(builder: ^strings.Builder, input: string, options: Flatten_Options = {}) -> Flatten_Error
 frame(builder: ^strings.Builder, input, frame: string, options: Frame_Options = {}) -> Frame_Error
+web_document_load(url: string, options: Web_Document_Options = {}) -> (Web_Document, Web_Document_Error)
+expand_url(builder: ^strings.Builder, url: string, options: Web_Expand_Options = {}) -> Expand_Error
+parse_url(url: string, sink: Sink, options: Web_Parse_Options = {}, user_data: rawptr = nil) -> Parse_Error
 ```
 
 `parse` and `parse_reader` produce `rdf.Quad` values. String fields are transient and
@@ -27,6 +30,27 @@ manifest includes
 aliases, value/type/language expansion, `@list`, nested `@set`, `@nest`, language and
 index containers, reverse maps, default/named graph expansion, and document-level
 `@graph`, `@id`, and `@type` containers including `@graph` composites.
+
+## Remote Documents and HTML
+
+Web admission is explicit rather than a hidden HTTP feature.
+`Remote_Document_Loader` is a synchronous callback supplied in
+`Web_Document_Options`; it returns the final URL, media type, complete HTTP
+`Link` fields, and body. The library performs no socket, redirect, cache, or
+credential operation. The caller therefore controls transport security,
+timeouts, redirect policy, and URL allow-lists.
+
+`web_document_load` accepts `application/ld+json`, JSON media types,
+`text/html`, and `application/xhtml+xml`. For JSON, it accepts at most one
+JSON-LD context Link; for HTML it resolves an `application/ld+json` alternate
+Link through the same bounded callback. HTML extraction uses a page `<base>`
+when present, selects `application/ld+json` scripts, supports `#id` targeting
+and `extract_all_scripts`, and validates the legacy script-comment wrapper.
+`expand_url` and `parse_url` pass the normalized result into the ordinary
+bounded algorithms; `parse_url` intentionally produces no quads for an HTML
+page with no selected script, while expansion treats that as a load error.
+The CLI remains intentionally narrower: `--context-map` admits local context
+files only and never fetches a remote document.
 
 `flatten` consumes that expanded-document boundary and emits a deterministic,
 bounded node-map. An optional `output_context` compacts that result with the
@@ -135,8 +159,9 @@ the same opt-in document loader. Expansion and Flattening preserve JSON-LD 1.1
 base and term `@direction` mappings on expanded value objects. Its opt-in
 `.I18n_Datatype` mode maps those values through RDF and restores them in
 serialization and compaction; `.Compound_Literal` supplies the standard RDF
-blank-node alternative. A built-in HTTP loader remains a separate conformance
-milestone.
+blank-node alternative. The explicit Web callback boundary is available for
+applications that need Remote Documents; a built-in HTTP loader remains out of
+scope by design.
 Document Expansion, Flattening, and Framing honor `@propagate: false` by
 rolling back to the previous context for nested node objects; type-scoped
 contexts are non-propagating unless they set `@propagate: true`. `@protected`
@@ -188,6 +213,14 @@ graph/index and graph/id map keys with `@none` aliases, document-base relative
 identifiers, parent paths, query/fragment references, and keyword-like path
 segments. This remains a pinned core selection, not a claim of complete JSON-LD
 1.1 Compaction conformance.
+
+`scripts/run-w3c-jsonld-remote-document-tests.sh` runs all 18 official Remote
+Document vectors, including content types, redirects, context Links, multiple
+context rejection, HTML profile contexts, and alternate Links.
+`scripts/run-w3c-jsonld-html-tests.sh` runs all 50 official HTML Content
+Algorithm vectors across Expansion (21), Compaction (4), Flattening (5), and
+To-RDF (20), including XHTML, fragments, script selection, all-script graph
+boundaries, bases, and legacy script-comment errors.
 
 Each positive vector supplies its original source document to Compaction and
 also undergoes RDF-semantic comparison. The structural comparison ignores JSON

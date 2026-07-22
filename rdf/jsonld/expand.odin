@@ -63,6 +63,10 @@ expand_error_message :: proc(code: Expand_Error) -> string {
 Expand_Options :: struct {
 	context_options:  Options,
 	max_output_bytes: int,
+	// preserve_top_level_graph keeps a document-level @graph object instead of
+	// unwrapping it. Explicit Web HTML extraction uses this when combining more
+	// than one script document.
+	preserve_top_level_graph: bool,
 }
 
 DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
@@ -1457,7 +1461,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		// Expansion removes them rather than emitting free-floating values.
 		if _, has_value := has_keyword(object, &active, "@value"); has_value do return .None
 		if _, has_list := has_keyword(object, &active, "@list"); has_list do return .None
-		if graph_value, has_graph := has_keyword(object, &active, "@graph"); has_graph {
+		if graph_value, has_graph := has_keyword(object, &active, "@graph"); has_graph && !state.preserve_top_level_graph {
 			_, has_id := has_keyword(object, &active, "@id")
 			has_other := false
 			for key in object {
@@ -1514,7 +1518,7 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 	parsed, json_err := json.parse_string(strings.to_string(prepared), .JSON, true)
 	if json_err != .None do return .Invalid_JSON
 	defer json.destroy_value(parsed)
-	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = context_options.processing_mode != .Json_LD_1_0, allow_direction = context_options.processing_mode != .Json_LD_1_0, legacy_prefixes = context_options.processing_mode == .Json_LD_1_0, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls}
+	state := State{remote_urls = make(map[string]bool), named_bnodes = make(map[string]rdf.Term), max_contexts = max_contexts, max_remote = max_remote, loader = context_options.document_loader, loader_data = context_options.loader_data, allow_document_containers = context_options.processing_mode != .Json_LD_1_0, allow_direction = context_options.processing_mode != .Json_LD_1_0, legacy_prefixes = context_options.processing_mode == .Json_LD_1_0, retain_id_only_nodes = retain_id_only_nodes, retain_frame_controls = retain_frame_controls, preserve_top_level_graph = options.preserve_top_level_graph}
 	defer destroy_state(&state)
 	ctx, context_err := make_context(&state, nil)
 	if context_err.code != .None do return expand_from_parse_error(context_err)
@@ -1526,6 +1530,11 @@ DEFAULT_MAX_EXPANDED_OUTPUT_BYTES :: 32 * 1024 * 1024
 		ctx.base_iri = base
 	}
 	state.initial_base_iri = ctx.base_iri
+	if len(context_options.initial_context) > 0 {
+		initial_context, initial_context_error := apply_initial_context(&state, &ctx, context_options.initial_context)
+		if initial_context_error.code != .None do return expand_from_parse_error(initial_context_error)
+		ctx = initial_context
+	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
 	if err := expand_write_top_values(&temporary, &state, &ctx, parsed); err != .None do return err

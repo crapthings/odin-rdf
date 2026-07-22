@@ -4,6 +4,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Add explicit callback-driven JSON-LD Remote Document loading and HTML JSON-LD
+  script extraction. `expand_url` and `parse_url` accept caller-supplied
+  response metadata, apply final-response and HTML base URLs, honor JSON-LD
+  HTTP Link contexts and alternates, and never open a socket themselves.
+  Extraction supports fragment-targeted scripts, all-script extraction, XHTML
+  media types, legacy script-comment validation, and the HTML To-RDF empty-page
+  behavior. Pin all 18 W3C Remote Document and 50 HTML Content Algorithm
+  vectors in CI.
+
 ## 0.30.1 - 2026-07-21
 
 - Correct the JSON-LD design documentation to describe the explicit CLI

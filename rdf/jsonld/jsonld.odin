@@ -130,8 +130,16 @@ Processing_Mode :: enum {
 // Options bounds retained state. Zero selects the documented default, except
 // max_quads where zero disables the output cap. base_iri must be absolute when
 // provided; it is used to resolve document-relative identifiers and contexts.
+// initial_context is an optional JSON-encoded context definition applied before
+// the source document. It is primarily used by explicit Web-document loaders
+// to apply an HTTP JSON-LD context Link without rewriting the document body.
+// name_top_level_graphs is an explicit Web extraction mode: each top-level
+// graph-only object is assigned a blank graph name instead of being merged
+// into the default graph. Ordinary JSON-LD parsing leaves it disabled.
 Options :: struct {
 	base_iri:            string,
+	initial_context:     string,
+	name_top_level_graphs: bool,
 	max_document_bytes:  int,
 	max_nesting_depth:   int,
 	max_contexts:        int,
@@ -142,6 +150,15 @@ Options :: struct {
 	processing_mode:     Processing_Mode,
 	document_loader:     Document_Loader,
 	loader_data:         rawptr,
+}
+
+@(private) apply_initial_context :: proc(state: ^State, ctx: ^Context, source: string) -> (Context, Parse_Error) {
+	if len(source) == 0 do return ctx^, {}
+	if !utf8.valid_string(source) do return {}, Parse_Error{code = .Invalid_UTF8}
+	parsed, json_error := json.parse_string(strings.trim_space(source), .JSON, true)
+	if json_error != .None do return {}, Parse_Error{code = .Invalid_Context}
+	defer json.destroy_value(parsed)
+	return apply_context(state, ctx, parsed)
 }
 
 DEFAULT_MAX_DOCUMENT_BYTES  :: 16 * 1024 * 1024
@@ -226,12 +243,14 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 	loader_data:       rawptr,
 	allow_document_containers: bool,
 	allow_direction:           bool,
+	name_top_level_graphs:     bool,
 	legacy_prefixes:           bool,
 	rdf_direction:             RDF_Direction_Mode,
 	produce_generalized_rdf:   bool,
 	generalized_quad_keys:     map[string]bool,
 	retain_id_only_nodes:       bool,
 	retain_frame_controls:      bool,
+	preserve_top_level_graph:   bool,
 	prune_frame_blank_ids:       bool,
 	referenced_frame_blank_ids:  map[string]bool,
 	canonical_frame_blank_ids:   bool,
@@ -2465,7 +2484,7 @@ Sink :: proc(quad: rdf.Quad, user_data: rawptr) -> bool
 		if keyword == "@set" || keyword == "@direction" do return {}, Parse_Error{code = .Unsupported_Feature}
 		if keyword == "@graph" {
 			graph_quad := graph
-			if graph_has_node_name(object, &active_context, top_level) {
+			if state.name_top_level_graphs || graph_has_node_name(object, &active_context, top_level) {
 				graph_quad.has_graph = true
 				graph_quad.graph = subject
 			}
@@ -2873,6 +2892,7 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		loader_data = options.loader_data,
 		allow_document_containers = options.processing_mode != .Json_LD_1_0,
 		allow_direction = options.processing_mode != .Json_LD_1_0,
+		name_top_level_graphs = options.name_top_level_graphs,
 	}
 	defer destroy_state(&state)
 	if blank_err := preassign_blank_nodes(&state, parsed); blank_err.code != .None do return blank_err
@@ -2886,6 +2906,11 @@ parse :: proc(input: string, sink: Sink, options: Options = {}, user_data: rawpt
 		ctx.base_iri = base
 	}
 	state.initial_base_iri = ctx.base_iri
+	if len(options.initial_context) > 0 {
+		initial_context, initial_context_error := apply_initial_context(&state, &ctx, options.initial_context)
+		if initial_context_error.code != .None do return initial_context_error
+		ctx = initial_context
+	}
 	graph: rdf.Quad
 	if array, is_array := array_from_value(parsed); is_array {
 		for index in 0..<len(array) {

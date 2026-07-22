@@ -3,7 +3,7 @@
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
-![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C364%2F2%2C364-0f766e)
+![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C432%2F2%2C432-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
 
@@ -26,12 +26,13 @@ graph store or SPARQL engine.
 to the CLI, so bounded JSON-LD conversion can use approved remote-context
 documents without network access. The public API may still evolve, so
 applications should pin a release and retain integration tests for their own
-JSON-LD documents.
+JSON-LD documents. The unreleased main branch also adds explicit callback-based
+Remote Document and HTML JSON-LD entry points; it still supplies no HTTP client.
 
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
 | RDF syntax | N-Triples, N-Quads, Turtle, TriG, RDF/XML | Parsers and record writers are designed for bounded pipelines. |
-| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, and Framing | This is a documented core profile, not a complete JSON-LD 1.1 implementation. Generalized RDF output is opt-in and requires a compatible sink. |
+| JSON-LD | to-RDF, Expansion, Flattening, RDF-to-JSON-LD, source-aware Compaction, Framing, Remote Documents, and HTML script extraction | Remote responses enter only through an application-supplied loader; the CLI does not fetch documents or contexts. This remains a documented core profile, not a complete JSON-LD 1.1 implementation. |
 | Dataset tools | RDFC-1.0 canonicalization, hashing, comparison, and diff | Complete-dataset operations require an explicit admission bound. |
 | CLI | Conversion, formatting, canonicalization, hashing, comparison, and diff | RDF/XML and JSON-LD output are explicit bounded batch targets. |
 
@@ -49,13 +50,14 @@ full pinned W3C Framing manifest is gated; see the [JSON-LD processing
 profile](docs/jsonld-design.md) for exact behavior and limits.
 
 <details>
-<summary>Conformance breakdown — 2,364 passing pinned W3C gate cases</summary>
+<summary>Conformance breakdown — 2,432 passing pinned W3C gate cases</summary>
 
 | Suite | Cases |
 | --- | ---: |
 | N-Triples / N-Quads / Turtle / TriG | 72 / 87 / 313 / 355 |
 | JSON-LD to-RDF / Expansion / Flattening / Framing | 451 / 398 / 58 / 92 |
 | JSON-LD RDF-to-JSON-LD / Compaction | 54 / 246 |
+| JSON-LD Remote Document / HTML Content Algorithms | 18 / 50 |
 | RDF/XML / RDFC-1.0 | 173 / 65 |
 
 </details>
@@ -395,6 +397,8 @@ odin run cmd/odin-rdf -- --help
 ./scripts/run-w3c-jsonld-framing-tests.sh
 ./scripts/run-w3c-jsonld-fromrdf-tests.sh
 ./scripts/run-w3c-jsonld-compact-tests.sh
+./scripts/run-w3c-jsonld-remote-document-tests.sh
+./scripts/run-w3c-jsonld-html-tests.sh
 ./scripts/run-w3c-rdfxml-tests.sh
 ./scripts/run-w3c-trig-tests.sh
 ./scripts/run-w3c-rdf-canon-tests.sh

@@ -68,6 +68,10 @@ Flatten_Options :: struct {
 	max_output_bytes: int,
 	output_context:   string,
 	array_policy:     Compact_Array_Policy,
+	// force_graph_output retains the compacted @graph wrapper even when the
+	// flattened default graph has a single node. HTML extraction uses this
+	// without changing ordinary compact-array behavior.
+	force_graph_output: bool,
 	retain_reference_nodes: bool,
 }
 
@@ -630,7 +634,7 @@ DEFAULT_MAX_FLATTEN_NODES :: 100_000
 	}
 	temporary := strings.builder_make()
 	defer strings.builder_destroy(&temporary)
-	if len(nodes) == 1 && options.array_policy == .Compact {
+	if len(nodes) == 1 && options.array_policy == .Compact && !options.force_graph_output {
 		node, node_valid := object_from_value(nodes[0])
 		if !node_valid do return .Invalid_JSON
 		node_builder := strings.builder_make()

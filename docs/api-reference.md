@@ -203,6 +203,12 @@ serialize(builder: ^strings.Builder, quads: []rdf.Quad,
           options: Serialize_Options = {}) -> Serialize_Error
 compact(builder: ^strings.Builder, quads: []rdf.Quad, context_text: string,
         options: Compact_Options = {}) -> Compact_Error
+web_document_load(url: string, options: Web_Document_Options = {})
+    -> (Web_Document, Web_Document_Error)
+expand_url(builder: ^strings.Builder, url: string,
+           options: Web_Expand_Options = {}) -> Expand_Error
+parse_url(url: string, sink: Sink, options: Web_Parse_Options = {},
+          user_data: rawptr = nil) -> Parse_Error
 ```
 
 JSON-LD emits `rdf.Quad` values and retains a complete document. `Options`
@@ -245,12 +251,34 @@ Set `Options.produce_generalized_rdf = true` only when the sink explicitly
 accepts blank-node predicates; for example, use
 `nquads.write_quad_with_options` with `allow_generalized_rdf = true`.
 
+`Remote_Document_Loader` is the explicit Web boundary. Its callback returns a
+`Remote_Document` with the final `document_url`, response `content_type`, all
+HTTP `link_headers`, and response body. `web_document_load` normalizes JSON-LD,
+JSON, HTML, and XHTML responses into an owned `Web_Document`; call
+`destroy_web_document` when finished. `Web_Document_Options` has no default
+loader and therefore never performs network I/O. Applications own timeout,
+redirect, authentication, cache, TLS, and allow-list policy.
+
+`expand_url` and `parse_url` reuse the regular bounded algorithms after that
+admission step. They use the final response URL and a document `<base>` as the
+base IRI, honor a JSON-LD context `Link` header for JSON responses, and resolve
+an HTML `rel=alternate` JSON-LD response through the same callback. HTML input
+selects `application/ld+json` script elements by default, supports `#id`
+fragments, and can combine scripts with `extract_all_scripts`. The latter
+preserves each top-level graph boundary. `parse_url` returns an empty RDF
+dataset for an HTML page with no selected script, while `expand_url` reports a
+loading failure, matching the respective JSON-LD HTML algorithms. The CLI
+remains local-file based and exposes no HTTP document loader.
+
 `flatten` first expands the document, then atomically produces a deterministic
 node-map. It merges embedded nodes by `@id`, allocates bounded blank nodes,
 preserves lists and `@index`, normalizes reverse properties, and retains nested
 `@graph` objects. Set `Flatten_Options.output_context` to compact that node-map
 with a supplied JSON-LD context; set `array_policy = .Preserve` to implement
 the standard `compactArrays: false` shape.
+`force_graph_output` retains the outer compacted `@graph` for a one-node result
+without changing its value-array policy; it is useful for callers preserving an
+HTML algorithm result shape.
 `Flatten_Options.max_nodes` defaults to 100,000 and `max_output_bytes` to
 32 MiB.
 

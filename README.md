@@ -15,11 +15,16 @@ Use `odin-rdf` for bounded RDF syntax pipelines, deterministic JSON-LD document
 processing, and RDFC-1.0 dataset integrity work. It is a library and CLI, not a
 graph store or SPARQL engine.
 
+> **Understand the project faster:** explore the
+> [odin-rdf DeepWiki](https://deepwiki.com/crapthings/odin-rdf) for an
+> AI-navigable guide to the architecture, packages, and implementation details.
+
 **Start here:** [streaming library example](examples/basic/main.odin) ·
 [Web JSON-LD loader example](examples/jsonld_web/main.odin) ·
 [command-line conversion](#command-line-conversion) ·
 [API reference](docs/api-reference.md) ·
-[JSON-LD profile](docs/jsonld-design.md)
+[JSON-LD profile](docs/jsonld-design.md) ·
+[DeepWiki](https://deepwiki.com/crapthings/odin-rdf)
 
 ## Status and scope
 

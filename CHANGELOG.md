@@ -4,6 +4,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.31.1 - 2026-07-24
+
+- Publish a documentation-only patch that links the project overview to its
+  generated DeepWiki reference. This release does not change the RDF model,
+  parsers, serializers, public API, ownership rules, or compatibility policy.
+
 ## 0.31.0 - 2026-07-22
 
 - Add explicit callback-driven JSON-LD Remote Document loading and HTML JSON-LD

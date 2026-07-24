@@ -10,9 +10,9 @@ OWL_RL_Value_Space_Membership :: enum {
 }
 
 // owl_rl_literal_value_membership determines membership in the target
-// datatype value space. This initial dispatcher covers the complete exact
-// decimal/integer family, including cross-datatype cases such as
-// "1.00"^^xsd:decimal belonging to xsd:integer.
+// datatype value space. It derives a result only for datatype families whose
+// lexical-to-value mapping is modelled exactly; callers must retain Unknown
+// for every other pair.
 owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
 	if is_owl_rl_numeric_datatype(target_datatype) do return numeric_value_membership(literal, target_datatype)
 	if is_owl_rl_string_datatype(target_datatype) do return string_value_membership(literal, target_datatype)
@@ -21,11 +21,47 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#hexBinary" || target_datatype == "http://www.w3.org/2001/XMLSchema#base64Binary" do return binary_value_membership(literal)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#float" || target_datatype == "http://www.w3.org/2001/XMLSchema#double" do return floating_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#dateTime" || target_datatype == "http://www.w3.org/2001/XMLSchema#dateTimeStamp" do return datetime_value_membership(literal, target_datatype)
+	if target_datatype == "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral" do return plain_literal_value_membership(literal)
+	if target_datatype == "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral" do return xml_literal_value_membership(literal)
+	if is_owl_rl_pattern_datatype(target_datatype) do return pattern_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2000/01/rdf-schema#Literal" {
 		if literal.kind != .Literal do return .No
 		if validate_term_structure(literal) == .None do return .Yes
 		return .No
 	}
+	return .Unknown
+}
+
+@(private) plain_literal_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_plain_literal_status(literal)
+	if status == .Valid do return .Yes
+	if status == .Not_In_Value_Space do return .No
+	return .Unknown
+}
+
+@(private) xml_literal_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_xml_literal_status(literal)
+	if status == .Valid do return .Yes
+	if status == .Not_In_Value_Space do return .No
+	return .Unknown
+}
+
+@(private) is_owl_rl_pattern_datatype :: proc(datatype: string) -> bool {
+	switch datatype {
+	case "http://www.w3.org/2001/XMLSchema#language",
+		"http://www.w3.org/2001/XMLSchema#Name",
+		"http://www.w3.org/2001/XMLSchema#NCName",
+		"http://www.w3.org/2001/XMLSchema#NMTOKEN":
+		return true
+	}
+	return false
+}
+
+@(private) pattern_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
+	if literal.datatype != target_datatype do return .Unknown
+	status := owl_rl_pattern_literal_status(literal)
+	if status == .Valid do return .Yes
+	if status == .Not_In_Value_Space do return .No
 	return .Unknown
 }
 

@@ -24,6 +24,7 @@ test_owl_rl_string_and_any_uri_value_space_membership :: proc(t: ^testing.T) {
 	token := "http://www.w3.org/2001/XMLSchema#token"
 	any_uri := "http://www.w3.org/2001/XMLSchema#anyURI"
 	rdfs_literal := "http://www.w3.org/2000/01/rdf-schema#Literal"
+	plain_literal := "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral"
 
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("a\tb", string_datatype), normalized_string), OWL_RL_Value_Space_Membership.No)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("a\tb", normalized_string), token), OWL_RL_Value_Space_Membership.Yes)
@@ -32,6 +33,21 @@ test_owl_rl_string_and_any_uri_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("../relative", any_uri), any_uri), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), any_uri), OWL_RL_Value_Space_Membership.Unknown)
 	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), rdfs_literal), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), plain_literal), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(language_literal("colour", "en-GB"), plain_literal), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(language_literal("colour", "en--GB"), plain_literal), OWL_RL_Value_Space_Membership.No)
+}
+
+@(test)
+test_owl_rl_xml_and_pattern_value_space_membership :: proc(t: ^testing.T) {
+	xml_literal := "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral"
+	nc_name := "http://www.w3.org/2001/XMLSchema#NCName"
+
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("<p>ok</p>", xml_literal), xml_literal), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("<p>", xml_literal), xml_literal), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("valid_name", nc_name), nc_name), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("not:name", nc_name), nc_name), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(literal("valid_name"), nc_name), OWL_RL_Value_Space_Membership.Unknown)
 }
 
 @(test)

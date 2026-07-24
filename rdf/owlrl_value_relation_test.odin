@@ -24,15 +24,28 @@ test_owl_rl_value_relation_compares_floating_cross_datatype_values :: proc(t: ^t
 }
 
 @(test)
-test_owl_rl_value_relation_does_not_confuse_datetime_equality_with_identity :: proc(t: ^testing.T) {
+test_owl_rl_value_relation_compares_datetime_data_value_identity :: proc(t: ^testing.T) {
 	date_time := "http://www.w3.org/2001/XMLSchema#dateTime"
+	date_time_stamp := "http://www.w3.org/2001/XMLSchema#dateTimeStamp"
 
-	// These literals denote equal instants but retain different timezone-offset
-	// properties, so the W3C datatype map treats their values as nonidentical.
-	// Until exact identity mapping is implemented, OWL RL dt-eq/dt-diff must not
-	// be derived for either temporal literal.
+	// dateTimeStamp is derived from dateTime. Z and +00:00 both carry the same
+	// timezone-offset property, so these literals denote one data value.
+	testing.expect_value(t, owl_rl_literal_value_relation(
+		typed_literal("2024-01-01T00:00:00Z", date_time),
+		typed_literal("2024-01-01T00:00:00+00:00", date_time_stamp),
+	), OWL_RL_Literal_Value_Relation.Same)
+	// 24:00:00 is the first moment of the next calendar day. Fractional trailing
+	// zeroes do not change the seconds value.
+	testing.expect_value(t, owl_rl_literal_value_relation(
+		typed_literal("2024-02-29T24:00:00.0", date_time),
+		typed_literal("2024-03-01T00:00:00", date_time),
+	), OWL_RL_Literal_Value_Relation.Same)
+
+	// These literals denote equal instants, but the timezone-offset property is
+	// part of the XML Schema value. OWL RL dt-eq/dt-diff use identity, not the
+	// dateTime equality relation, so they must be different values.
 	testing.expect_value(t, owl_rl_literal_value_relation(
 		typed_literal("2024-01-01T00:00:00Z", date_time),
 		typed_literal("2023-12-31T19:00:00-05:00", date_time),
-	), OWL_RL_Literal_Value_Relation.Unknown)
+	), OWL_RL_Literal_Value_Relation.Different)
 }

@@ -32,6 +32,9 @@ owl_rl_datetime_literal_status :: proc(literal: Term) -> OWL_RL_DateTime_Status 
 	year_start := index
 	for index < len(value) && is_ascii_digit(value[index]) do index += 1
 	if index-year_start < 4 || index == len(value) || value[index] != '-' do return false
+	// XML Schema permits a leading zero only for exactly four digit years.
+	// This also keeps the arbitrary-width year representation canonical.
+	if index-year_start > 4 && value[year_start] == '0' do return false
 	if all_ascii_zeroes(value[year_start:index]) do return false
 	index += 1
 
@@ -62,7 +65,7 @@ owl_rl_datetime_literal_status :: proc(literal: Term) -> OWL_RL_DateTime_Status 
 	}
 
 	if month < 1 || month > 12 || day < 1 || day > days_in_month(month, is_gregorian_leap_year(value[year_start:index_of_year_end(value, year_start)])) do return false
-	if hour > 24 || minute > 59 || second > 60 do return false
+	if hour > 24 || minute > 59 || second >= 60 do return false
 	if hour == 24 && (minute != 0 || second != 0 || !fraction_is_zero) do return false
 
 	has_timezone := false

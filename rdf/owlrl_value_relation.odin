@@ -13,9 +13,9 @@ OWL_RL_Literal_Value_Relation :: enum {
 // owl_rl_literal_value_relation compares the data values denoted by two
 // literals. It covers the datatype families whose exact value mappings are
 // already implemented: decimal/integer, float/double, string descendants and
-// RDF 1.1 language literals, boolean, binary, and anyURI. It is intentionally
-// silent for XMLLiteral and temporal values until their identity semantics are
-// complete; temporal equality alone is insufficient for OWL RL dt-eq.
+// RDF 1.1 language literals, boolean, binary, anyURI, and dateTime values.
+// It is intentionally silent for XMLLiteral and every datatype whose complete
+// lexical-to-value mapping is not represented here.
 owl_rl_literal_value_relation :: proc(left, right: Term) -> OWL_RL_Literal_Value_Relation {
 	if left.kind != .Literal || right.kind != .Literal do return .Unknown
 
@@ -31,6 +31,7 @@ owl_rl_literal_value_relation :: proc(left, right: Term) -> OWL_RL_Literal_Value
 	if compared, same := owl_rl_boolean_literals_have_same_value(left, right); compared do return .Same if same else .Different
 	if compared, same := owl_rl_binary_literals_have_same_value(left, right); compared do return .Same if same else .Different
 	if compared, same := owl_rl_any_uri_literals_have_same_value(left, right); compared do return .Same if same else .Different
+	if compared, same := owl_rl_datetime_literals_have_same_value(left, right); compared do return .Same if same else .Different
 	return .Unknown
 }
 

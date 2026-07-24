@@ -46,3 +46,24 @@ test_owl_rl_boolean_and_binary_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("TWE=", base64_binary), hex_binary), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("0", hex_binary), base64_binary), OWL_RL_Value_Space_Membership.No)
 }
+
+@(test)
+test_owl_rl_floating_value_space_membership :: proc(t: ^testing.T) {
+	float_datatype := "http://www.w3.org/2001/XMLSchema#float"
+	double_datatype := "http://www.w3.org/2001/XMLSchema#double"
+
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("1.5", float_datatype), double_datatype), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("1.5", double_datatype), float_datatype), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("0.1", double_datatype), float_datatype), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("NaN", double_datatype), float_datatype), OWL_RL_Value_Space_Membership.Yes)
+}
+
+@(test)
+test_owl_rl_datetime_value_space_membership :: proc(t: ^testing.T) {
+	date_time := "http://www.w3.org/2001/XMLSchema#dateTime"
+	date_time_stamp := "http://www.w3.org/2001/XMLSchema#dateTimeStamp"
+
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("2024-01-01T00:00:00Z", date_time_stamp), date_time), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("2024-01-01T00:00:00+01:00", date_time), date_time_stamp), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("2024-01-01T00:00:00", date_time), date_time_stamp), OWL_RL_Value_Space_Membership.No)
+}

@@ -19,6 +19,8 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#anyURI" do return any_uri_value_membership(literal)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#boolean" do return boolean_value_membership(literal)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#hexBinary" || target_datatype == "http://www.w3.org/2001/XMLSchema#base64Binary" do return binary_value_membership(literal)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#float" || target_datatype == "http://www.w3.org/2001/XMLSchema#double" do return floating_value_membership(literal, target_datatype)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#dateTime" || target_datatype == "http://www.w3.org/2001/XMLSchema#dateTimeStamp" do return datetime_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2000/01/rdf-schema#Literal" {
 		if literal.kind != .Literal do return .No
 		if validate_term_structure(literal) == .None do return .Yes
@@ -103,6 +105,33 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if status == .Not_Binary_Datatype do return .Unknown
 	if status == .Not_In_Value_Space do return .No
 	return .Yes
+}
+
+@(private) floating_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_floating_literal_status(literal)
+	if status == .Not_Floating_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	if literal.datatype == target_datatype do return .Yes
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#double" do return .Yes
+	if literal.value == "NaN" || literal.value == "INF" || literal.value == "+INF" || literal.value == "-INF" do return .Yes
+	double_value, double_ok := parse_xsd_f64(literal.value)
+	if !double_ok do return .Unknown
+	if f64(f32(double_value)) == double_value do return .Yes
+	return .No
+}
+
+@(private) datetime_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_datetime_literal_status(literal)
+	if status == .Not_DateTime_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#dateTime" do return .Yes
+	if datetime_lexical_has_timezone(literal.value) do return .Yes
+	return .No
+}
+
+@(private) datetime_lexical_has_timezone :: proc(value: string) -> bool {
+	if len(value) > 0 && value[len(value)-1] == 'Z' do return true
+	return len(value) >= 6 && (value[len(value)-6] == '+' || value[len(value)-6] == '-')
 }
 
 @(private) is_owl_rl_numeric_datatype :: proc(datatype: string) -> bool {

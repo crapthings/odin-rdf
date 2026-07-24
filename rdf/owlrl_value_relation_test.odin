@@ -22,3 +22,17 @@ test_owl_rl_value_relation_compares_floating_cross_datatype_values :: proc(t: ^t
 	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("0.1", float_datatype), typed_literal("0.1", double_datatype)), OWL_RL_Literal_Value_Relation.Different)
 	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("NaN", float_datatype), typed_literal("NaN", double_datatype)), OWL_RL_Literal_Value_Relation.Unknown)
 }
+
+@(test)
+test_owl_rl_value_relation_does_not_confuse_datetime_equality_with_identity :: proc(t: ^testing.T) {
+	date_time := "http://www.w3.org/2001/XMLSchema#dateTime"
+
+	// These literals denote equal instants but retain different timezone-offset
+	// properties, so the W3C datatype map treats their values as nonidentical.
+	// Until exact identity mapping is implemented, OWL RL dt-eq/dt-diff must not
+	// be derived for either temporal literal.
+	testing.expect_value(t, owl_rl_literal_value_relation(
+		typed_literal("2024-01-01T00:00:00Z", date_time),
+		typed_literal("2023-12-31T19:00:00-05:00", date_time),
+	), OWL_RL_Literal_Value_Relation.Unknown)
+}

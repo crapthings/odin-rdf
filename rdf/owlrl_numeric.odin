@@ -164,6 +164,7 @@ owl_rl_numeric_literals_have_same_value :: proc(left, right: Term) -> (compared,
 	if sign == .Negative && len(digits) == 0 do return true
 	if parts.sign != sign do return parts.sign > sign
 	if len(digits) == 0 do return true
+	if sign == .Negative do return compare_unsigned_digits(parts.digits, digits) <= 0
 	return compare_unsigned_digits(parts.digits, digits) >= 0
 }
 

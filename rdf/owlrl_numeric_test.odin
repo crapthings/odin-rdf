@@ -2,6 +2,7 @@ package rdf
 
 import "core:testing"
 
+@(test)
 test_owl_rl_numeric_literal_status :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_numeric_literal_status(typed_literal("+001", "http://www.w3.org/2001/XMLSchema#integer")), OWL_RL_Numeric_Status.Valid)
 	testing.expect_value(t, owl_rl_numeric_literal_status(typed_literal("1e2", "http://www.w3.org/2001/XMLSchema#decimal")), OWL_RL_Numeric_Status.Not_In_Value_Space)
@@ -13,6 +14,7 @@ test_owl_rl_numeric_literal_status :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_numeric_literal_status(typed_literal("-9223372036854775809", "http://www.w3.org/2001/XMLSchema#long")), OWL_RL_Numeric_Status.Not_In_Value_Space)
 }
 
+@(test)
 test_owl_rl_numeric_value_equality :: proc(t: ^testing.T) {
 	left := typed_literal("+001", "http://www.w3.org/2001/XMLSchema#integer")
 	right := typed_literal("1.00", "http://www.w3.org/2001/XMLSchema#decimal")

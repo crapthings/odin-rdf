@@ -22,23 +22,31 @@ owl_rl_floating_literal_status :: proc(literal: Term) -> OWL_RL_Floating_Status 
 	return .Not_In_Value_Space
 }
 
-// owl_rl_floating_literals_have_same_value compares values within one IEEE
-// datatype. NaN is deliberately unequal to itself, while +0 and -0 compare
-// equal, per XML Schema 1.1 equality. Cross-datatype comparison is left to
-// the common OWL RL value dispatcher because it must also reconcile integer
-// and decimal values with the floating value spaces.
+// owl_rl_floating_literals_have_same_value compares values within and across
+// the IEEE float/double datatypes. A float value is also a double value when
+// its widened IEEE representation equals the double value. NaN is deliberately
+// unequal to itself, while +0 and -0 compare equal, per XML Schema 1.1.
 owl_rl_floating_literals_have_same_value :: proc(left, right: Term) -> (compared, same: bool) {
 	if owl_rl_floating_literal_status(left) != .Valid || owl_rl_floating_literal_status(right) != .Valid do return false, false
-	if left.datatype != right.datatype do return false, false
 	if left.value == "NaN" || right.value == "NaN" do return true, false
-	if left.datatype == "http://www.w3.org/2001/XMLSchema#float" {
+	if left.datatype == "http://www.w3.org/2001/XMLSchema#float" && right.datatype == "http://www.w3.org/2001/XMLSchema#float" {
 		left_value, left_ok := parse_xsd_f32(left.value)
 		right_value, right_ok := parse_xsd_f32(right.value)
 		return left_ok && right_ok, left_value == right_value
 	}
+	if left.datatype == "http://www.w3.org/2001/XMLSchema#double" && right.datatype == "http://www.w3.org/2001/XMLSchema#double" {
+		left_value, left_ok := parse_xsd_f64(left.value)
+		right_value, right_ok := parse_xsd_f64(right.value)
+		return left_ok && right_ok, left_value == right_value
+	}
+	if left.datatype == "http://www.w3.org/2001/XMLSchema#float" {
+		left_value, left_ok := parse_xsd_f32(left.value)
+		right_value, right_ok := parse_xsd_f64(right.value)
+		return left_ok && right_ok, f64(left_value) == right_value
+	}
 	left_value, left_ok := parse_xsd_f64(left.value)
-	right_value, right_ok := parse_xsd_f64(right.value)
-	return left_ok && right_ok, left_value == right_value
+	right_value, right_ok := parse_xsd_f32(right.value)
+	return left_ok && right_ok, left_value == f64(right_value)
 }
 
 @(private) is_xsd_floating_lexical :: proc(value: string) -> bool {

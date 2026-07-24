@@ -17,6 +17,8 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if is_owl_rl_numeric_datatype(target_datatype) do return numeric_value_membership(literal, target_datatype)
 	if is_owl_rl_string_datatype(target_datatype) do return string_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#anyURI" do return any_uri_value_membership(literal)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#boolean" do return boolean_value_membership(literal)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#hexBinary" || target_datatype == "http://www.w3.org/2001/XMLSchema#base64Binary" do return binary_value_membership(literal)
 	if target_datatype == "http://www.w3.org/2000/01/rdf-schema#Literal" {
 		if literal.kind != .Literal do return .No
 		if validate_term_structure(literal) == .None do return .Yes
@@ -85,6 +87,20 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 @(private) any_uri_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
 	status := owl_rl_any_uri_literal_status(literal)
 	if status == .Not_AnyURI_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	return .Yes
+}
+
+@(private) boolean_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_boolean_literal_status(literal)
+	if status == .Not_Boolean_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	return .Yes
+}
+
+@(private) binary_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_binary_literal_status(literal)
+	if status == .Not_Binary_Datatype do return .Unknown
 	if status == .Not_In_Value_Space do return .No
 	return .Yes
 }

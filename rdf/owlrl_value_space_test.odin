@@ -33,3 +33,16 @@ test_owl_rl_string_and_any_uri_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), any_uri), OWL_RL_Value_Space_Membership.Unknown)
 	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), rdfs_literal), OWL_RL_Value_Space_Membership.Yes)
 }
+
+@(test)
+test_owl_rl_boolean_and_binary_value_space_membership :: proc(t: ^testing.T) {
+	boolean := "http://www.w3.org/2001/XMLSchema#boolean"
+	hex_binary := "http://www.w3.org/2001/XMLSchema#hexBinary"
+	base64_binary := "http://www.w3.org/2001/XMLSchema#base64Binary"
+
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("1", boolean), boolean), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("TRUE", boolean), boolean), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("4d61", hex_binary), base64_binary), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("TWE=", base64_binary), hex_binary), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("0", hex_binary), base64_binary), OWL_RL_Value_Space_Membership.No)
+}

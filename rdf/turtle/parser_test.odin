@@ -27,6 +27,23 @@ test_parse_directives_abbreviations_and_relative_iris :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_parse_blank_property_list_with_trailing_semicolon :: proc(t: ^testing.T) {
+	triples := make([dynamic]rdf.Triple)
+	defer delete(triples)
+	err := parse(`<urn:outer> <urn:contains> [ <urn:p> <urn:o> ; ] .`, collect, {}, &triples)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect_value(t, len(triples), 2)
+	if len(triples) == 2 {
+		testing.expect_value(t, triples[0].subject.value, ".turtle-genid-0")
+		testing.expect_value(t, triples[0].predicate.value, "urn:p")
+		testing.expect_value(t, triples[0].object.value, "urn:o")
+		testing.expect_value(t, triples[1].subject.value, "urn:outer")
+		testing.expect_value(t, triples[1].predicate.value, "urn:contains")
+		testing.expect_value(t, triples[1].object.value, ".turtle-genid-0")
+	}
+}
+
+@(test)
 test_parse_sparql_directives_and_default_prefix :: proc(t: ^testing.T) {
 	input := `BASE <http://example.com/base/>
 PREFIX : <v/>

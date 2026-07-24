@@ -48,6 +48,23 @@ GRAPH _:other { ex:s ex:p (ex:a ex:b) . }`
 }
 
 @(test)
+test_parses_blank_property_list_with_trailing_semicolon :: proc(t: ^testing.T) {
+	quads := make([dynamic]rdf.Quad)
+	defer delete(quads)
+	err := parse(`<urn:g> { <urn:outer> <urn:contains> [ <urn:p> <urn:o> ; ] . }`, collect, {}, &quads)
+	testing.expect_value(t, err.code, Error_Code.None)
+	testing.expect_value(t, len(quads), 2)
+	if len(quads) == 2 {
+		for quad in quads do testing.expect(t, quad.has_graph)
+		testing.expect_value(t, quads[0].subject.value, "trig-genid-0")
+		testing.expect_value(t, quads[0].predicate.value, "urn:p")
+		testing.expect_value(t, quads[1].subject.value, "urn:outer")
+		testing.expect_value(t, quads[1].predicate.value, "urn:contains")
+		testing.expect_value(t, quads[1].object.value, "trig-genid-0")
+	}
+}
+
+@(test)
 test_rejects_literal_graph_name_without_emitting :: proc(t: ^testing.T) {
 	quads := make([dynamic]rdf.Quad)
 	defer delete(quads)

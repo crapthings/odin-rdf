@@ -706,7 +706,10 @@ DEFAULT_MAX_DOCUMENT_BYTES  :: 16 * 1024 * 1024
 			termlex.advance_ascii(&p.scanner)
 			if err := skip_space_and_comments(p); err.code != .None do return err
 		}
-		if p.scanner.pos >= len(p.scanner.input) || p.scanner.input[p.scanner.pos] == '.' || p.scanner.input[p.scanner.pos] == '}' do break
+		// A predicate-object list may end before an enclosing blank-node
+		// property list's closing delimiter. TriG inherits Turtle's permitted
+		// trailing ';' form: [ ex:p ex:o ; ].
+		if p.scanner.pos >= len(p.scanner.input) || p.scanner.input[p.scanner.pos] == '.' || p.scanner.input[p.scanner.pos] == ']' || p.scanner.input[p.scanner.pos] == '}' do break
 	}
 	return {}
 }

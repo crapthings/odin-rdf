@@ -17,7 +17,11 @@ OWL_RL_Plain_Literal_Status :: enum {
 owl_rl_plain_literal_status :: proc(literal: Term) -> OWL_RL_Plain_Literal_Status {
 	if literal.kind != .Literal do return .Not_Plain_Literal_Value
 	if validate_term_structure(literal) != .None || !is_xml_character_string(literal.value) do return .Not_In_Value_Space
-	if is_owl_rl_string_datatype(literal.datatype) && len(literal.language) == 0 do return .Valid
+	if (is_owl_rl_string_datatype(literal.datatype) || is_owl_rl_pattern_datatype(literal.datatype)) && len(literal.language) == 0 {
+		_, valid := string_like_literal_value_mode(literal)
+		if valid do return .Valid
+		return .Not_In_Value_Space
+	}
 	if literal.datatype == RDF_LANG_STRING {
 		if valid_rdf_language_tag(literal.language) do return .Valid
 		return .Not_In_Value_Space

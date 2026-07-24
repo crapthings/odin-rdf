@@ -1,5 +1,7 @@
 package rdf
 
+import "core:strings"
+
 // OWL_RL_Value_Space_Membership reports whether the value denoted by a literal
 // belongs to a requested OWL 2 RL datatype. Unknown is intentional: callers
 // must not infer a result until that datatype family has exact support.
@@ -58,11 +60,13 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 }
 
 @(private) pattern_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
-	if literal.datatype != target_datatype do return .Unknown
-	status := owl_rl_pattern_literal_status(literal)
-	if status == .Valid do return .Yes
-	if status == .Not_In_Value_Space do return .No
-	return .Unknown
+	mode, valid := string_like_literal_value_mode(literal)
+	if !valid {
+		if is_owl_rl_string_datatype(literal.datatype) || is_owl_rl_pattern_datatype(literal.datatype) do return .No
+		return .Unknown
+	}
+	if mapped_string_value_matches_pattern(literal.value, mode, target_datatype) do return .Yes
+	return .No
 }
 
 @(private) numeric_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
@@ -83,18 +87,62 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 }
 
 @(private) string_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
-	status := owl_rl_string_literal_status(literal)
-	if status == .Not_String_Datatype do return .Unknown
-	if status == .Not_In_Value_Space do return .No
+	mode, valid := string_like_literal_value_mode(literal)
+	if !valid {
+		if is_owl_rl_string_datatype(literal.datatype) || is_owl_rl_pattern_datatype(literal.datatype) do return .No
+		return .Unknown
+	}
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#string" do return .Yes
 
-	mode := string_value_mode(literal.datatype)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#normalizedString" {
 		if string_value_has_replaced_whitespace(literal.value, mode) do return .No
 		return .Yes
 	}
 	if string_value_is_token(literal.value, mode) do return .Yes
 	return .No
+}
+
+// string_like_literal_value_mode exposes the value mapping shared by the
+// three basic string datatypes and the four pattern-restricted descendants.
+// The pattern datatypes have whiteSpace=collapse, so their already-validated
+// data values are token-normalized strings.
+@(private) string_like_literal_value_mode :: proc(literal: Term) -> (String_Value_Mode, bool) {
+	if is_owl_rl_string_datatype(literal.datatype) {
+		if owl_rl_string_literal_status(literal) != .Valid do return .None, false
+		return string_value_mode(literal.datatype), true
+	}
+	if is_owl_rl_pattern_datatype(literal.datatype) {
+		if owl_rl_pattern_literal_status(literal) != .Valid do return .None, false
+		return .Collapse, true
+	}
+	return .None, false
+}
+
+// mapped_string_value_matches_pattern checks the source datatype's mapped
+// string, not its raw lexical form. This distinction matters, for example:
+// "  name  "^^xsd:token denotes "name", whereas the same xsd:string literal
+// does not belong to xsd:NCName's value space.
+@(private) mapped_string_value_matches_pattern :: proc(value: string, mode: String_Value_Mode, target_datatype: string) -> bool {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	iterator := String_Value_Iterator{value = value, mode = mode}
+	for {
+		byte, more := next_string_value_byte(&iterator)
+		if !more do break
+		strings.write_byte(&builder, byte)
+	}
+	mapped := strings.to_string(builder)
+	if len(mapped) == 0 do return false
+	for index := 0; index < len(mapped); index += 1 {
+		if is_xml_schema_whitespace(mapped[index]) do return false
+	}
+	switch target_datatype {
+	case "http://www.w3.org/2001/XMLSchema#language": return is_xsd_language(mapped)
+	case "http://www.w3.org/2001/XMLSchema#Name": return is_xml_name(mapped)
+	case "http://www.w3.org/2001/XMLSchema#NCName": return is_xml_ncname(mapped)
+	case "http://www.w3.org/2001/XMLSchema#NMTOKEN": return is_xml_nmtoken(mapped)
+	}
+	return false
 }
 
 @(private) string_value_has_replaced_whitespace :: proc(value: string, mode: String_Value_Mode) -> bool {

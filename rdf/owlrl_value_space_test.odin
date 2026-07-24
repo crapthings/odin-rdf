@@ -36,6 +36,7 @@ test_owl_rl_string_and_any_uri_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(literal("value"), plain_literal), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(language_literal("colour", "en-GB"), plain_literal), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(language_literal("colour", "en--GB"), plain_literal), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("  local-name  ", token), plain_literal), OWL_RL_Value_Space_Membership.Yes)
 }
 
 @(test)
@@ -47,7 +48,10 @@ test_owl_rl_xml_and_pattern_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("<p>", xml_literal), xml_literal), OWL_RL_Value_Space_Membership.No)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("valid_name", nc_name), nc_name), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("not:name", nc_name), nc_name), OWL_RL_Value_Space_Membership.No)
-	testing.expect_value(t, owl_rl_literal_value_membership(literal("valid_name"), nc_name), OWL_RL_Value_Space_Membership.Unknown)
+	testing.expect_value(t, owl_rl_literal_value_membership(literal("valid_name"), nc_name), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(literal(" valid_name "), nc_name), OWL_RL_Value_Space_Membership.No)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal(" valid_name ", "http://www.w3.org/2001/XMLSchema#token"), nc_name), OWL_RL_Value_Space_Membership.Yes)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("en-GB", "http://www.w3.org/2001/XMLSchema#token"), "http://www.w3.org/2001/XMLSchema#language"), OWL_RL_Value_Space_Membership.Yes)
 }
 
 @(test)

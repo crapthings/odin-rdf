@@ -14,16 +14,79 @@ OWL_RL_Value_Space_Membership :: enum {
 // decimal/integer family, including cross-datatype cases such as
 // "1.00"^^xsd:decimal belonging to xsd:integer.
 owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
-	if !is_owl_rl_numeric_datatype(target_datatype) do return .Unknown
+	if is_owl_rl_numeric_datatype(target_datatype) do return numeric_value_membership(literal, target_datatype)
+	if is_owl_rl_string_datatype(target_datatype) do return string_value_membership(literal, target_datatype)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#anyURI" do return any_uri_value_membership(literal)
+	if target_datatype == "http://www.w3.org/2000/01/rdf-schema#Literal" {
+		if literal.kind != .Literal do return .No
+		if validate_term_structure(literal) == .None do return .Yes
+		return .No
+	}
+	return .Unknown
+}
+
+@(private) numeric_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
 	status := owl_rl_numeric_literal_status(literal)
 	if status == .Not_Numeric_Datatype do return .Unknown
 	if status == .Not_In_Value_Space do return .No
-
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#decimal" do return .Yes
 	integer, is_integer := numeric_integer_value(literal)
 	if !is_integer do return .No
 	if integer_value_in_numeric_target(integer, target_datatype) do return .Yes
 	return .No
+}
+
+@(private) is_owl_rl_string_datatype :: proc(datatype: string) -> bool {
+	return datatype == "http://www.w3.org/2001/XMLSchema#string" ||
+		datatype == "http://www.w3.org/2001/XMLSchema#normalizedString" ||
+		datatype == "http://www.w3.org/2001/XMLSchema#token"
+}
+
+@(private) string_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_string_literal_status(literal)
+	if status == .Not_String_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#string" do return .Yes
+
+	mode := string_value_mode(literal.datatype)
+	if target_datatype == "http://www.w3.org/2001/XMLSchema#normalizedString" {
+		if string_value_has_replaced_whitespace(literal.value, mode) do return .No
+		return .Yes
+	}
+	if string_value_is_token(literal.value, mode) do return .Yes
+	return .No
+}
+
+@(private) string_value_has_replaced_whitespace :: proc(value: string, mode: String_Value_Mode) -> bool {
+	if mode != .Raw do return false
+	for character in value {
+		if character == '\t' || character == '\n' || character == '\r' do return true
+	}
+	return false
+}
+
+@(private) string_value_is_token :: proc(value: string, mode: String_Value_Mode) -> bool {
+	iterator := String_Value_Iterator{value = value, mode = mode}
+	previous_space := false
+	first := true
+	last_space := false
+	for {
+		character, more := next_string_value_byte(&iterator)
+		if !more do break
+		if first && character == ' ' do return false
+		first = false
+		if character == ' ' && previous_space do return false
+		previous_space = character == ' '
+		last_space = character == ' '
+	}
+	return !last_space
+}
+
+@(private) any_uri_value_membership :: proc(literal: Term) -> OWL_RL_Value_Space_Membership {
+	status := owl_rl_any_uri_literal_status(literal)
+	if status == .Not_AnyURI_Datatype do return .Unknown
+	if status == .Not_In_Value_Space do return .No
+	return .Yes
 }
 
 @(private) is_owl_rl_numeric_datatype :: proc(datatype: string) -> bool {

@@ -71,7 +71,14 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 
 @(private) numeric_value_membership :: proc(literal: Term, target_datatype: string) -> OWL_RL_Value_Space_Membership {
 	status := owl_rl_numeric_literal_status(literal)
-	if status == .Not_Numeric_Datatype do return .Unknown
+	if status == .Not_Numeric_Datatype {
+		// These string-family datatype value spaces are modelled exactly and do
+		// not overlap the numeric value spaces. Keep unknown source datatype
+		// families conservative, but do not suppress a provable dt-not-type
+		// conclusion such as an xsd:string filler in an xsd:integer range.
+		if is_owl_rl_string_datatype(literal.datatype) || is_owl_rl_pattern_datatype(literal.datatype) do return .No
+		return .Unknown
+	}
 	if status == .Not_In_Value_Space do return .No
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#decimal" do return .Yes
 	integer, is_integer := numeric_integer_value(literal)

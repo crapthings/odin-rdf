@@ -12,10 +12,17 @@ test_owl_rl_floating_literal_status :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_owl_rl_floating_value_equality :: proc(t: ^testing.T) {
+test_owl_rl_floating_value_identity :: proc(t: ^testing.T) {
 	compared, same := owl_rl_floating_literals_have_same_value(
 		typed_literal("-0", "http://www.w3.org/2001/XMLSchema#double"),
 		typed_literal("0.0", "http://www.w3.org/2001/XMLSchema#double"),
+	)
+	testing.expect(t, compared)
+	testing.expect(t, !same)
+
+	compared, same = owl_rl_floating_literals_have_same_value(
+		typed_literal("-0", "http://www.w3.org/2001/XMLSchema#double"),
+		typed_literal("-0.0", "http://www.w3.org/2001/XMLSchema#double"),
 	)
 	testing.expect(t, compared)
 	testing.expect(t, same)
@@ -39,5 +46,5 @@ test_owl_rl_floating_value_equality :: proc(t: ^testing.T) {
 		typed_literal("0", "http://www.w3.org/2001/XMLSchema#double"),
 	)
 	testing.expect(t, compared)
-	testing.expect(t, same)
+	testing.expect(t, !same)
 }

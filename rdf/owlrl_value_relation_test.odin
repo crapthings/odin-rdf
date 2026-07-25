@@ -20,6 +20,7 @@ test_owl_rl_value_relation_compares_floating_cross_datatype_values :: proc(t: ^t
 
 	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("1.5", float_datatype), typed_literal("1.5", double_datatype)), OWL_RL_Literal_Value_Relation.Same)
 	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("0.1", float_datatype), typed_literal("0.1", double_datatype)), OWL_RL_Literal_Value_Relation.Different)
+	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("+0.0", float_datatype), typed_literal("-0.0", double_datatype)), OWL_RL_Literal_Value_Relation.Different)
 	testing.expect_value(t, owl_rl_literal_value_relation(typed_literal("NaN", float_datatype), typed_literal("NaN", double_datatype)), OWL_RL_Literal_Value_Relation.Unknown)
 }
 

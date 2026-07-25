@@ -14,7 +14,10 @@ test_owl_rl_numeric_value_space_membership :: proc(t: ^testing.T) {
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("256", integer), unsigned_byte), OWL_RL_Value_Space_Membership.No)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("-0.0", decimal), non_negative), OWL_RL_Value_Space_Membership.Yes)
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("invalid", integer), integer), OWL_RL_Value_Space_Membership.No)
-	testing.expect_value(t, owl_rl_literal_value_membership(literal("1"), integer), OWL_RL_Value_Space_Membership.Unknown)
+	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("aString", "http://www.w3.org/2001/XMLSchema#string"), integer), OWL_RL_Value_Space_Membership.No)
+	// A simple RDF 1.1 literal is xsd:string, so even a numeric-looking lexical
+	// form is not a member of the xsd:integer value space.
+	testing.expect_value(t, owl_rl_literal_value_membership(literal("1"), integer), OWL_RL_Value_Space_Membership.No)
 }
 
 @(test)

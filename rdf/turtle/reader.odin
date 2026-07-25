@@ -46,6 +46,7 @@ Reader_Result :: struct {
 	escaped:          bool,
 	in_iri:           bool,
 	comment:          bool,
+	unpaired_caret:   bool,
 	square_depth:     int,
 	paren_depth:      int,
 }
@@ -131,8 +132,9 @@ Reader_Result :: struct {
 		case ']': if state.square_depth > 0 do state.square_depth -= 1
 		case '(': state.paren_depth += 1
 		case ')': if state.paren_depth > 0 do state.paren_depth -= 1
+		case '^': state.unpaired_caret = !state.unpaired_caret
 		case '.':
-			if state.square_depth == 0 && state.paren_depth == 0 {
+			if !state.unpaired_caret && state.square_depth == 0 && state.paren_depth == 0 {
 				if index + 1 == len(input) && !eof { state.cursor = index; return -1 }
 				if (index + 1 == len(input) && eof) || (index + 1 < len(input) && (input[index + 1] == ' ' || input[index + 1] == '\t' || input[index + 1] == '\r' || input[index + 1] == '\n' || input[index + 1] == '#' || input[index + 1] == '@' || input[index + 1] == '<' || input[index + 1] == '_' || input[index + 1] == '[' || input[index + 1] == '(')) {
 					return index + 1

@@ -57,3 +57,18 @@ test_reader_does_not_confuse_keyword_prefixes_or_escaped_punctuation :: proc(t: 
 	testing.expect_value(t, result.error.code, Error_Code.None)
 	testing.expect_value(t, count, 2)
 }
+
+@(test)
+test_reader_matches_memory_after_unpaired_datatype_marker :: proc(t: ^testing.T) {
+	input := "<urn:s> <urn:p>\xc0\"42\"^.<http://www.w3.org/2001/XMLSchema#i\xecteger> ."
+	memory := parse(input, proc(_: rdf.Triple, _: rawptr) -> bool { return true })
+
+	reader_state: strings.Reader
+	reader := strings.to_reader(&reader_state, input)
+	stream := parse_reader(reader, proc(_: rdf.Triple, _: rawptr) -> bool { return true }, Reader_Options{chunk_size = 28})
+
+	testing.expect_value(t, memory.code, Error_Code.Expected_Object)
+	testing.expect_value(t, stream.error.code, memory.code)
+	testing.expect_value(t, stream.error.line, memory.line)
+	testing.expect_value(t, stream.error.column, memory.column)
+}

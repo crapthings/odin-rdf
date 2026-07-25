@@ -4,6 +4,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.32.1 - 2026-07-26
+
+- Keep bounded Turtle Reader framing from treating an unpaired datatype marker
+  followed by `.` as a complete statement. Streaming and in-memory parsing now
+  report the same diagnostic location for that malformed input.
+
 ## 0.32.0 - 2026-07-25
 
 - Add an exact integer-datatype interval helper for proving whether a nonempty

@@ -28,9 +28,10 @@ graph store or SPARQL engine.
 
 ## Status and scope
 
-**Current release: `0.31.2`** — OWL/RDF data-value helpers distinguish signed
-floating-point zero and can prove the modeled string-family values outside
-numeric datatype ranges. Bounded JSON-LD conversion supports approved
+**Current release: `0.32.0`** — OWL/RDF data-value helpers distinguish signed
+floating-point zero, prove the modeled string-family values outside numeric
+datatype ranges, and model exact intersections of integer-derived datatype
+ranges. Bounded JSON-LD conversion supports approved
 local context maps, while library callers can admit Remote Documents and HTML
 JSON-LD through an explicit callback-based loader. The public API may still
 evolve, so applications should pin a release and retain integration tests for

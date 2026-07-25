@@ -4,6 +4,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.32.0 - 2026-07-25
+
+- Add an exact integer-datatype interval helper for proving whether a nonempty
+  intersection of two modeled XML Schema integer value spaces is contained in
+  a target datatype. It covers the thirteen integer-derived OWL RL datatypes
+  without guessing about decimal, floating-point, or unmodeled families.
+
 ## 0.31.2 - 2026-07-25
 
 - Correct OWL/RDF data-value identity for floating-point zero: positive and

@@ -4,6 +4,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.31.2 - 2026-07-25
+
+- Correct OWL/RDF data-value identity for floating-point zero: positive and
+  negative zero are distinct data values, including across `xsd:float` and
+  `xsd:double`. This aligns the value-relation helper with the pinned W3C
+  regression scenario.
+- Recognize the exact non-overlap between modeled string-family values and
+  numeric datatype ranges, allowing a string literal to yield a definite
+  value-space non-membership instead of an indeterminate result.
+
 ## 0.31.1 - 2026-07-24
 
 - Publish a documentation-only patch that links the project overview to its

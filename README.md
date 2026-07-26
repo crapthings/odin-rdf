@@ -28,7 +28,10 @@ graph store or SPARQL engine.
 
 ## Status and scope
 
-**Current release: `0.32.1`** — OWL/RDF data-value helpers distinguish signed
+**Current release: `0.33.0`** — The new `rdf/vocab` package shares the small
+RDF/XSD IRI surface already used by runtime consumers, while keeping the root
+literal datatype constants source-compatible. It has no parser, storage,
+query, or reasoner dependency. OWL/RDF data-value helpers distinguish signed
 floating-point zero, prove the modeled string-family values outside numeric
 datatype ranges, and model exact intersections of integer-derived datatype
 ranges. Bounded Turtle Reader framing preserves in-memory parser diagnostics

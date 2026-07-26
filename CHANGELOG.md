@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Add the lightweight `rdf/vocab` package for the RDF and XSD IRI strings
+  already shared by current runtime paths, together with the RDFS namespace.
+  It has no parser, storage, query, or reasoner dependency; the existing
+  `rdf.XSD_STRING` and `rdf.RDF_LANG_STRING` names remain compatible aliases.
+
 ## 0.32.1 - 2026-07-26
 
 - Keep bounded Turtle Reader framing from treating an unpaired datatype marker

@@ -32,6 +32,20 @@ description. Writers follow the same pattern with `write_error_message`.
   a concrete serialization's lexical grammar.
 - `new_blank_node_scope` creates document identity for advanced integrations.
 
+## Shared vocabulary `rdf/vocab`
+
+`rdf/vocab` is a string-only, allocation-free package for the RDF and XSD
+terms already duplicated by the current syntax, reasoning, and query paths,
+along with the RDFS namespace.  Its first surface is intentionally small:
+`RDF_TYPE`, `RDF_FIRST`, `RDF_REST`, `RDF_NIL`, `RDF_LANG_STRING`, and the
+`XSD_STRING` / boolean / numeric datatype constants.  It does not create
+`rdf.Term` values and has no parser, store, query, or reasoner dependency.
+
+The existing root `rdf.XSD_STRING` and `rdf.RDF_LANG_STRING` constants remain
+source-compatible aliases.  Add further vocabulary only after it has at least
+two current runtime consumers; OWL, SHACL, and PROV are not part of this
+package yet.
+
 ## Owned collection `rdf/dataset`
 
 ```odin

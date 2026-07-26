@@ -2,6 +2,7 @@
 package rdf
 
 import "core:sync"
+import vocab "./vocab"
 
 // Term_Kind identifies the three RDF 1.1 term categories represented by Term.
 Term_Kind :: enum {
@@ -24,8 +25,10 @@ new_blank_node_scope :: proc() -> Blank_Node_Scope {
 	return Blank_Node_Scope(previous + 1)
 }
 
-XSD_STRING      :: "http://www.w3.org/2001/XMLSchema#string"
-RDF_LANG_STRING :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"
+// Kept at the root package for source compatibility. New consumers that need
+// broader vocabulary strings should import rdf/vocab directly.
+XSD_STRING      :: vocab.XSD_STRING
+RDF_LANG_STRING :: vocab.RDF_LANG_STRING
 
 // Term is the low-level, syntax-independent representation of an RDF term.
 // Constructors establish RDF datatype invariants but do not validate lexical syntax.

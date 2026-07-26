@@ -115,6 +115,7 @@ flowchart LR
 
 ```text
 rdf/                 Syntax-independent RDF terms, triples, and quads
+rdf/vocab/           Small shared RDF, RDFS namespace, and XSD IRI vocabulary
 rdf/ntriples/        N-Triples parser, writer, and unit tests
 rdf/nquads/          N-Quads parser, writer, and unit tests
 rdf/turtle/          Turtle parser, writer, formatter, IRI resolution, and bounded reader
@@ -163,6 +164,10 @@ are grouped by job:
   plus the `odin-rdf` CLI, are explicit complete-dataset paths.
 - **Core values and diagnostics:** `rdf` supplies validated terms, triples,
   quads, literal constructors, and stable allocation-free error messages.
+- **Shared vocabulary strings:** `rdf/vocab` supplies the small set of RDF and
+  XSD IRIs already used by multiple runtime packages, plus the RDFS namespace.
+  It has no parser, store, query, or reasoner dependency; OWL, SHACL, and PROV
+  terms stay out until a second runtime consumer requires them.
 
 Strings passed to a sink may point into the caller's input or a temporary parser buffer. They are valid only for the duration of that callback. Copy values or encode them into application-owned IDs before returning if they need to outlive the callback.
 

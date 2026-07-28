@@ -53,6 +53,21 @@ RDF 1.1 is the stable baseline. RDF 1.2 features should be added behind explicit
 
 The core package validates RDF term and triple structure separately from lexical syntax. N-Triples enforces the grammar tested by the pinned W3C suite. Full RFC 3987 IRI and BCP 47 language-tag validation are not claimed by the syntax-independent layer.
 
+## Deferred core API: RDF value equality and hashing
+
+`rdf` does not yet expose a general public equality or hashing API for `Term`,
+`Triple`, and `Quad`. Consumers that need owned identity must currently define
+their comparison at their own boundary; this is deliberate while the common
+contract is still being proven.
+
+Revisit a public `term_equal` / `triple_equal` / `quad_equal` and matching hash
+surface only when at least two runtime consumers need exactly the same rules.
+It must cover term kind, lexical value, datatype, ASCII case-insensitive
+language tags, and blank-node `(scope, label)` identity; quad equality must
+also preserve the default-versus-named graph distinction. Any hash must agree
+with that equality, make no cross-version persistence promise, and never
+replace application-owned interning or a persistent term ID.
+
 ## Performance policy
 
 Correctness against the W3C test suite comes first. Performance work should use representative large inputs and report throughput, allocation counts, and peak memory. Optimize copying and allocation behavior first, then I/O batching and data layout; consider SIMD only after profiling identifies a clear benefit.

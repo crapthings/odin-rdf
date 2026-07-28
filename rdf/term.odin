@@ -41,6 +41,15 @@ Term :: struct {
 	scope:    Blank_Node_Scope,
 }
 
+// term_kind, term_value, term_language, and term_datatype expose a Term's
+// immutable RDF identity fields. Returned strings are borrowed from the Term;
+// callers retain neither the strings nor the Term beyond their owning parser,
+// Dataset, or Snapshot lifetime.
+term_kind :: proc(term: Term) -> Term_Kind { return term.kind }
+term_value :: proc(term: Term) -> string { return term.value }
+term_language :: proc(term: Term) -> string { return term.language }
+term_datatype :: proc(term: Term) -> string { return term.datatype }
+
 // Triple is one RDF statement in subject-predicate-object order.
 Triple :: struct {
 	subject:   Term,

@@ -22,6 +22,10 @@ description. Writers follow the same pattern with `write_error_message`.
 
 ## Core `rdf`
 
+`term_kind`, `term_value`, `term_language`, and `term_datatype` return the
+immutable identity fields of an RDF term. Their strings are borrowed: callers
+must not retain them past the Term's owning parser, Dataset, or Snapshot.
+
 - `Term`, `Triple`, and `Quad` represent the syntax-independent data model.
 - `iri`, `blank_node`, `literal`, `language_literal`, and `typed_literal`
   construct terms with valid structural invariants.

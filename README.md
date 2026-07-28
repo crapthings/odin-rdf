@@ -1,11 +1,19 @@
-![Abstract RDF graph flowing through a bounded streaming pipeline](docs/assets/odin-rdf-banner.jpg)
-
 # odin-rdf
 
 [![RDF 1.1](https://img.shields.io/badge/RDF-1.1-2563eb)](https://www.w3.org/TR/n-triples/)
 ![Pinned W3C gate cases](https://img.shields.io/badge/W3C_gate_cases-2%2C432%2F2%2C432-0f766e)
 ![Platforms](https://img.shields.io/badge/platforms-Linux_%7C_macOS_%7C_Windows-475569)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b)](LICENSE)
+
+> **Status:** public `0.33.0`; API evolution remains governed by the
+> compatibility policy.
+>
+> **Role:** bounded, streaming-first RDF syntax, JSON-LD, and dataset-integrity
+> tooling for Odin.
+>
+> **Not:** a graph Store, SPARQL engine, or implicit network client.
+
+![Abstract RDF graph flowing through a bounded streaming pipeline](docs/assets/odin-rdf-banner.jpg)
 
 A bounded, streaming-first RDF toolkit for Odin. Parse or convert RDF without
 requiring a graph store; use complete-dataset operations only with an explicit
@@ -22,11 +30,11 @@ graph store or SPARQL engine.
 **Start here:** [streaming library example](examples/basic/main.odin) ·
 [Web JSON-LD loader example](examples/jsonld_web/main.odin) ·
 [command-line conversion](#command-line-conversion) ·
-[API reference](docs/api-reference.md) ·
+[API reference](docs/api-reference.md) · [development](#development) ·
 [JSON-LD profile](docs/jsonld-design.md) ·
 [DeepWiki](https://deepwiki.com/crapthings/odin-rdf)
 
-## Status and scope
+## Status
 
 **Current release: `0.33.0`** — The new `rdf/vocab` package shares the small
 RDF/XSD IRI surface already used by runtime consumers, while keeping the root
@@ -41,6 +49,8 @@ JSON-LD through an explicit callback-based loader. The public API may still
 evolve, so applications should pin a release and retain integration tests for
 their own JSON-LD documents. The library still supplies no HTTP client.
 See the [compatibility policy](docs/compatibility.md) for release expectations.
+
+## Scope
 
 | Area | Use it for | Important boundary |
 | --- | --- | --- |
@@ -198,7 +208,7 @@ writer. It is useful for stable dataset comparison, signing pipelines, and test
 fixtures. Its built-in limits reject adversarially complex blank-node graphs;
 raise a specific limit only after setting an application-level admission policy.
 
-## Getting started
+## Quick start
 
 Clone or vendor this repository into your Odin source tree, then import the packages by path. The basic streaming interface looks like this:
 
@@ -386,7 +396,7 @@ uses a descriptive `<operation>_error_message` name. These functions are
 allocation-free; callers should branch on the enum code rather than message
 text.
 
-## Verification
+## Development
 
 ```sh
 odin check rdf -no-entry-point

@@ -1,6 +1,7 @@
 package rdf
 
 import "core:unicode/utf8"
+import vocab "./vocab"
 
 // OWL_RL_String_Status describes validation for the string datatypes whose
 // value mapping differs only by XML Schema's whiteSpace facet. XML name and
@@ -49,7 +50,7 @@ owl_rl_string_literals_have_same_value :: proc(left, right: Term) -> (compared, 
 
 @(private) string_value_mode :: proc(datatype: string) -> String_Value_Mode {
 	switch datatype {
-	case "http://www.w3.org/2001/XMLSchema#string":
+	case vocab.XSD_STRING:
 		return .Raw
 	case "http://www.w3.org/2001/XMLSchema#normalizedString":
 		return .Replace

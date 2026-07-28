@@ -1,5 +1,7 @@
 package rdf
 
+import vocab "./vocab"
+
 // OWL_RL_Literal_Value_Relation is the exact data-value relation currently
 // known for two RDF literals. Unknown deliberately prevents an OWL RL caller
 // from deriving equality or inequality for a datatype pair without a complete
@@ -36,7 +38,7 @@ owl_rl_literal_value_relation :: proc(left, right: Term) -> OWL_RL_Literal_Value
 }
 
 @(private) literal_is_floating_nan :: proc(literal: Term) -> bool {
-	return literal.value == "NaN" && (literal.datatype == "http://www.w3.org/2001/XMLSchema#float" || literal.datatype == "http://www.w3.org/2001/XMLSchema#double")
+	return literal.value == "NaN" && (literal.datatype == vocab.XSD_FLOAT || literal.datatype == vocab.XSD_DOUBLE)
 }
 
 @(private) string_like_literals_have_same_value :: proc(left, right: Term) -> (compared, same: bool) {

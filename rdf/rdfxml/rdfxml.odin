@@ -9,18 +9,19 @@ import "core:strings"
 import "core:unicode/utf8"
 import rdf ".."
 import turtle "../turtle"
+import vocab "../vocab"
 
-RDF_NAMESPACE   :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+RDF_NAMESPACE   :: vocab.RDF_NAMESPACE
 XML_NAMESPACE   :: "http://www.w3.org/XML/1998/namespace"
-RDF_TYPE        :: RDF_NAMESPACE + "type"
-RDF_FIRST       :: RDF_NAMESPACE + "first"
-RDF_REST        :: RDF_NAMESPACE + "rest"
-RDF_NIL         :: RDF_NAMESPACE + "nil"
-RDF_STATEMENT   :: RDF_NAMESPACE + "Statement"
-RDF_SUBJECT     :: RDF_NAMESPACE + "subject"
-RDF_PREDICATE   :: RDF_NAMESPACE + "predicate"
-RDF_OBJECT      :: RDF_NAMESPACE + "object"
-RDF_XML_LITERAL :: RDF_NAMESPACE + "XMLLiteral"
+RDF_TYPE        :: vocab.RDF_TYPE
+RDF_FIRST       :: vocab.RDF_FIRST
+RDF_REST        :: vocab.RDF_REST
+RDF_NIL         :: vocab.RDF_NIL
+RDF_STATEMENT   :: vocab.RDF_STATEMENT
+RDF_SUBJECT     :: vocab.RDF_SUBJECT
+RDF_PREDICATE   :: vocab.RDF_PREDICATE
+RDF_OBJECT      :: vocab.RDF_OBJECT
+RDF_XML_LITERAL :: vocab.RDF_XML_LITERAL
 
 // Error_Code identifies XML, RDF/XML, resource-limit, and sink outcomes.
 Error_Code :: enum {

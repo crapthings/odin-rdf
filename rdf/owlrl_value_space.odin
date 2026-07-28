@@ -1,6 +1,7 @@
 package rdf
 
 import "core:strings"
+import vocab "./vocab"
 
 // OWL_RL_Value_Space_Membership reports whether the value denoted by a literal
 // belongs to a requested OWL 2 RL datatype. Unknown is intentional: callers
@@ -19,14 +20,14 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if is_owl_rl_numeric_datatype(target_datatype) do return numeric_value_membership(literal, target_datatype)
 	if is_owl_rl_string_datatype(target_datatype) do return string_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#anyURI" do return any_uri_value_membership(literal)
-	if target_datatype == "http://www.w3.org/2001/XMLSchema#boolean" do return boolean_value_membership(literal)
+	if target_datatype == vocab.XSD_BOOLEAN do return boolean_value_membership(literal)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#hexBinary" || target_datatype == "http://www.w3.org/2001/XMLSchema#base64Binary" do return binary_value_membership(literal)
-	if target_datatype == "http://www.w3.org/2001/XMLSchema#float" || target_datatype == "http://www.w3.org/2001/XMLSchema#double" do return floating_value_membership(literal, target_datatype)
+	if target_datatype == vocab.XSD_FLOAT || target_datatype == vocab.XSD_DOUBLE do return floating_value_membership(literal, target_datatype)
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#dateTime" || target_datatype == "http://www.w3.org/2001/XMLSchema#dateTimeStamp" do return datetime_value_membership(literal, target_datatype)
-	if target_datatype == "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral" do return plain_literal_value_membership(literal)
-	if target_datatype == "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral" do return xml_literal_value_membership(literal)
+	if target_datatype == vocab.RDF_PLAIN_LITERAL do return plain_literal_value_membership(literal)
+	if target_datatype == vocab.RDF_XML_LITERAL do return xml_literal_value_membership(literal)
 	if is_owl_rl_pattern_datatype(target_datatype) do return pattern_value_membership(literal, target_datatype)
-	if target_datatype == "http://www.w3.org/2000/01/rdf-schema#Literal" {
+	if target_datatype == vocab.RDFS_LITERAL {
 		if literal.kind != .Literal do return .No
 		if validate_term_structure(literal) == .None do return .Yes
 		return .No
@@ -80,7 +81,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 		return .Unknown
 	}
 	if status == .Not_In_Value_Space do return .No
-	if target_datatype == "http://www.w3.org/2001/XMLSchema#decimal" do return .Yes
+	if target_datatype == vocab.XSD_DECIMAL do return .Yes
 	integer, is_integer := numeric_integer_value(literal)
 	if !is_integer do return .No
 	if integer_value_in_numeric_target(integer, target_datatype) do return .Yes
@@ -88,7 +89,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 }
 
 @(private) is_owl_rl_string_datatype :: proc(datatype: string) -> bool {
-	return datatype == "http://www.w3.org/2001/XMLSchema#string" ||
+	return datatype == vocab.XSD_STRING ||
 		datatype == "http://www.w3.org/2001/XMLSchema#normalizedString" ||
 		datatype == "http://www.w3.org/2001/XMLSchema#token"
 }
@@ -99,7 +100,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 		if is_owl_rl_string_datatype(literal.datatype) || is_owl_rl_pattern_datatype(literal.datatype) do return .No
 		return .Unknown
 	}
-	if target_datatype == "http://www.w3.org/2001/XMLSchema#string" do return .Yes
+	if target_datatype == vocab.XSD_STRING do return .Yes
 
 	if target_datatype == "http://www.w3.org/2001/XMLSchema#normalizedString" {
 		if string_value_has_replaced_whitespace(literal.value, mode) do return .No
@@ -203,7 +204,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 	if status == .Not_Floating_Datatype do return .Unknown
 	if status == .Not_In_Value_Space do return .No
 	if literal.datatype == target_datatype do return .Yes
-	if target_datatype == "http://www.w3.org/2001/XMLSchema#double" do return .Yes
+	if target_datatype == vocab.XSD_DOUBLE do return .Yes
 	if literal.value == "NaN" || literal.value == "INF" || literal.value == "+INF" || literal.value == "-INF" do return .Yes
 	double_value, double_ok := parse_xsd_f64(literal.value)
 	if !double_ok do return .Unknown
@@ -227,8 +228,8 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 
 @(private) is_owl_rl_numeric_datatype :: proc(datatype: string) -> bool {
 	switch datatype {
-	case "http://www.w3.org/2001/XMLSchema#decimal",
-		"http://www.w3.org/2001/XMLSchema#integer",
+	case vocab.XSD_DECIMAL,
+		vocab.XSD_INTEGER,
 		"http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
 		"http://www.w3.org/2001/XMLSchema#nonPositiveInteger",
 		"http://www.w3.org/2001/XMLSchema#positiveInteger",
@@ -247,7 +248,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 }
 
 @(private) numeric_integer_value :: proc(literal: Term) -> (Integer_Parts, bool) {
-	if literal.datatype != "http://www.w3.org/2001/XMLSchema#decimal" do return integer_parts(literal.value), true
+	if literal.datatype != vocab.XSD_DECIMAL do return integer_parts(literal.value), true
 	decimal := decimal_parts(literal.value)
 	if len(decimal.fraction) > 0 do return {}, false
 	return Integer_Parts{valid = decimal.valid, sign = decimal.sign, digits = decimal.integral}, true
@@ -255,7 +256,7 @@ owl_rl_literal_value_membership :: proc(literal: Term, target_datatype: string) 
 
 @(private) integer_value_in_numeric_target :: proc(value: Integer_Parts, target_datatype: string) -> bool {
 	switch target_datatype {
-	case "http://www.w3.org/2001/XMLSchema#integer":
+	case vocab.XSD_INTEGER:
 		return true
 	case "http://www.w3.org/2001/XMLSchema#nonNegativeInteger":
 		return integer_in_range(value, .Zero, "", .Positive, "")

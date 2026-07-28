@@ -1,5 +1,7 @@
 package rdf
 
+import vocab "./vocab"
+
 // OWL_RL_Boolean_Status describes xsd:boolean value-space validation.
 OWL_RL_Boolean_Status :: enum {
 	Not_Boolean_Datatype,
@@ -10,7 +12,7 @@ OWL_RL_Boolean_Status :: enum {
 // owl_rl_boolean_literal_status validates the four XML Schema boolean lexical
 // representations: true, false, 1, and 0.
 owl_rl_boolean_literal_status :: proc(literal: Term) -> OWL_RL_Boolean_Status {
-	if literal.kind != .Literal || literal.datatype != "http://www.w3.org/2001/XMLSchema#boolean" do return .Not_Boolean_Datatype
+	if literal.kind != .Literal || literal.datatype != vocab.XSD_BOOLEAN do return .Not_Boolean_Datatype
 	switch literal.value {
 	case "true", "false", "1", "0": return .Valid
 	}

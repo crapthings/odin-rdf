@@ -2,6 +2,7 @@ package rdf
 
 import "core:strconv"
 import "core:math"
+import vocab "./vocab"
 
 // OWL_RL_Floating_Status describes xsd:float and xsd:double lexical-space
 // validation. It follows XML Schema's decimal/scientific grammar and its
@@ -17,7 +18,7 @@ OWL_RL_Floating_Status :: enum {
 // to the corresponding IEEE infinity.
 owl_rl_floating_literal_status :: proc(literal: Term) -> OWL_RL_Floating_Status {
 	if literal.kind != .Literal do return .Not_Floating_Datatype
-	if literal.datatype != "http://www.w3.org/2001/XMLSchema#float" && literal.datatype != "http://www.w3.org/2001/XMLSchema#double" do return .Not_Floating_Datatype
+	if literal.datatype != vocab.XSD_FLOAT && literal.datatype != vocab.XSD_DOUBLE do return .Not_Floating_Datatype
 	if is_xsd_floating_lexical(literal.value) do return .Valid
 	return .Not_In_Value_Space
 }
@@ -31,19 +32,19 @@ owl_rl_floating_literal_status :: proc(literal: Term) -> OWL_RL_Floating_Status 
 owl_rl_floating_literals_have_same_value :: proc(left, right: Term) -> (compared, same: bool) {
 	if owl_rl_floating_literal_status(left) != .Valid || owl_rl_floating_literal_status(right) != .Valid do return false, false
 	if left.value == "NaN" || right.value == "NaN" do return true, false
-	if left.datatype == "http://www.w3.org/2001/XMLSchema#float" && right.datatype == "http://www.w3.org/2001/XMLSchema#float" {
+	if left.datatype == vocab.XSD_FLOAT && right.datatype == vocab.XSD_FLOAT {
 		left_value, left_ok := parse_xsd_f32(left.value)
 		right_value, right_ok := parse_xsd_f32(right.value)
 		if !left_ok || !right_ok do return false, false
 		return true, owl_rl_floating_f32_values_have_same_identity(left.value, left_value, right.value, right_value)
 	}
-	if left.datatype == "http://www.w3.org/2001/XMLSchema#double" && right.datatype == "http://www.w3.org/2001/XMLSchema#double" {
+	if left.datatype == vocab.XSD_DOUBLE && right.datatype == vocab.XSD_DOUBLE {
 		left_value, left_ok := parse_xsd_f64(left.value)
 		right_value, right_ok := parse_xsd_f64(right.value)
 		if !left_ok || !right_ok do return false, false
 		return true, owl_rl_floating_f64_values_have_same_identity(left.value, left_value, right.value, right_value)
 	}
-	if left.datatype == "http://www.w3.org/2001/XMLSchema#float" {
+	if left.datatype == vocab.XSD_FLOAT {
 		left_value, left_ok := parse_xsd_f32(left.value)
 		right_value, right_ok := parse_xsd_f64(right.value)
 		if !left_ok || !right_ok do return false, false

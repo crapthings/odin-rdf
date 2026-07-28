@@ -1,5 +1,7 @@
 package rdf
 
+import vocab "./vocab"
+
 // OWL_RL_Numeric_Status describes the result of inspecting a literal in the
 // integer and decimal portion of the OWL 2 RL datatype registry.  It is kept
 // separate from the full datatype dispatcher until every supported datatype
@@ -24,10 +26,10 @@ owl_rl_numeric_literal_status :: proc(literal: Term) -> OWL_RL_Numeric_Status {
 	if literal.kind != .Literal do return .Not_Numeric_Datatype
 
 	switch literal.datatype {
-	case "http://www.w3.org/2001/XMLSchema#decimal":
+	case vocab.XSD_DECIMAL:
 		if decimal_parts(literal.value).valid do return .Valid
 		return .Not_In_Value_Space
-	case "http://www.w3.org/2001/XMLSchema#integer":
+	case vocab.XSD_INTEGER:
 		if integer_parts(literal.value).valid do return .Valid
 		return .Not_In_Value_Space
 	case "http://www.w3.org/2001/XMLSchema#nonNegativeInteger":
@@ -66,8 +68,8 @@ owl_rl_numeric_literal_status :: proc(literal: Term) -> OWL_RL_Numeric_Status {
 owl_rl_numeric_literals_have_same_value :: proc(left, right: Term) -> (compared, same: bool) {
 	if owl_rl_numeric_literal_status(left) != .Valid || owl_rl_numeric_literal_status(right) != .Valid do return false, false
 
-	left_decimal := left.datatype == "http://www.w3.org/2001/XMLSchema#decimal"
-	right_decimal := right.datatype == "http://www.w3.org/2001/XMLSchema#decimal"
+	left_decimal := left.datatype == vocab.XSD_DECIMAL
+	right_decimal := right.datatype == vocab.XSD_DECIMAL
 	if !left_decimal && !right_decimal {
 		left_integer := integer_parts(left.value)
 		right_integer := integer_parts(right.value)

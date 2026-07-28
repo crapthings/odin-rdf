@@ -4,6 +4,7 @@ package turtle
 import "core:sort"
 import "core:strings"
 import rdf ".."
+import vocab "../vocab"
 
 // Prefix_Policy controls whether the formatter augments supplied prefixes with
 // deterministic, safe namespace declarations.
@@ -109,8 +110,8 @@ format_triples :: proc(builder: ^strings.Builder, triples: []rdf.Triple, options
 	return .None
 }
 
-@(private) FORMATTER_RDF_NAMESPACE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-@(private) FORMATTER_XSD_NAMESPACE :: "http://www.w3.org/2001/XMLSchema#"
+@(private) FORMATTER_RDF_NAMESPACE :: vocab.RDF_NAMESPACE
+@(private) FORMATTER_XSD_NAMESPACE :: vocab.XSD_NAMESPACE
 
 @(private) Format_State :: struct {
 	triples: []rdf.Triple,
@@ -175,7 +176,7 @@ format_triples :: proc(builder: ^strings.Builder, triples: []rdf.Triple, options
 	switch namespace {
 	case FORMATTER_RDF_NAMESPACE:           return "rdf"
 	case FORMATTER_XSD_NAMESPACE:           return "xsd"
-	case "http://www.w3.org/2000/01/rdf-schema#": return "rdfs"
+	case vocab.RDFS_NAMESPACE:                     return "rdfs"
 	case "http://www.w3.org/2002/07/owl#":       return "owl"
 	case "http://www.w3.org/2004/02/skos/core#": return "skos"
 	case "http://purl.org/dc/terms/":             return "dcterms"

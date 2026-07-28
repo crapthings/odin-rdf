@@ -38,17 +38,22 @@ must not retain them past the Term's owning parser, Dataset, or Snapshot.
 
 ## Shared vocabulary `rdf/vocab`
 
-`rdf/vocab` is a string-only, allocation-free package for the RDF and XSD
-terms already duplicated by the current syntax, reasoning, and query paths,
-along with the RDFS namespace.  Its first surface is intentionally small:
-`RDF_TYPE`, `RDF_FIRST`, `RDF_REST`, `RDF_NIL`, `RDF_LANG_STRING`, and the
-`XSD_STRING` / boolean / numeric datatype constants.  It does not create
-`rdf.Term` values and has no parser, store, query, or reasoner dependency.
+`rdf/vocab` is a string-only, allocation-free package for the RDF, RDFS, and
+currently shared XSD terms. Its source is organised as `rdf.odin`,
+`rdfs.odin`, and `xsd.odin`, while consumers continue to import the single
+`rdf/vocab` package. It includes the RDF model, collection, and active
+legacy-reification terms; the RDFS model, semantic, and documentation terms;
+and the string, boolean, and numeric XSD datatypes used by the runtime.
+
+It is an exact IRI inventory, not an implementation of RDF 1.2, RDFS
+entailment, RDF/XML reification semantics, or complete XSD datatype support.
+It does not create `rdf.Term` values and has no parser, store, query, or
+reasoner dependency.
 
 The existing root `rdf.XSD_STRING` and `rdf.RDF_LANG_STRING` constants remain
-source-compatible aliases.  Add further vocabulary only after it has at least
-two current runtime consumers; OWL, SHACL, and PROV are not part of this
-package yet.
+source-compatible aliases. Further vocabulary requires either an active
+runtime consumer or a standards-level role in the supported RDF/RDFS core;
+OWL, SHACL, PROV, and a complete XSD inventory are not part of this package.
 
 ## Owned collection `rdf/dataset`
 

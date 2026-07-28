@@ -5,15 +5,16 @@ import "core:strings"
 import "core:strconv"
 import rdf ".."
 import termlex "../internal/termlex"
+import vocab "../vocab"
 
-@(private) RDF_TYPE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-@(private) RDF_FIRST :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
-@(private) RDF_REST :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
-@(private) RDF_NIL :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
-@(private) XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
-@(private) XSD_DECIMAL :: "http://www.w3.org/2001/XMLSchema#decimal"
-@(private) XSD_DOUBLE :: "http://www.w3.org/2001/XMLSchema#double"
-@(private) XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
+@(private) RDF_TYPE    :: vocab.RDF_TYPE
+@(private) RDF_FIRST   :: vocab.RDF_FIRST
+@(private) RDF_REST    :: vocab.RDF_REST
+@(private) RDF_NIL     :: vocab.RDF_NIL
+@(private) XSD_INTEGER :: vocab.XSD_INTEGER
+@(private) XSD_DECIMAL :: vocab.XSD_DECIMAL
+@(private) XSD_DOUBLE  :: vocab.XSD_DOUBLE
+@(private) XSD_BOOLEAN :: vocab.XSD_BOOLEAN
 
 // Error_Code identifies Turtle syntax, input, resource-limit, I/O, and sink outcomes.
 Error_Code :: enum {

@@ -1,5 +1,7 @@
 package rdf
 
+import vocab "./vocab"
+
 // owl_rl_integer_datatype_intersection_is_subset_of reports whether the
 // nonempty intersection of two modeled XML Schema integer datatype value
 // spaces is wholly contained in target_datatype. It deliberately excludes
@@ -29,7 +31,7 @@ owl_rl_integer_datatype_intersection_is_subset_of :: proc(left_datatype, right_d
 
 @(private) owl_rl_integer_datatype_interval :: proc(datatype: string) -> (Integer_Datatype_Interval, bool) {
 	switch datatype {
-	case "http://www.w3.org/2001/XMLSchema#integer":
+	case vocab.XSD_INTEGER:
 		return {}, true
 	case "http://www.w3.org/2001/XMLSchema#nonNegativeInteger":
 		return {has_lower = true, lower = {.Zero, "0"}}, true

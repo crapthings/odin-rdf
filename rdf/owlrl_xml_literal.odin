@@ -2,6 +2,7 @@ package rdf
 
 import "core:strings"
 import xml "core:encoding/xml"
+import vocab "./vocab"
 
 // OWL_RL_XML_Literal_Status describes rdf:XMLLiteral lexical validation.
 OWL_RL_XML_Literal_Status :: enum {
@@ -16,7 +17,7 @@ OWL_RL_XML_Literal_Status :: enum {
 // is intentionally not exposed here: RDF XMLLiteral equality requires shared
 // canonical XML, never raw source-string comparison.
 owl_rl_xml_literal_status :: proc(literal: Term) -> OWL_RL_XML_Literal_Status {
-	if literal.kind != .Literal || literal.datatype != "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral" do return .Not_XML_Literal_Datatype
+	if literal.kind != .Literal || literal.datatype != vocab.RDF_XML_LITERAL do return .Not_XML_Literal_Datatype
 	if valid_xml_literal_fragment(literal.value) do return .Valid
 	return .Not_In_Value_Space
 }

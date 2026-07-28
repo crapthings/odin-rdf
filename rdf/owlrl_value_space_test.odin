@@ -1,6 +1,7 @@
 package rdf
 
 import "core:testing"
+import vocab "./vocab"
 
 @(test)
 test_owl_rl_numeric_value_space_membership :: proc(t: ^testing.T) {
@@ -26,7 +27,7 @@ test_owl_rl_string_and_any_uri_value_space_membership :: proc(t: ^testing.T) {
 	normalized_string := "http://www.w3.org/2001/XMLSchema#normalizedString"
 	token := "http://www.w3.org/2001/XMLSchema#token"
 	any_uri := "http://www.w3.org/2001/XMLSchema#anyURI"
-	rdfs_literal := "http://www.w3.org/2000/01/rdf-schema#Literal"
+	rdfs_literal := vocab.RDFS_LITERAL
 	plain_literal := "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral"
 
 	testing.expect_value(t, owl_rl_literal_value_membership(typed_literal("a\tb", string_datatype), normalized_string), OWL_RL_Value_Space_Membership.No)

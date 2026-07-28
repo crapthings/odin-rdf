@@ -7,10 +7,11 @@ import "core:unicode/utf8"
 import rdf ".."
 import termlex "../internal/termlex"
 import turtle "../turtle"
+import vocab "../vocab"
 
-@(private) FORMAT_RDF_TYPE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-@(private) FORMAT_RDF_NAMESPACE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-@(private) FORMAT_XSD_NAMESPACE :: "http://www.w3.org/2001/XMLSchema#"
+@(private) FORMAT_RDF_TYPE      :: vocab.RDF_TYPE
+@(private) FORMAT_RDF_NAMESPACE :: vocab.RDF_NAMESPACE
+@(private) FORMAT_XSD_NAMESPACE :: vocab.XSD_NAMESPACE
 
 // Format_Options selects the batch formatter's compact-IRI policy. Explicit
 // prefixes are retained in their supplied order. Infer adds deterministic,
@@ -288,7 +289,7 @@ format_quads :: proc(builder: ^strings.Builder, quads: []rdf.Quad, options: Form
 	switch namespace {
 	case FORMAT_RDF_NAMESPACE:                     return "rdf"
 	case FORMAT_XSD_NAMESPACE:                     return "xsd"
-	case "http://www.w3.org/2000/01/rdf-schema#": return "rdfs"
+	case vocab.RDFS_NAMESPACE:                    return "rdfs"
 	case "http://www.w3.org/2002/07/owl#":        return "owl"
 	case "http://www.w3.org/2004/02/skos/core#":  return "skos"
 	case "http://purl.org/dc/terms/":              return "dcterms"

@@ -11,20 +11,21 @@ import "core:strings"
 import "core:unicode/utf8"
 import rdf ".."
 import turtle "../turtle"
+import vocab "../vocab"
 
-RDF_TYPE  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-RDF_FIRST :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
-RDF_REST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
-RDF_NIL   :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
-RDF_LIST  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#List"
+RDF_TYPE  :: vocab.RDF_TYPE
+RDF_FIRST :: vocab.RDF_FIRST
+RDF_REST  :: vocab.RDF_REST
+RDF_NIL   :: vocab.RDF_NIL
+RDF_LIST  :: vocab.RDF_LIST
 RDF_JSON  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
-RDF_VALUE :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#value"
+RDF_VALUE :: vocab.RDF_VALUE
 RDF_DIRECTION :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#direction"
 RDF_LANGUAGE  :: "http://www.w3.org/1999/02/22-rdf-syntax-ns#language"
 I18N      :: "https://www.w3.org/ns/i18n#"
-XSD_BOOLEAN :: "http://www.w3.org/2001/XMLSchema#boolean"
-XSD_INTEGER :: "http://www.w3.org/2001/XMLSchema#integer"
-XSD_DOUBLE  :: "http://www.w3.org/2001/XMLSchema#double"
+XSD_BOOLEAN :: vocab.XSD_BOOLEAN
+XSD_INTEGER :: vocab.XSD_INTEGER
+XSD_DOUBLE  :: vocab.XSD_DOUBLE
 
 // core:encoding/json currently drops empty object member names. JSON-LD only
 // needs to retain one in an opaque @json value, where this marker is restored
